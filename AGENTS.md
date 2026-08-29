@@ -1,4 +1,4 @@
-# pogo-dex
+# ndod-pogo-dex
 
 PWA for a Pokemon GO visual collector. Each screenshot is one specimen. Tags overlap; categories do not.
 
