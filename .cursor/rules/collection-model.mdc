@@ -1,0 +1,34 @@
+---
+description: Specimen and tag model; no stored combo categories
+alwaysApply: true
+---
+
+# Collection model
+
+Unit of collection = one screenshot (`specimen`), not a species-in-a-bucket.
+
+A specimen has independent tags. Never store combo categories such as `shadow_shiny_polos` or `shiny-shadow-hundo-tokyo`. Derive combos with filters.
+
+Visual uniqueness key (duplicate if all match):
+
+`species + form + shiny + costume + shadowStatus + background`
+
+IV is not in that key. "Normal IV" is not a track.
+
+Core tracks only: Living, Shiny, Shadow, Purified, Costume, Background, Hundo, Nundo.
+
+- Costume = finite per species.
+- Background = open gallery; do not force 100% completion.
+- Living = default look (not shiny, not shadow/purified, no costume, default background).
+
+Plain / pure = has only that track's visual tags: no extra shiny, no costume, default background. Detect this from tags; do not add a `polos` tag.
+
+```text
+# BAD: new category
+tags: ["shadow_shiny_polos"]
+
+# GOOD: derive
+shiny && shadow && !costume && background === "default"
+```
+
+Shiny Shadow (and similar) may later be a smart view, not a stored category. Do not add combo tracks unless asked.

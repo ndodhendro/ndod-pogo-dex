@@ -1,0 +1,27 @@
+---
+description: Dex cover selection, auto-replace, and green/gray purity borders
+alwaysApply: true
+---
+
+# Dex covers
+
+Each track shows one cover photo per species.
+
+Purity is relative to the track. A shiny+shadow default photo is impure on Shiny Dex and Shadow Dex, and would be pure only on a future Shiny Shadow view.
+
+**Green border:** cover is plain for that track (only that track's visual tags).
+**Gray border:** species is owned on that track, but the cover is not plain.
+
+Cover rules:
+
+- `Set as cover` is the only manual control. No pin, no favorite lock.
+- If no plain specimen exists, an impure photo may be `Set as cover` (gray).
+- When the first plain specimen for that track is added, it automatically becomes cover and the border turns green. The previous cover stays in the gallery.
+- After a green/plain cover exists, do not auto-replace it. Switch only via `Set as cover`.
+- A new specimen never overwrites or deletes another specimen.
+
+```text
+# Shadow Dex example
+# Specimen A: shiny + shadow + tokyo  -> allowed gray cover
+# Specimen B: shadow only             -> auto-replaces A as cover, green
+```
