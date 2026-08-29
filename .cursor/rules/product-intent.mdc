@@ -12,3 +12,5 @@ Do not model this as "one Pokemon belongs to one category". One upload may fill 
 Collector goal: unique looks (species, form, shiny, costume, shadow/purified, background). IV 0 and IV 100 are stat tracks, not visual uniqueness.
 
 Never add a Pin / favorite-cover lock. The only cover control is `Set as cover`.
+
+Do not build an offline upload queue. If the phone has no signal, Pokemon GO is not playable anyway.

@@ -1,34 +1,27 @@
 ---
-description: Specimen and tag model; no stored combo categories
+description: Specimen tags and user-defined dex categories
 alwaysApply: true
 ---
 
 # Collection model
 
-Unit of collection = one screenshot (`specimen`), not a species-in-a-bucket.
+Unit of collection = one screenshot (`specimen`) with independent tags. Never store a combo name as a tag (`shadow_shiny_polos`). Combos are categories.
 
-A specimen has independent tags. Never store combo categories such as `shadow_shiny_polos` or `shiny-shadow-hundo-tokyo`. Derive combos with filters.
+Visual uniqueness key: `species + form + shiny + costume + shadowStatus + background`. IV is not in that key. "Normal IV" is not a tag.
 
-Visual uniqueness key (duplicate if all match):
+A **category** is a name plus a set of required tags the user picks. Seed defaults (Living, Shiny, Shadow, Purified, Costume, Background, Hundo, Nundo). Users may add more. Adding a category does not create a new tag.
 
-`species + form + shiny + costume + shadowStatus + background`
+- Living = no required tags. Pure = specimen with zero tags (default look).
+- Shadow polos = category tags `[shadow]` only. Do not add an IV tag unless the category is meant to be Shadow Hundo / Shadow Nundo.
+- Hundo / Nundo are optional tags (`hundo`, `nundo`), not a generic `iv` tag.
 
-IV is not in that key. "Normal IV" is not a track.
-
-Core tracks only: Living, Shiny, Shadow, Purified, Costume, Background, Hundo, Nundo.
-
-- Costume = finite per species.
-- Background = open gallery; do not force 100% completion.
-- Living = default look (not shiny, not shadow/purified, no costume, default background).
-
-Plain / pure = has only that track's visual tags: no extra shiny, no costume, default background. Detect this from tags; do not add a `polos` tag.
+A species is **in** a category if some specimen's tags include every required tag (extras allowed).
 
 ```text
-# BAD: new category
-tags: ["shadow_shiny_polos"]
+# Category "Shadow" required: [shadow]
+# gray: [shadow, shiny, tokyo]
+# green: [shadow]
 
-# GOOD: derive
-shiny && shadow && !costume && background === "default"
+# Category "Shadow Hundo" required: [shadow, hundo]
+# green only when tags are exactly [shadow, hundo]
 ```
-
-Shiny Shadow (and similar) may later be a smart view, not a stored category. Do not add combo tracks unless asked.

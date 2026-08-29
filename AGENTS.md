@@ -2,6 +2,6 @@
 
 PWA for a Pokemon GO visual collector. Each screenshot is one specimen. Tags overlap; categories do not.
 
-Follow `.cursor/rules/` before changing data model, dex tracks, or cover behavior.
+Follow `.cursor/rules/` before changing data model, dex tracks, covers, auth, or UI.
 
-User-facing copy can be Indonesian. Code, comments, and git messages stay in English.
+UI copy, code, comments, and git messages stay in English.

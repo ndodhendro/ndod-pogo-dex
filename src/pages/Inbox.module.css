@@ -1,0 +1,43 @@
+.list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr auto;
+  gap: var(--space-3);
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  text-align: left;
+}
+
+.item img {
+  width: 4.5rem;
+  aspect-ratio: var(--card-aspect);
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.speciesList {
+  display: flex;
+  flex-direction: column;
+  max-height: 14rem;
+  overflow: auto;
+  margin: var(--space-3) 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.speciesList button {
+  padding: var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.speciesList button[data-on='true'] {
+  background: var(--color-accent-soft);
+}

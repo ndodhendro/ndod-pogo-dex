@@ -1,0 +1,22 @@
+---
+description: Dex card preview popup and stacked tag VFX
+alwaysApply: true
+---
+
+# Card preview
+
+Tapping a `DexCard` opens a modal preview. Do not navigate away from the dex grid. Backdrop dismiss, swipe down, or close control.
+
+The preview shows the specimen photo (medium size, not the grid thumb) and **stacks VFX for every visual tag on that specimen**, not only the current dex track.
+
+| Tag | Preview effect |
+|---|---|
+| Shadow | Purple aura around the card |
+| Shiny | Sparkles / shine sweep |
+| Purified | Soft white-blue glow |
+| Hundo | Brief star/gold pulse |
+| Costume / background | Photo already shows it; small chip, no extra VFX |
+
+Example: Shadow Dex cover that is shiny+shadow+Tokyo → purple aura **and** sparkles, Tokyo photo, chips for all tags.
+
+Keep VFX on preview only (one card). CSS/Canvas, pause when closed, respect `prefers-reduced-motion` (static glow). Preview actions: `Set as cover`, open species gallery. No pin.

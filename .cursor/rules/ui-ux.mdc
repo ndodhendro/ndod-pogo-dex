@@ -1,0 +1,18 @@
+---
+description: Dark theme, English UI, design tokens, toast, Inbox, performance
+alwaysApply: true
+---
+
+# UI / UX
+
+English UI. Dark theme. One component set on every page: `DexCard`, `TrackChip`, `TagChip`, `BottomSheet`, `Toast`, `PinPad`, `SearchField`. Tokenize color, type, spacing by function, not by page.
+
+Toast: `position: fixed` at the top, including `safe-area-inset-top`. Stays on screen while scrolling. Use for errors and duplicates, not for obvious save success.
+
+Auth: PIN pad in the UI, Supabase Auth behind it. Never put the PIN in `.env`. Env only has `SUPABASE_URL` and `SUPABASE_ANON_KEY`. App lock after idle.
+
+Add flow: Android Share Target dumps the screenshot into **Inbox**. User tags later. No overlay on Pokemon GO.
+
+Dex grid: thumbnails (~128px), virtualized, lazy-loaded, fixed aspect-ratio. Load a larger image only in preview. No VFX on grid cards.
+
+No offline queue. No pin-cover. Users may add categories by picking existing tags; do not invent combo tag names.
