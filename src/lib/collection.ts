@@ -1,6 +1,8 @@
 import { coverPurity, shouldAutoReplaceCover } from './covers'
 import { db, ensureSeedCategories, type CategoryRow, type InboxRow, type SpecimenRow } from './db'
 import { makeImageVariants } from './images'
+import { hashBlob } from './hash'
+import { pushCategory, pushCover, pushMetadataAfterSave, deleteCloudCategory } from './sync'
 import {
   specimenTags,
   visualKey,
@@ -36,10 +38,13 @@ export async function discardInbox(id: string) {
 export async function saveSpecimenFromInbox(
   inboxId: string,
   fields: SpecimenFields,
-): Promise<{ duplicate: boolean }> {
+): Promise<{ duplicate: boolean; cloudError?: string }> {
   await ensureSeedCategories()
   const inbox = await db.inbox.get(inboxId)
   if (!inbox) throw new Error('Inbox item is gone')
+  const image = await db.images.get(inbox.imageId)
+  if (!image) throw new Error('Inbox image is gone')
+  const fileHash = await hashBlob(image.original)
 
   const specimen: SpecimenRow = {
     id: crypto.randomUUID(),
@@ -52,6 +57,7 @@ export async function saveSpecimenFromInbox(
     hundo: fields.hundo,
     nundo: fields.nundo,
     imageId: inbox.imageId,
+    fileHash,
     createdAt: Date.now(),
   }
 
@@ -68,7 +74,8 @@ export async function saveSpecimenFromInbox(
     }
   })
 
-  return { duplicate }
+  const cloudError = await pushMetadataAfterSave(specimen)
+  return { duplicate, cloudError }
 }
 
 async function maybeSetCover(
@@ -103,19 +110,22 @@ export async function setAsCover(categoryId: string, specimenId: string) {
     speciesId: specimen.speciesId,
     specimenId,
   })
+  return pushCover(categoryId, specimen.speciesId, specimenId)
 }
 
 export async function addCategory(name: string, requiredTags: TagId[]) {
   const trimmed = name.trim()
   if (!trimmed) throw new Error('Name is required')
   const last = await db.categories.orderBy('sortOrder').last()
-  await db.categories.add({
+  const row = {
     id: crypto.randomUUID(),
     name: trimmed,
     requiredTags: [...new Set(requiredTags)],
     sortOrder: (last?.sortOrder ?? 0) + 1,
-    seed: false,
-  })
+    seed: false as const,
+  }
+  await db.categories.add(row)
+  return pushCategory(row)
 }
 
 export async function deleteCategory(id: string) {
@@ -125,6 +135,7 @@ export async function deleteCategory(id: string) {
     await db.covers.where('categoryId').equals(id).delete()
     await db.categories.delete(id)
   })
+  return deleteCloudCategory(id)
 }
 
 export const SHARE_DB_NAME = 'ndod-pogo-dex-share'

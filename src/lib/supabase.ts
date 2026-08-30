@@ -10,6 +10,13 @@ export function getSupabase(): SupabaseClient | null {
     client = null
     return client
   }
-  client = createClient(url, anon)
+  client = createClient(url, anon, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      flowType: 'pkce',
+    },
+  })
   return client
 }

@@ -13,6 +13,7 @@ export type SpecimenRow = {
   hundo: boolean
   nundo: boolean
   imageId: string
+  fileHash?: string | null
   createdAt: number
 }
 
@@ -54,6 +55,13 @@ class PogoDexDB extends Dexie {
     super('ndod-pogo-dex')
     this.version(1).stores({
       specimens: 'id, speciesId, createdAt, imageId',
+      images: 'id',
+      inbox: 'id, createdAt, imageId',
+      categories: 'id, sortOrder',
+      covers: '[categoryId+speciesId], specimenId, categoryId',
+    })
+    this.version(2).stores({
+      specimens: 'id, speciesId, createdAt, imageId, fileHash',
       images: 'id',
       inbox: 'id, createdAt, imageId',
       categories: 'id, sortOrder',

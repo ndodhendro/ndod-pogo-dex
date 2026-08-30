@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
-import { LockGate } from './components/LockGate'
+import { AuthGate } from './components/AuthGate'
 import { Toast } from './components/Toast'
 import { UpdatePrompt } from './components/UpdatePrompt'
 import { DexPage } from './pages/Dex'
@@ -13,7 +13,7 @@ export function App() {
     <>
       <Toast />
       <UpdatePrompt />
-      <LockGate>
+      <AuthGate>
         <Routes>
           <Route element={<AppShell />}>
             <Route path="/" element={<Navigate to="/dex" replace />} />
@@ -24,7 +24,7 @@ export function App() {
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>
-      </LockGate>
+      </AuthGate>
     </>
   )
 }

@@ -5,11 +5,11 @@ alwaysApply: true
 
 # UI / UX
 
-English UI. Dark theme. One component set on every page: `DexCard`, `TrackChip`, `TagChip`, `BottomSheet`, `Toast`, `PinPad`, `SearchField`. Tokenize color, type, spacing by function, not by page.
+English UI. Dark theme. One component set on every page: `DexCard`, `TrackChip`, `TagChip`, `BottomSheet`, `Toast`, `SearchField`. Tokenize color, type, spacing by function, not by page.
 
 Toast: `position: fixed` at the top, including `safe-area-inset-top`. Stays on screen while scrolling. Use for errors and duplicates, not for obvious save success.
 
-Auth: PIN pad in the UI, Supabase Auth behind it. Never put the PIN in `.env`. Env only has `SUPABASE_URL` and `SUPABASE_ANON_KEY`. App lock after idle.
+Auth: Sign in with Google via Supabase. No PIN pad. No idle lock. Env only has `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
 
 Add flow: Android Share Target dumps the screenshot into **Inbox**. User tags later. No overlay on Pokemon GO.
 

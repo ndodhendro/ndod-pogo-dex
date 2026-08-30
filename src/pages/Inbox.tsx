@@ -6,6 +6,7 @@ import { TagChip } from '../components/TagChip'
 import { TrackChip } from '../components/TrackChip'
 import { COMMON_FORMS, searchSpecies, SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
+import { RestoreGalleryButton } from '../components/RestoreGalleryButton'
 import {
   discardInbox,
   importPendingShares,
@@ -63,19 +64,22 @@ export function InboxPage() {
     <section>
       <h1 className="page-title">Inbox</h1>
       <p className="page-sub">Share a screenshot from your phone, then tag it here.</p>
-      <label className="btn btn-primary" style={{ display: 'inline-grid', placeItems: 'center' }}>
-        Add screenshots
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          hidden
-          onChange={(e) => {
-            void onFiles(e.target.files)
-            e.target.value = ''
-          }}
-        />
-      </label>
+      <div className="row-actions" style={{ marginBottom: '1rem' }}>
+        <label className="btn btn-primary" style={{ display: 'inline-grid', placeItems: 'center' }}>
+          Add screenshots
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              void onFiles(e.target.files)
+              e.target.value = ''
+            }}
+          />
+        </label>
+        <RestoreGalleryButton />
+      </div>
       {items.length === 0 ? (
         <p className="empty-state">Nothing waiting. Catch something, screenshot it, share it here.</p>
       ) : (
@@ -95,9 +99,10 @@ export function InboxPage() {
       <TagSheet
         item={active}
         onClose={() => setActive(null)}
-        onSaved={(duplicate) => {
+        onSaved={(duplicate, cloudError) => {
           setActive(null)
           if (duplicate) showToast('Same look already in the collection', 'warning')
+          if (cloudError) showToast(cloudError, 'warning')
         }}
         onError={(message) => showToast(message)}
       />
@@ -144,7 +149,7 @@ function TagSheet({
 }: {
   item: InboxRow | null
   onClose: () => void
-  onSaved: (duplicate: boolean) => void
+  onSaved: (duplicate: boolean, cloudError?: string) => void
   onError: (message: string) => void
 }) {
   const [query, setQuery] = useState('')
@@ -172,7 +177,7 @@ function TagSheet({
         costume: fields.costume === null ? null : fields.costume.trim() || '',
         background: fields.background === null ? null : fields.background.trim() || '',
       })
-      onSaved(result.duplicate)
+      onSaved(result.duplicate, result.cloudError)
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Could not save')
     } finally {

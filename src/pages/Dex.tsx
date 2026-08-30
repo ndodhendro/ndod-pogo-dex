@@ -136,7 +136,10 @@ export function DexPage() {
           onClose={() => setPreview(null)}
           onSetCover={() => {
             void setAsCover(category.id, preview.id)
-              .then(() => setPreview(null))
+              .then((cloudError) => {
+                if (cloudError) showToast(cloudError, 'warning')
+                setPreview(null)
+              })
               .catch((err) => showToast(err instanceof Error ? err.message : 'Could not set cover'))
           }}
           onOpenGallery={() => {

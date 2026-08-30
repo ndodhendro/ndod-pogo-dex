@@ -1,0 +1,49 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-lock);
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--color-bg);
+}
+
+.panel {
+  width: min(22rem, 100%);
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font-size: var(--font-size-xl);
+}
+
+.sub {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+}
+
+.error {
+  min-height: 1.25rem;
+  margin: var(--space-4) 0;
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
+
+.google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: var(--tap-min);
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  font-weight: var(--font-weight-medium);
+}
+
+.google:disabled {
+  opacity: 0.55;
+}
