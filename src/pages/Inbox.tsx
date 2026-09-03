@@ -4,6 +4,7 @@ import { BottomSheet } from '../components/BottomSheet'
 import { SearchField } from '../components/SearchField'
 import { TagChip } from '../components/TagChip'
 import { TrackChip } from '../components/TrackChip'
+import { iconForForm, toneForForm } from '../data/navIcons'
 import { COMMON_FORMS, searchSpecies, SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { RestoreGalleryButton } from '../components/RestoreGalleryButton'
@@ -62,7 +63,9 @@ export function InboxPage() {
 
   return (
     <section>
-      <h1 className="page-title">Inbox</h1>
+      <h1 className="page-title" data-tone="inbox">
+        Inbox
+      </h1>
       <p className="page-sub">Share a screenshot from your phone, then tag it here.</p>
       <div className="row-actions" style={{ marginBottom: '1rem' }}>
         <label className="btn btn-primary" style={{ display: 'inline-grid', placeItems: 'center' }}>
@@ -124,7 +127,7 @@ function InboxItem({
     <div className={styles.item}>
       {url ? <img src={url} alt="" /> : <span />}
       <div>
-        <strong>Untagged</strong>
+        <strong data-tone="inbox">Untagged</strong>
         <p className="page-sub" style={{ margin: 0 }}>
           {new Date(item.createdAt).toLocaleString()}
         </p>
@@ -205,6 +208,8 @@ function TagSheet({
         <span>Form</span>
         <div className="chip-row">
           <TrackChip
+            icon={iconForForm(null)}
+            tone={toneForForm(null)}
             label="Default"
             active={!fields.form}
             onClick={() => setFields((f) => ({ ...f, form: null }))}
@@ -212,6 +217,8 @@ function TagSheet({
           {COMMON_FORMS.map((form) => (
             <TrackChip
               key={form}
+              icon={iconForForm(form)}
+              tone={toneForForm(form)}
               label={form}
               active={fields.form === form}
               onClick={() => setFields((f) => ({ ...f, form }))}

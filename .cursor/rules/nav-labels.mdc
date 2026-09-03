@@ -1,0 +1,46 @@
+---
+description: Every menu, submenu, and navigation item uses an icon plus visible text
+alwaysApply: true
+---
+
+# Navigation labels
+
+Every menu, submenu, tab, track chip, and navigation control shows **icon + text**. Never icon-only. Never text-only.
+
+- Prefer Unicode emoji first (no asset file). Keep the English label visible.
+- Mark the glyph `aria-hidden="true"`. The text is the accessible name.
+- User-made categories: icon of the first required tag, or 📌 if none.
+- Custom PNG/SVG live in `public/nav/` (64×64, dark theme, no Pokemon IP).
+- If a custom image is required and you cannot generate it, do not ship a blank icon. Give a ready-to-paste prompt: subject, style, colors, size, transparent background, filename.
+
+## Default map
+
+| Item | Emoji |
+| Inbox | 📥 |
+| Dex | 📒 |
+| Settings | ⚙️ |
+| Living | 🌿 |
+| Shiny | ✨ |
+| Shadow | 🌑 |
+| Purified | 💎 |
+| Costume | 🎭 |
+| Background | 🖼️ |
+| Hundo | 💯 |
+| Nundo | 0️⃣ |
+| Default form | ⚪ |
+| Alolan | 🌺 |
+| Galarian | ⚔️ |
+| Hisuian | 🏯 |
+| Paldean | 🍊 |
+| Mega | ⚡ |
+
+```tsx
+// ❌ BAD
+<NavLink to="/dex">Dex</NavLink>
+
+// ✅ GOOD
+<NavLink to="/dex">
+  <span aria-hidden="true">📒</span>
+  Dex
+</NavLink>
+```

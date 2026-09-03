@@ -16,6 +16,9 @@
 .title {
   margin: 0;
   font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-ui);
+  color: var(--color-living-text);
 }
 
 .sub {
@@ -42,6 +45,7 @@
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
   font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-ui);
 }
 
 .google:disabled {

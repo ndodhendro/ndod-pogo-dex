@@ -1,35 +1,25 @@
 .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   min-height: 2rem;
   padding: 0 var(--space-3);
   border-radius: var(--radius-full);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
+  color: color-mix(in srgb, var(--tone, var(--color-text-muted)) 72%, var(--color-text-muted));
   font-size: var(--font-size-sm);
+  font-weight: 500;
+  letter-spacing: var(--letter-ui);
+}
+
+.icon {
+  line-height: 1;
 }
 
 .chip[data-on='true'] {
+  background: var(--tone-soft);
+  border-color: var(--tone-fill);
+  color: var(--tone);
   font-weight: var(--font-weight-medium);
-}
-
-.chip[data-tag='shiny'][data-on='true'] {
-  border-color: var(--color-shiny);
-  background: rgba(253, 230, 138, 0.12);
-}
-.chip[data-tag='shadow'][data-on='true'] {
-  border-color: var(--color-shadow);
-  background: rgba(124, 58, 237, 0.18);
-}
-.chip[data-tag='purified'][data-on='true'] {
-  border-color: var(--color-purified);
-  background: rgba(147, 197, 253, 0.14);
-}
-.chip[data-tag='hundo'][data-on='true'] {
-  border-color: var(--color-hundo);
-  background: rgba(251, 191, 36, 0.14);
-}
-.chip[data-tag='nundo'][data-on='true'],
-.chip[data-tag='costume'][data-on='true'],
-.chip[data-tag='background'][data-on='true'] {
-  border-color: var(--color-accent);
-  background: var(--color-accent-soft);
 }

@@ -1,0 +1,44 @@
+---
+description: Dark-theme visual language — readable gaming type, semantic label color, consistent grouping
+alwaysApply: true
+---
+
+# Visual design
+
+Design every screen to look intentional and calm: dark, minimal, no eye strain. Attractive means contrast, hierarchy, and hue that match the label — not neon, glow, or extra decoration.
+
+## Type
+
+One family everywhere: `Rajdhani` (`--font-sans`), with system-ui fallback. Gaming HUD feel, still easy to read. Do not use Orbitron, Audiowide, pixel, or all-caps body copy.
+
+- Body / fields / help: weight 500, `--color-text` / `--color-text-muted`
+- Titles, nav, chips, buttons: weight 600–700, slight letter-spacing
+- Same sizes (`--font-size-*`) on every page. Do not invent per-page fonts.
+
+## Color by meaning
+
+Semantic hue is for **labels** (nav, tracks, tags, forms, page titles). Body copy stays `--color-text`. Fill the hue at low opacity; text uses the lighter `*-text` token so it stays readable on `#0e1116`.
+
+| Meaning | Token |
+| Inbox / incoming | `--color-inbox-text` |
+| Dex / Living / primary | `--color-living-text` |
+| Settings / tools | `--color-settings-text` |
+| Shiny | `--color-shiny-text` |
+| Shadow | `--color-shadow-text` |
+| Purified | `--color-purified-text` |
+| Costume | `--color-costume-text` |
+| Background | `--color-scene-text` |
+| Hundo | `--color-hundo-text` |
+| Nundo | `--color-nundo-text` |
+
+Set `data-tone` on the control (see global `[data-tone]`). Custom categories use the first required tag’s tone, or `living` if none.
+
+## Chrome
+
+Reuse tokens. Do not restyle a page with a one-off card.
+
+- In-page groups: `.group` (surface, 1px `--color-border`, `--radius-md`)
+- Sheets / overlays: `--radius-lg`, same surface and border (not a different background)
+- Chips: `--radius-full`
+- Primary actions: `--color-accent` on every page
+- Preview VFX stay on preview only

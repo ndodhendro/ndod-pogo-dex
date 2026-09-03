@@ -1,5 +1,6 @@
 import {
   fromCloudCategoryId,
+  LEGACY_SEED_CLOUD_IDS,
   toCloudCategoryId,
 } from '../data/seedCategories'
 import { db, type CategoryRow, type SpecimenRow } from './db'
@@ -34,6 +35,24 @@ async function signedInUserId(): Promise<string | null> {
   return data.session?.user.id ?? null
 }
 
+const ownedLegacyByUser = new Map<string, Set<string>>()
+
+async function ownedLegacySeedIds(userId: string): Promise<Set<string> | string> {
+  const cached = ownedLegacyByUser.get(userId)
+  if (cached) return cached
+  const supabase = getSupabase()
+  if (!supabase) return new Set()
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('user_id', userId)
+    .in('id', LEGACY_SEED_CLOUD_IDS)
+  if (error) return error.message
+  const ids = new Set((data ?? []).map((row) => row.id as string))
+  ownedLegacyByUser.set(userId, ids)
+  return ids
+}
+
 export async function ensureFileHash(specimen: SpecimenRow): Promise<string | null> {
   if (specimen.fileHash) return specimen.fileHash
   const image = await db.images.get(specimen.imageId)
@@ -48,10 +67,13 @@ export async function pushCategories(): Promise<string | undefined> {
   const userId = await signedInUserId()
   if (!supabase || !userId) return
 
+  const ownedLegacy = await ownedLegacySeedIds(userId)
+  if (typeof ownedLegacy === 'string') return ownedLegacy
+
   const categories = await db.categories.toArray()
   const { error } = await supabase.from('categories').upsert(
     categories.map((row) => ({
-      id: toCloudCategoryId(row.id),
+      id: toCloudCategoryId(row.id, userId, ownedLegacy),
       user_id: userId,
       name: row.name,
       required_tags: row.requiredTags,
@@ -93,12 +115,15 @@ export async function pushCoversForSpecies(speciesId: number): Promise<string | 
   const userId = await signedInUserId()
   if (!supabase || !userId) return
 
+  const ownedLegacy = await ownedLegacySeedIds(userId)
+  if (typeof ownedLegacy === 'string') return ownedLegacy
+
   const covers = (await db.covers.toArray()).filter((row) => row.speciesId === speciesId)
   if (covers.length === 0) return
   const { error } = await supabase.from('covers').upsert(
     covers.map((row) => ({
       user_id: userId,
-      category_id: toCloudCategoryId(row.categoryId),
+      category_id: toCloudCategoryId(row.categoryId, userId, ownedLegacy),
       species_id: row.speciesId,
       specimen_id: row.specimenId,
     })),
@@ -118,9 +143,11 @@ export async function pushCover(categoryId: string, speciesId: number, specimenI
   const supabase = getSupabase()
   const userId = await signedInUserId()
   if (!supabase || !userId) return
+  const ownedLegacy = await ownedLegacySeedIds(userId)
+  if (typeof ownedLegacy === 'string') return ownedLegacy
   const { error } = await supabase.from('covers').upsert({
     user_id: userId,
-    category_id: toCloudCategoryId(categoryId),
+    category_id: toCloudCategoryId(categoryId, userId, ownedLegacy),
     species_id: speciesId,
     specimen_id: specimenId,
   })
@@ -131,8 +158,10 @@ export async function pushCategory(row: CategoryRow) {
   const supabase = getSupabase()
   const userId = await signedInUserId()
   if (!supabase || !userId) return
+  const ownedLegacy = await ownedLegacySeedIds(userId)
+  if (typeof ownedLegacy === 'string') return ownedLegacy
   const { error } = await supabase.from('categories').upsert({
-    id: toCloudCategoryId(row.id),
+    id: toCloudCategoryId(row.id, userId, ownedLegacy),
     user_id: userId,
     name: row.name,
     required_tags: row.requiredTags,
@@ -146,10 +175,12 @@ export async function deleteCloudCategory(id: string) {
   const supabase = getSupabase()
   const userId = await signedInUserId()
   if (!supabase || !userId) return
+  const ownedLegacy = await ownedLegacySeedIds(userId)
+  if (typeof ownedLegacy === 'string') return ownedLegacy
   const { error } = await supabase
     .from('categories')
     .delete()
-    .eq('id', toCloudCategoryId(id))
+    .eq('id', toCloudCategoryId(id, userId, ownedLegacy))
     .eq('user_id', userId)
   if (error) return error.message
 }
@@ -232,9 +263,11 @@ export async function backupAllMetadata(): Promise<string | undefined> {
     if (error) return error.message
   }
 
+  const ownedLegacy = await ownedLegacySeedIds(userId)
+  if (typeof ownedLegacy === 'string') return ownedLegacy
   const coverRows = covers.map((row) => ({
     user_id: userId,
-    category_id: toCloudCategoryId(row.categoryId),
+    category_id: toCloudCategoryId(row.categoryId, userId, ownedLegacy),
     species_id: row.speciesId,
     specimen_id: row.specimenId,
   }))
@@ -288,7 +321,7 @@ export async function pullCloudCollection(): Promise<{
 
   return {
     categories: rawCats.map((row) => ({
-      id: fromCloudCategoryId(row.id),
+      id: fromCloudCategoryId(row.id, userId, { name: row.name, seed: row.seed }),
       name: row.name,
       requiredTags: row.required_tags ?? [],
       sortOrder: row.sort_order,
@@ -310,7 +343,7 @@ export async function pullCloudCollection(): Promise<{
         createdAt: new Date(row.created_at).getTime(),
       })),
     covers: rawCovers.map((row) => ({
-      categoryId: fromCloudCategoryId(row.category_id),
+      categoryId: fromCloudCategoryId(row.category_id, userId),
       speciesId: row.species_id,
       specimenId: row.specimen_id,
     })),

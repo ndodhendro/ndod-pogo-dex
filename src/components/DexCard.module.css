@@ -47,11 +47,16 @@
   left: 0.35rem;
   bottom: 0.25rem;
   font-size: var(--font-size-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--letter-ui);
   color: var(--color-text-muted);
 }
 
 .label {
   font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: var(--letter-ui);
   color: var(--color-text-muted);
   white-space: nowrap;
   overflow: hidden;

@@ -8,17 +8,59 @@
   --color-text: #e8edf5;
   --color-text-muted: #8b95a8;
   --color-accent: #34d399;
-  --color-accent-soft: rgba(52, 211, 153, 0.16);
+  --color-accent-soft: rgba(52, 211, 153, 0.14);
   --color-danger: #f87171;
   --color-warning: #fbbf24;
-  --color-shadow: #7c3aed;
-  --color-purified: #93c5fd;
-  --color-shiny: #fde68a;
-  --color-hundo: #fbbf24;
   --color-cover-green: #34d399;
   --color-cover-gray: #6b7280;
 
-  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --color-inbox: #2dd4bf;
+  --color-inbox-text: #5eead4;
+  --color-inbox-soft: rgba(45, 212, 191, 0.12);
+  --color-living: #34d399;
+  --color-living-text: #6ee7b7;
+  --color-living-soft: rgba(52, 211, 153, 0.14);
+  --color-settings: #94a3b8;
+  --color-settings-text: #cbd5e1;
+  --color-settings-soft: rgba(148, 163, 184, 0.12);
+  --color-shiny: #e8c547;
+  --color-shiny-text: #f5e19a;
+  --color-shiny-soft: rgba(232, 197, 71, 0.12);
+  --color-shadow: #8b5cf6;
+  --color-shadow-text: #c4b5fd;
+  --color-shadow-soft: rgba(139, 92, 246, 0.16);
+  --color-purified: #7dd3fc;
+  --color-purified-text: #bae6fd;
+  --color-purified-soft: rgba(125, 211, 252, 0.14);
+  --color-costume: #e879f9;
+  --color-costume-text: #f0abfc;
+  --color-costume-soft: rgba(232, 121, 249, 0.12);
+  --color-scene: #22d3ee;
+  --color-scene-text: #67e8f9;
+  --color-scene-soft: rgba(34, 211, 238, 0.12);
+  --color-hundo: #fbbf24;
+  --color-hundo-text: #fcd34d;
+  --color-hundo-soft: rgba(251, 191, 36, 0.12);
+  --color-nundo: #94a3b8;
+  --color-nundo-text: #cbd5e1;
+  --color-nundo-soft: rgba(148, 163, 184, 0.12);
+  --color-alolan: #f9a8d4;
+  --color-alolan-text: #fbcfe8;
+  --color-alolan-soft: rgba(249, 168, 212, 0.12);
+  --color-galarian: #93c5fd;
+  --color-galarian-text: #bfdbfe;
+  --color-galarian-soft: rgba(147, 197, 253, 0.12);
+  --color-hisuian: #fdba74;
+  --color-hisuian-text: #fed7aa;
+  --color-hisuian-soft: rgba(253, 186, 116, 0.12);
+  --color-paldean: #fb923c;
+  --color-paldean-text: #fdba74;
+  --color-paldean-soft: rgba(251, 146, 60, 0.12);
+  --color-mega: #fbbf24;
+  --color-mega-text: #fde68a;
+  --color-mega-soft: rgba(251, 191, 36, 0.12);
+
+  --font-sans: "Rajdhani", "Segoe UI", system-ui, sans-serif;
   --font-size-xs: 0.75rem;
   --font-size-sm: 0.875rem;
   --font-size-md: 1rem;
@@ -27,7 +69,8 @@
   --font-weight-medium: 600;
   --font-weight-bold: 700;
   --line-tight: 1.2;
-  --line-body: 1.45;
+  --line-body: 1.5;
+  --letter-ui: 0.04em;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -56,6 +99,84 @@
   --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
+[data-tone='inbox'] {
+  --tone: var(--color-inbox-text);
+  --tone-fill: var(--color-inbox);
+  --tone-soft: var(--color-inbox-soft);
+}
+[data-tone='dex'],
+[data-tone='living'] {
+  --tone: var(--color-living-text);
+  --tone-fill: var(--color-living);
+  --tone-soft: var(--color-living-soft);
+}
+[data-tone='settings'],
+[data-tone='default'] {
+  --tone: var(--color-settings-text);
+  --tone-fill: var(--color-settings);
+  --tone-soft: var(--color-settings-soft);
+}
+[data-tone='nundo'] {
+  --tone: var(--color-nundo-text);
+  --tone-fill: var(--color-nundo);
+  --tone-soft: var(--color-nundo-soft);
+}
+[data-tone='shiny'] {
+  --tone: var(--color-shiny-text);
+  --tone-fill: var(--color-shiny);
+  --tone-soft: var(--color-shiny-soft);
+}
+[data-tone='shadow'] {
+  --tone: var(--color-shadow-text);
+  --tone-fill: var(--color-shadow);
+  --tone-soft: var(--color-shadow-soft);
+}
+[data-tone='purified'] {
+  --tone: var(--color-purified-text);
+  --tone-fill: var(--color-purified);
+  --tone-soft: var(--color-purified-soft);
+}
+[data-tone='costume'] {
+  --tone: var(--color-costume-text);
+  --tone-fill: var(--color-costume);
+  --tone-soft: var(--color-costume-soft);
+}
+[data-tone='background'] {
+  --tone: var(--color-scene-text);
+  --tone-fill: var(--color-scene);
+  --tone-soft: var(--color-scene-soft);
+}
+[data-tone='hundo'] {
+  --tone: var(--color-hundo-text);
+  --tone-fill: var(--color-hundo);
+  --tone-soft: var(--color-hundo-soft);
+}
+[data-tone='alolan'] {
+  --tone: var(--color-alolan-text);
+  --tone-fill: var(--color-alolan);
+  --tone-soft: var(--color-alolan-soft);
+}
+[data-tone='galarian'] {
+  --tone: var(--color-galarian-text);
+  --tone-fill: var(--color-galarian);
+  --tone-soft: var(--color-galarian-soft);
+}
+[data-tone='hisuian'] {
+  --tone: var(--color-hisuian-text);
+  --tone-fill: var(--color-hisuian);
+  --tone-soft: var(--color-hisuian-soft);
+}
+[data-tone='paldean'] {
+  --tone: var(--color-paldean-text);
+  --tone-fill: var(--color-paldean);
+  --tone-soft: var(--color-paldean-soft);
+}
+[data-tone='mega'] {
+  --tone: var(--color-mega-text);
+  --tone-fill: var(--color-mega);
+  --tone-soft: var(--color-mega-soft);
+}
+
 *,
 *::before,
 *::after {
@@ -76,6 +197,7 @@ html {
 body {
   font-family: var(--font-sans);
   font-size: var(--font-size-md);
+  font-weight: 500;
   line-height: var(--line-body);
   color: var(--color-text);
   background: var(--color-bg);
@@ -127,6 +249,16 @@ a {
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
   line-height: var(--line-tight);
+  letter-spacing: var(--letter-ui);
+}
+
+.page-title[data-tone] {
+  color: var(--tone);
+}
+
+.page-sub a[data-tone] {
+  color: var(--tone);
+  font-weight: var(--font-weight-medium);
 }
 
 .page-sub {
@@ -141,6 +273,41 @@ a {
   flex-wrap: wrap;
 }
 
+.group {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+.group h2 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-ui);
+}
+
+.group-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.group > .btn {
+  margin-top: var(--space-3);
+}
+
+.group-row .page-sub {
+  margin: 0;
+}
+
+.group-row [data-tone] {
+  color: var(--tone);
+}
+
 .btn {
   min-height: var(--tap-min);
   padding: 0 var(--space-4);
@@ -148,6 +315,7 @@ a {
   background: var(--color-surface-raised);
   border: 1px solid var(--color-border);
   font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-ui);
 }
 
 .btn-primary {
@@ -169,6 +337,8 @@ a {
 
 .field span {
   font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-ui);
   color: var(--color-text-muted);
 }
 

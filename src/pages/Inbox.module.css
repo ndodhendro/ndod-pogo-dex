@@ -22,6 +22,11 @@
   border-radius: var(--radius-sm);
 }
 
+.item strong[data-tone] {
+  color: var(--tone);
+  letter-spacing: var(--letter-ui);
+}
+
 .speciesList {
   display: flex;
   flex-direction: column;
@@ -40,4 +45,6 @@
 
 .speciesList button[data-on='true'] {
   background: var(--color-accent-soft);
+  color: var(--color-living-text);
+  font-weight: var(--font-weight-medium);
 }

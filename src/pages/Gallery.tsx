@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CardPreview } from '../components/CardPreview'
 import { DexCard } from '../components/DexCard'
+import { toneForCategory } from '../data/navIcons'
 import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { coverPurity } from '../lib/covers'
@@ -10,6 +11,7 @@ import { setAsCover } from '../lib/collection'
 import { db, type SpecimenRow } from '../lib/db'
 import { useToast } from '../lib/toast'
 import { hasAllRequired, specimenTags } from '../lib/tags'
+import styles from './Gallery.module.css'
 
 export function GalleryPage() {
   const { categoryId, speciesId } = useParams()
@@ -39,20 +41,18 @@ export function GalleryPage() {
   return (
     <section>
       <p className="page-sub">
-        <Link to={`/dex/${categoryId}`}>← {category?.name ?? 'Dex'}</Link>
+        <Link to={`/dex/${categoryId}`} data-tone={category ? toneForCategory(category) : 'dex'}>
+          ← {category?.name ?? 'Dex'}
+        </Link>
       </p>
       <h1 className="page-title">{species.name}</h1>
-      <p className="page-sub">{specimens.length} specimen{specimens.length === 1 ? '' : 's'}</p>
+      <p className="page-sub">
+        {specimens.length} specimen{specimens.length === 1 ? '' : 's'}
+      </p>
       {specimens.length === 0 ? (
         <p className="empty-state">No screenshots for this species yet.</p>
       ) : (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(7.5rem, 1fr))',
-            gap: '0.5rem',
-          }}
-        >
+        <div className={styles.grid}>
           {specimens.map((specimen) => (
             <GalleryCard
               key={specimen.id}

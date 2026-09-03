@@ -19,6 +19,8 @@
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-card);
   font-size: var(--font-size-sm);
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .toast[data-tone='error'] {

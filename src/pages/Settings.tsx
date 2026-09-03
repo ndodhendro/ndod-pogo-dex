@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { BottomSheet } from '../components/BottomSheet'
 import { TagChip } from '../components/TagChip'
 import { RestoreGalleryButton } from '../components/RestoreGalleryButton'
+import { iconForCategory, toneForCategory } from '../data/navIcons'
 import { addCategory, deleteCategory } from '../lib/collection'
 import { getSession, signOut, userEmail } from '../lib/auth'
 import { db } from '../lib/db'
@@ -50,26 +51,22 @@ export function SettingsPage() {
 
   return (
     <section className={styles.stack}>
-      <h1 className="page-title">Settings</h1>
-      <div className={styles.card}>
+      <h1 className="page-title" data-tone="settings">
+        Settings
+      </h1>
+      <div className="group">
         <h2>Categories</h2>
         <p className="page-sub">
           A category is a name plus required tags. Combos are categories, not new tags.
         </p>
         {categories.map((cat) => (
-          <div
-            key={cat.id}
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              gap: '0.75rem',
-              padding: '0.5rem 0',
-              borderTop: '1px solid var(--color-border)',
-            }}
-          >
+          <div key={cat.id} className="group-row">
             <div>
-              <strong>{cat.name}</strong>
-              <p className="page-sub" style={{ margin: 0 }}>
+              <strong data-tone={toneForCategory(cat)}>
+                <span aria-hidden="true">{iconForCategory(cat)} </span>
+                {cat.name}
+              </strong>
+              <p className="page-sub">
                 {cat.requiredTags.length
                   ? cat.requiredTags.map((t) => TAG_LABELS[t]).join(', ')
                   : 'No required tags (Living)'}
@@ -96,7 +93,7 @@ export function SettingsPage() {
           Add category
         </button>
       </div>
-      <div className={styles.card}>
+      <div className="group">
         <h2>Account</h2>
         <p className="page-sub">
           {email ? `Signed in as ${email}.` : 'Signed in with Google.'} The same account restores
@@ -111,7 +108,7 @@ export function SettingsPage() {
           </button>
         </div>
       </div>
-      <div className={styles.card}>
+      <div className="group">
         <h2>Restore</h2>
         <p className="page-sub">
           A phone restart keeps the Dex. After clearing site data, sign in with the same Google

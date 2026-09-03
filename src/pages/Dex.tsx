@@ -6,6 +6,7 @@ import { CardPreview } from '../components/CardPreview'
 import { DexCard } from '../components/DexCard'
 import { SearchField } from '../components/SearchField'
 import { TrackChip } from '../components/TrackChip'
+import { iconForCategory, toneForCategory } from '../data/navIcons'
 import { SPECIES, SPECIES_BY_ID, searchSpecies } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { coverPurity, type CoverPurity } from '../lib/covers'
@@ -84,7 +85,9 @@ export function DexPage() {
 
   return (
     <section>
-      <h1 className="page-title">{category?.name ?? 'Dex'}</h1>
+      <h1 className="page-title" data-tone={category ? toneForCategory(category) : 'dex'}>
+        {category?.name ?? 'Dex'}
+      </h1>
       <p className={styles.progress}>
         {filledCount} / {SPECIES.length}
       </p>
@@ -92,6 +95,8 @@ export function DexPage() {
         {categories.map((cat) => (
           <TrackChip
             key={cat.id}
+            icon={iconForCategory(cat)}
+            tone={toneForCategory(cat)}
             label={cat.name}
             active={cat.id === category?.id}
             onClick={() => navigate(`/dex/${cat.id}`)}

@@ -71,7 +71,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   return (
     <div className={styles.overlay}>
-      <div className={styles.panel}>
+      <div className={`group ${styles.panel}`}>
         <h1 className={styles.title}>Sign in</h1>
         <p className={styles.sub}>
           {configured
