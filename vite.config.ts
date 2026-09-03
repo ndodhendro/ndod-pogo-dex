@@ -3,7 +3,17 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+const viteBasePath = (globalThis as {
+  process?: { env?: Record<string, string | undefined> }
+}).process?.env?.VITE_BASE_PATH
+
+function pagesBase(path = viteBasePath) {
+  if (!path || path === '/') return '/'
+  return path.endsWith('/') ? path : `${path}/`
+}
+
 export default defineConfig({
+  base: pagesBase(),
   plugins: [
     react(),
     VitePWA({

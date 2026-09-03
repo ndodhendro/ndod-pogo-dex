@@ -47,12 +47,17 @@ async function handleShareTarget(request: Request) {
     })
     shareDb.close()
   }
-  return Response.redirect('/inbox', 303)
+  const inbox = new URL('inbox', new URL(import.meta.env.BASE_URL, self.location.origin))
+  return Response.redirect(inbox.href, 303)
 }
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
-  if (event.request.method === 'POST' && url.pathname === '/share-target') {
+  const shareTarget = new URL(
+    'share-target',
+    new URL(import.meta.env.BASE_URL, self.location.origin),
+  )
+  if (event.request.method === 'POST' && url.pathname === shareTarget.pathname) {
     event.respondWith(handleShareTarget(event.request))
   }
 })
