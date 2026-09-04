@@ -17,7 +17,8 @@ export function App() {
         <Routes>
           <Route element={<AppShell />}>
             <Route path="/" element={<Navigate to="/dex" replace />} />
-            <Route path="/inbox" element={<InboxPage />} />
+            <Route path="/transfer" element={<InboxPage />} />
+            <Route path="/inbox" element={<Navigate to="/transfer" replace />} />
             <Route path="/dex" element={<DexPage />} />
             <Route path="/dex/:categoryId" element={<DexPage />} />
             <Route path="/dex/:categoryId/species/:speciesId" element={<GalleryPage />} />

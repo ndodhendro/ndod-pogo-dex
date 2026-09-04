@@ -18,7 +18,8 @@
 .item img {
   width: 4.5rem;
   aspect-ratio: var(--card-aspect);
-  object-fit: cover;
+  object-fit: contain;
+  background: var(--color-surface);
   border-radius: var(--radius-sm);
 }
 

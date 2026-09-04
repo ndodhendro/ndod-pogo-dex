@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { categoryForTag, lookForTag } from '../data/navIcons'
 import { SPECIES_BY_ID } from '../data/species'
-import type { SpecimenRow } from '../lib/db'
-import { specimenTags, TAG_LABELS } from '../lib/tags'
+import { db, type SpecimenRow } from '../lib/db'
+import { specimenTags, labelForTag } from '../lib/tags'
 import { TagChip } from './TagChip'
 import styles from './CardPreview.module.css'
 
@@ -12,6 +14,7 @@ type Props = {
   onClose: () => void
   onSetCover: () => void
   onOpenGallery: () => void
+  onDelete: () => void | Promise<void>
 }
 
 export function CardPreview({
@@ -21,11 +24,20 @@ export function CardPreview({
   onClose,
   onSetCover,
   onOpenGallery,
+  onDelete,
 }: Props) {
   const species = SPECIES_BY_ID.get(specimen.speciesId)
   const tags = specimenTags(specimen)
+  const categories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
   const sheetRef = useRef<HTMLDivElement>(null)
   const [dragY, setDragY] = useState(0)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  useEffect(() => {
+    setConfirmDelete(false)
+    setDeleting(false)
+  }, [specimen.id])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -48,6 +60,15 @@ export function CardPreview({
   function onTouchEnd() {
     if (dragY > 90) onClose()
     setDragY(0)
+  }
+
+  async function confirmRemove() {
+    setDeleting(true)
+    try {
+      await onDelete()
+    } finally {
+      setDeleting(false)
+    }
   }
 
   return (
@@ -85,26 +106,68 @@ export function CardPreview({
           {specimen.form ? <p className={styles.form}>{specimen.form}</p> : null}
           <div className="chip-row">
             {tags.map((tag) => {
+              const look = lookForTag(tag, categories)
+              const named = categoryForTag(categories, tag)?.name
               const extra =
                 tag === 'costume'
-                  ? specimen.costume || TAG_LABELS.costume
+                  ? specimen.costume || named || labelForTag(tag)
                   : tag === 'background'
-                    ? specimen.background || TAG_LABELS.background
-                    : TAG_LABELS[tag]
-              return <TagChip key={tag} tag={tag} selected label={extra} />
+                    ? specimen.background || named || labelForTag(tag)
+                    : named || labelForTag(tag)
+              return (
+                <TagChip
+                  key={tag}
+                  tag={tag}
+                  selected
+                  icon={look.emoji}
+                  label={extra}
+                  labelColor={look.labelColor}
+                />
+              )
             })}
           </div>
         </div>
-        <div className={styles.actions}>
-          {canSetCover ? (
-            <button type="button" className="btn btn-primary" onClick={onSetCover}>
-              Set as cover
+        {confirmDelete ? (
+          <>
+            <p className="page-sub">
+              Remove this specimen from the collection? The screenshot will be gone.
+            </p>
+            <div className={styles.actions}>
+              <button
+                type="button"
+                className="btn"
+                disabled={deleting}
+                onClick={() => setConfirmDelete(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={deleting}
+                onClick={() => void confirmRemove()}
+              >
+                <span aria-hidden="true">🗑️</span>
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className={styles.actions}>
+            {canSetCover ? (
+              <button type="button" className="btn btn-primary" onClick={onSetCover}>
+                Set as cover
+              </button>
+            ) : null}
+            <button type="button" className="btn" onClick={onOpenGallery}>
+              Species gallery
             </button>
-          ) : null}
-          <button type="button" className="btn" onClick={onOpenGallery}>
-            Species gallery
-          </button>
-        </div>
+            <button type="button" className="btn" onClick={() => setConfirmDelete(true)}>
+              <span aria-hidden="true">🗑️</span>
+              Delete
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

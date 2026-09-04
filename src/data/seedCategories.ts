@@ -1,3 +1,4 @@
+import { CATEGORY_ICONS, TAG_ICONS, TONE_TEXT_HEX } from './navIcons'
 import type { TagId } from '../lib/tags'
 
 export const SEED_CATEGORIES: {
@@ -6,15 +7,81 @@ export const SEED_CATEGORIES: {
   requiredTags: TagId[]
   sortOrder: number
   seed: boolean
+  emoji: string
+  labelColor: string
 }[] = [
-  { id: 'seed:living', name: 'Living', requiredTags: [], sortOrder: 0, seed: true },
-  { id: 'seed:shiny', name: 'Shiny', requiredTags: ['shiny'], sortOrder: 1, seed: true },
-  { id: 'seed:shadow', name: 'Shadow', requiredTags: ['shadow'], sortOrder: 2, seed: true },
-  { id: 'seed:purified', name: 'Purified', requiredTags: ['purified'], sortOrder: 3, seed: true },
-  { id: 'seed:costume', name: 'Costume', requiredTags: ['costume'], sortOrder: 4, seed: true },
-  { id: 'seed:background', name: 'Background', requiredTags: ['background'], sortOrder: 5, seed: true },
-  { id: 'seed:hundo', name: 'Hundo', requiredTags: ['hundo'], sortOrder: 6, seed: true },
-  { id: 'seed:nundo', name: 'Nundo', requiredTags: ['nundo'], sortOrder: 7, seed: true },
+  {
+    id: 'seed:living',
+    name: 'Basic',
+    requiredTags: [],
+    sortOrder: 0,
+    seed: true,
+    emoji: CATEGORY_ICONS.Basic,
+    labelColor: TONE_TEXT_HEX.living,
+  },
+  {
+    id: 'seed:shiny',
+    name: 'Shiny',
+    requiredTags: ['shiny'],
+    sortOrder: 1,
+    seed: true,
+    emoji: TAG_ICONS.shiny,
+    labelColor: TONE_TEXT_HEX.shiny,
+  },
+  {
+    id: 'seed:shadow',
+    name: 'Shadow',
+    requiredTags: ['shadow'],
+    sortOrder: 2,
+    seed: true,
+    emoji: TAG_ICONS.shadow,
+    labelColor: TONE_TEXT_HEX.shadow,
+  },
+  {
+    id: 'seed:purified',
+    name: 'Purified',
+    requiredTags: ['purified'],
+    sortOrder: 3,
+    seed: true,
+    emoji: TAG_ICONS.purified,
+    labelColor: TONE_TEXT_HEX.purified,
+  },
+  {
+    id: 'seed:costume',
+    name: 'Costume',
+    requiredTags: ['costume'],
+    sortOrder: 4,
+    seed: true,
+    emoji: TAG_ICONS.costume,
+    labelColor: TONE_TEXT_HEX.costume,
+  },
+  {
+    id: 'seed:background',
+    name: 'Background',
+    requiredTags: ['background'],
+    sortOrder: 5,
+    seed: true,
+    emoji: TAG_ICONS.background,
+    labelColor: TONE_TEXT_HEX.background,
+  },
+  {
+    id: 'seed:hundo',
+    name: 'Hundo',
+    requiredTags: ['hundo'],
+    sortOrder: 6,
+    seed: true,
+    emoji: TAG_ICONS.hundo,
+    labelColor: TONE_TEXT_HEX.hundo,
+  },
+  {
+    id: 'seed:nundo',
+    name: 'Nundo',
+    requiredTags: ['nundo'],
+    sortOrder: 7,
+    seed: true,
+    emoji: TAG_ICONS.nundo,
+    labelColor: TONE_TEXT_HEX.nundo,
+  },
 ]
 
 /**
@@ -34,6 +101,21 @@ export const SEED_CLOUD_IDS: Record<string, string> = {
 }
 
 export const LEGACY_SEED_CLOUD_IDS = Object.values(SEED_CLOUD_IDS)
+
+/** Older cloud/local rows used Living or Pokémon for the empty-tag seed track. */
+export const LEGACY_SEED_NAMES: Record<string, string> = {
+  Living: 'Basic',
+  Pokémon: 'Basic',
+  Pokemon: 'Basic',
+}
+
+export function canonicalSeedName(name: string) {
+  return LEGACY_SEED_NAMES[name] ?? name
+}
+
+export function seedCategoryById(id: string) {
+  return SEED_CATEGORIES.find((row) => row.id === id)
+}
 
 /** Deterministic UUID so each signed-in account can backup the same seed tracks. */
 export function perUserSeedCloudId(userId: string, seedLocalId: string) {
@@ -65,7 +147,8 @@ export function fromCloudCategoryId(
     if (seed) return seed.id
   }
   if (meta?.seed && meta.name) {
-    const named = SEED_CATEGORIES.find((row) => row.name === meta.name)
+    const seedName = meta.name
+    const named = SEED_CATEGORIES.find((row) => row.name === canonicalSeedName(seedName))
     if (named) return named.id
   }
   return id

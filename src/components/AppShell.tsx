@@ -1,7 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { APP_CONFIG } from '../config'
-import { TAB_ICONS } from '../data/navIcons'
+import { TAB_ICONS, TAB_LOGOS } from '../data/navIcons'
 import { db } from '../lib/db'
 import styles from './AppShell.module.css'
 
@@ -13,16 +13,9 @@ export function AppShell() {
       <main className="app-main">
         <Outlet />
       </main>
-      <footer className={styles.footer}>
-        <span>v{APP_CONFIG.version}</span>
-        <span className={styles.dot} aria-hidden="true">
-          ·
-        </span>
-        <span>{APP_CONFIG.credit}</span>
-      </footer>
       <nav className={styles.nav}>
         <NavLink
-          to="/inbox"
+          to="/transfer"
           data-tone="inbox"
           className={({ isActive }) => (isActive ? styles.active : undefined)}
         >
@@ -30,7 +23,7 @@ export function AppShell() {
             {TAB_ICONS.inbox}
           </span>
           <span className={styles.label}>
-            Inbox
+            Transfer
             {inboxCount > 0 ? <span className={styles.badge}>{inboxCount}</span> : null}
           </span>
         </NavLink>
@@ -40,9 +33,16 @@ export function AppShell() {
           className={({ isActive }) => (isActive ? styles.active : undefined)}
         >
           <span className={styles.icon} aria-hidden="true">
-            {TAB_ICONS.dex}
+            <img
+              className={styles.logo}
+              src={`${import.meta.env.BASE_URL}${TAB_LOGOS.dex}`}
+              alt=""
+              draggable={false}
+              width={24}
+              height={24}
+            />
           </span>
-          <span className={styles.label}>Dex</span>
+          <span className={styles.label}>Pokédex</span>
         </NavLink>
         <NavLink
           to="/settings"
@@ -55,6 +55,10 @@ export function AppShell() {
           <span className={styles.label}>Settings</span>
         </NavLink>
       </nav>
+      <footer className={styles.footer}>
+        <span className={styles.version}>v{APP_CONFIG.version}</span>
+        <span className={styles.credit}>{APP_CONFIG.credit}</span>
+      </footer>
     </div>
   )
 }

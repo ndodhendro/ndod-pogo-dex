@@ -9,17 +9,18 @@ Every menu, submenu, tab, track chip, and navigation control shows **icon + text
 
 - Prefer Unicode emoji first (no asset file). Keep the English label visible.
 - Mark the glyph `aria-hidden="true"`. The text is the accessible name.
-- User-made categories: icon of the first required tag, or 📌 if none.
+- User-made categories: stored emoji, else the first required tag, or 📌 if none.
+- A category may store a font color; when set, that color is used on its labels.
 - Custom PNG/SVG live in `public/nav/` (64×64, dark theme, no Pokemon IP).
 - If a custom image is required and you cannot generate it, do not ship a blank icon. Give a ready-to-paste prompt: subject, style, colors, size, transparent background, filename.
 
 ## Default map
 
 | Item | Emoji |
-| Inbox | 📥 |
-| Dex | 📒 |
+| Transfer | 📥 |
+| Pokédex | app logo (`public/nav/pokedex.png`) |
 | Settings | ⚙️ |
-| Living | 🌿 |
+| Basic | 🌿 |
 | Shiny | ✨ |
 | Shadow | 🌑 |
 | Purified | 💎 |
@@ -36,11 +37,13 @@ Every menu, submenu, tab, track chip, and navigation control shows **icon + text
 
 ```tsx
 // ❌ BAD
-<NavLink to="/dex">Dex</NavLink>
+<NavLink to="/dex">Pokédex</NavLink>
 
 // ✅ GOOD
 <NavLink to="/dex">
-  <span aria-hidden="true">📒</span>
-  Dex
+  <span aria-hidden="true">
+    <img src={`${import.meta.env.BASE_URL}nav/pokedex.png`} alt="" width={24} height={24} />
+  </span>
+  Pokédex
 </NavLink>
 ```

@@ -30,3 +30,7 @@
 .toast[data-tone='warning'] {
   border-color: var(--color-warning);
 }
+
+.toast[data-tone='success'] {
+  border-color: var(--color-accent);
+}

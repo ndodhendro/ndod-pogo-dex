@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { coverPurity, shouldAutoReplaceCover, speciesInCategory } from './covers'
+import { coverPurity, pickCoverAfterDelete, speciesInCategory, shouldAutoReplaceCover } from './covers'
 import { hasAllRequired, isExactMatch, specimenTags, visualKey } from './tags'
 
 const shadowGray = specimenTags({
@@ -40,6 +40,20 @@ describe('tags', () => {
     expect(visualKey({ ...base, nundo: true })).toBe(visualKey(base))
   })
 
+  it('includes custom tags in the visual uniqueness key', () => {
+    const base = {
+      speciesId: 25,
+      form: null,
+      shiny: false,
+      shadowStatus: 'none' as const,
+      costume: null,
+      background: null,
+      hundo: false,
+      nundo: false,
+    }
+    expect(visualKey({ ...base, extraTags: ['lucky'] })).not.toBe(visualKey(base))
+  })
+
   it('treats costume and background values as part of uniqueness', () => {
     const base = {
       speciesId: 25,
@@ -73,7 +87,7 @@ describe('categories', () => {
     expect(hasAllRequired(shadowPure, ['shiny', 'shadow'])).toBe(false)
   })
 
-  it('treats Living (no required tags) as matching every specimen', () => {
+  it('treats Basic (no required tags) as matching every specimen', () => {
     expect(hasAllRequired(shadowGray, [])).toBe(true)
     expect(isExactMatch(shadowGray, [])).toBe(false)
     expect(isExactMatch([], [])).toBe(true)
@@ -98,6 +112,31 @@ describe('covers', () => {
 
   it('uses the first in-category specimen as cover when none exists', () => {
     expect(shouldAutoReplaceCover(['shadow'], null, shadowGray)).toBe(true)
+  })
+
+  it('picks a remaining green cover after delete, else the newest gray', () => {
+    expect(
+      pickCoverAfterDelete(
+        ['shadow'],
+        [
+          { id: 'gray-old', tags: shadowGray, createdAt: 1 },
+          { id: 'green', tags: shadowPure, createdAt: 2 },
+          { id: 'gray-new', tags: shadowGray, createdAt: 3 },
+        ],
+      ),
+    ).toBe('green')
+    expect(
+      pickCoverAfterDelete(
+        ['shadow'],
+        [
+          { id: 'gray-old', tags: shadowGray, createdAt: 1 },
+          { id: 'gray-new', tags: shadowGray, createdAt: 3 },
+        ],
+      ),
+    ).toBe('gray-new')
+    expect(pickCoverAfterDelete(['shadow', 'hundo'], [{ id: 'gray-old', tags: shadowGray, createdAt: 1 }])).toBe(
+      null,
+    )
   })
 
   it('requires exact [shadow, hundo] for a green Shadow Hundo cover', () => {

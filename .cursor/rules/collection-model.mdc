@@ -7,11 +7,13 @@ alwaysApply: true
 
 Unit of collection = one screenshot (`specimen`) with independent tags. Never store a combo name as a tag (`shadow_shiny_polos`). Combos are categories.
 
-Visual uniqueness key: `species + form + shiny + costume + shadowStatus + background`. IV is not in that key. "Normal IV" is not a tag.
+Visual uniqueness key: `species + form + shiny + costume + shadowStatus + background + custom tags`. IV is not in that key. "Normal IV" is not a tag.
 
-A **category** is a name plus a set of required tags the user picks. Seed defaults (Living, Shiny, Shadow, Purified, Costume, Background, Hundo, Nundo). Users may add more. Adding a category does not create a new tag.
+A **category** is a name plus a set of required tags the user picks. Seed defaults (Basic, Shiny, Shadow, Purified, Costume, Background, Hundo, Nundo). Users may add more.
 
-- Living = no required tags. Pure = specimen with zero tags (default look).
+- Basic = no required tags. Pure = specimen with zero tags (default look).
+- A custom category saved with **no picked tags** (Lucky, etc.) defines one new atomic tag from its name. That tag shows in required tags and on Transfer.
+- Picking existing tags makes a combo track (`[shadow, hundo]`). Do not store a combo name as a tag (`shadow_shiny_polos`).
 - Shadow polos = category tags `[shadow]` only. Do not add an IV tag unless the category is meant to be Shadow Hundo / Shadow Nundo.
 - Hundo / Nundo are optional tags (`hundo`, `nundo`), not a generic `iv` tag.
 

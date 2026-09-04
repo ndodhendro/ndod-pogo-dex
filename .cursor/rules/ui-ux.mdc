@@ -1,5 +1,5 @@
 ---
-description: Dark theme, English UI, design tokens, toast, Inbox, performance
+description: Dark theme, English UI, design tokens, toast, Transfer, performance
 alwaysApply: true
 ---
 
@@ -7,11 +7,11 @@ alwaysApply: true
 
 English UI. Dark theme. One component set on every page: `DexCard`, `TrackChip`, `TagChip`, `BottomSheet`, `Toast`, `SearchField`. Tokenize color, type, spacing by function, not by page. Every menu, submenu, and nav item is icon + text (see nav-labels). Type, label color, borders, and grouping stay consistent (see visual-design).
 
-Toast: `position: fixed` at the top, including `safe-area-inset-top`. Stays on screen while scrolling. Use for errors and duplicates, not for obvious save success.
+Toast: `position: fixed` at the top, including `safe-area-inset-top`. Stays on screen while scrolling. Show a toast after every action that writes to the collection (save, delete, reorder, backup, restore), plus errors and duplicates.
 
 Auth: Sign in with Google via Supabase. No PIN pad. No idle lock. Env only has `SUPABASE_URL` and `SUPABASE_ANON_KEY`.
 
-Add flow: Android Share Target dumps the screenshot into **Inbox**. User tags later. No overlay on Pokemon GO.
+Add flow: Android Share Target dumps the screenshot into **Transfer**. User tags later. No overlay on Pokemon GO.
 
 Dex grid: thumbnails (~128px), virtualized, lazy-loaded, fixed aspect-ratio. Load a larger image only in preview. No VFX on grid cards.
 

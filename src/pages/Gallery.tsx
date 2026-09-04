@@ -3,13 +3,14 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CardPreview } from '../components/CardPreview'
 import { DexCard } from '../components/DexCard'
-import { toneForCategory } from '../data/navIcons'
+import { colorForCategory, iconForCategory, toneForCategory } from '../data/navIcons'
 import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { coverPurity } from '../lib/covers'
-import { setAsCover } from '../lib/collection'
+import { deleteSpecimen, setAsCover } from '../lib/collection'
+import { categoryChromeStyle } from '../lib/categoryStyle'
 import { db, type SpecimenRow } from '../lib/db'
-import { useToast } from '../lib/toast'
+import { toastAfterWrite, useToast } from '../lib/toast'
 import { hasAllRequired, specimenTags } from '../lib/tags'
 import styles from './Gallery.module.css'
 
@@ -41,8 +42,20 @@ export function GalleryPage() {
   return (
     <section>
       <p className="page-sub">
-        <Link to={`/dex/${categoryId}`} data-tone={category ? toneForCategory(category) : 'dex'}>
-          ← {category?.name ?? 'Dex'}
+        <Link
+          to={`/dex/${categoryId}`}
+          data-tone={category ? toneForCategory(category) : 'dex'}
+          style={category ? categoryChromeStyle(colorForCategory(category)) : undefined}
+        >
+          ←{' '}
+          {category ? (
+            <>
+              <span aria-hidden="true">{iconForCategory(category)} </span>
+              {category.name}
+            </>
+          ) : (
+            'Pokédex'
+          )}
         </Link>
       </p>
       <h1 className="page-title">{species.name}</h1>
@@ -77,12 +90,20 @@ export function GalleryPage() {
           onSetCover={() => {
             void setAsCover(category.id, preview.id)
               .then((cloudError) => {
-                if (cloudError) showToast(cloudError, 'warning')
+                toastAfterWrite(showToast, 'Cover updated', cloudError)
                 setPreview(null)
               })
               .catch((err) => showToast(err instanceof Error ? err.message : 'Could not set cover'))
           }}
           onOpenGallery={() => setPreview(null)}
+          onDelete={() =>
+            deleteSpecimen(preview.id)
+              .then((cloudError) => {
+                toastAfterWrite(showToast, 'Specimen deleted', cloudError)
+                setPreview(null)
+              })
+              .catch((err) => showToast(err instanceof Error ? err.message : 'Could not delete'))
+          }
         />
       ) : null}
     </section>

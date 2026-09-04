@@ -2,3 +2,158 @@
   display: grid;
   gap: var(--space-3);
 }
+
+.addCategory {
+  margin-bottom: var(--space-2);
+}
+
+.catList {
+  display: grid;
+}
+
+.catItem {
+  --cat-swipe-width: 72px;
+  position: relative;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overscroll-behavior-x: none;
+}
+
+.catList[data-reordering='true'] .catItem:not([data-dragging='true']) {
+  transition: transform 0.16s ease;
+}
+
+.catItem[data-dragging='true'] {
+  z-index: 3;
+  overflow: visible;
+  margin: 0 calc(var(--space-2) * -1);
+  padding-left: var(--space-2);
+  padding-right: var(--space-2);
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-card);
+  transition: none;
+}
+
+.swipeDelete {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: var(--cat-swipe-width);
+  min-height: var(--tap-min);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  background: var(--color-danger);
+  color: #1a1010;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-ui);
+  line-height: var(--line-tight);
+  touch-action: manipulation;
+}
+
+.swipeDeleteIcon {
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+}
+
+.swipeDeleteIcon svg {
+  display: block;
+}
+
+.catList .catFront {
+  position: relative;
+  z-index: 1;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  background: var(--color-surface);
+  touch-action: pan-y;
+}
+
+.catFront[data-swipe-animate='true'] {
+  transition: transform 0.2s ease;
+}
+
+.catItem[data-dragging='true'] .catFront {
+  background: var(--color-surface-raised);
+}
+
+.confirmCopy {
+  margin: 0 0 var(--space-4);
+}
+
+.handle {
+  flex: 0 0 auto;
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  display: grid;
+  place-items: center end;
+  margin-right: calc(var(--space-2) - var(--space-3));
+  color: var(--color-text-muted);
+  cursor: grab;
+  touch-action: none;
+  border-radius: var(--radius-sm);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.handle:active,
+.catItem[data-dragging='true'] .handle {
+  cursor: grabbing;
+  color: var(--color-text);
+}
+
+.catEdit {
+  flex: 1 1 8rem;
+  min-width: 0;
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  text-align: left;
+}
+
+.emojiInput {
+  width: 5.5rem;
+  text-align: center;
+  font-size: var(--font-size-xl);
+  line-height: 1;
+}
+
+.lookRow {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: var(--space-3);
+  align-items: start;
+}
+
+.lookPreview {
+  pointer-events: none;
+}
+
+.categoryForm {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sheetSave {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-top: var(--space-2);
+  background: var(--color-surface);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .catList[data-reordering='true'] .catItem:not([data-dragging='true']),
+  .catFront[data-swipe-animate='true'] {
+    transition: none;
+  }
+}

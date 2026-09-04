@@ -19,4 +19,4 @@ The preview shows the specimen photo (medium size, not the grid thumb) and **sta
 
 Example: Shadow Dex cover that is shiny+shadow+Tokyo → purple aura **and** sparkles, Tokyo photo, chips for all tags.
 
-Keep VFX on preview only (one card). CSS/Canvas, pause when closed, respect `prefers-reduced-motion` (static glow). Preview actions: `Set as cover`, open species gallery. No pin.
+Keep VFX on preview only (one card). CSS/Canvas, pause when closed, respect `prefers-reduced-motion` (static glow). Preview actions: `Set as cover`, open species gallery, delete specimen. No pin.

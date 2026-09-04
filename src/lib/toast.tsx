@@ -7,7 +7,7 @@ import {
   type ReactNode,
 } from 'react'
 
-type ToastTone = 'error' | 'warning'
+type ToastTone = 'error' | 'warning' | 'success'
 
 export type ToastMessage = {
   id: string
@@ -23,6 +23,8 @@ type ToastApi = {
 
 const ToastContext = createContext<ToastApi | null>(null)
 
+let toastSeq = 0
+
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastMessage[]>([])
 
@@ -32,7 +34,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const showToast = useCallback(
     (text: string, tone: ToastTone = 'error') => {
-      const id = crypto.randomUUID()
+      const id = `toast-${Date.now()}-${++toastSeq}`
       setToasts((list) => [...list, { id, text, tone }])
       window.setTimeout(() => dismissToast(id), 5000)
     },
@@ -51,4 +53,14 @@ export function useToast() {
   const ctx = useContext(ToastContext)
   if (!ctx) throw new Error('useToast needs ToastProvider')
   return ctx
+}
+
+/** Local write succeeded: success toast, unless cloud backup returned a warning. */
+export function toastAfterWrite(
+  showToast: ToastApi['showToast'],
+  success: string,
+  cloudError?: string,
+) {
+  if (cloudError) showToast(cloudError, 'warning')
+  else showToast(success, 'success')
 }

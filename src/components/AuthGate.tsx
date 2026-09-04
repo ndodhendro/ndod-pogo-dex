@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { isAuthConfigured, signInWithGoogle, subscribeToSession, getSession } from '../lib/auth'
+import { hydrateCategoriesFromCloud, subscribeCategoryChanges } from '../lib/categorySync'
 import { backupAllMetadata } from '../lib/sync'
 import { useToast } from '../lib/toast'
 import styles from './AuthGate.module.css'
@@ -50,9 +51,21 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!session) return
-    void backupAllMetadata().then((message) => {
-      if (message) showToast(message, 'warning')
-    })
+    let cancelled = false
+    let unsubscribe: (() => void) | undefined
+    void (async () => {
+      const hydrateMessage = await hydrateCategoriesFromCloud()
+      if (cancelled) return
+      if (hydrateMessage) showToast(hydrateMessage, 'warning')
+      unsubscribe = subscribeCategoryChanges(session.user.id)
+      const backupMessage = await backupAllMetadata()
+      if (cancelled) return
+      if (backupMessage) showToast(backupMessage, 'warning')
+    })()
+    return () => {
+      cancelled = true
+      unsubscribe?.()
+    }
   }, [session, showToast])
 
   async function onGoogle() {

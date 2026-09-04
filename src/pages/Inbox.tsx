@@ -1,13 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useMemo, useState } from 'react'
 import { BottomSheet } from '../components/BottomSheet'
+import { FilePickerButton } from '../components/FilePickerButton'
 import { SearchField } from '../components/SearchField'
 import { TagChip } from '../components/TagChip'
-import { TrackChip } from '../components/TrackChip'
-import { iconForForm, toneForForm } from '../data/navIcons'
-import { COMMON_FORMS, searchSpecies, SPECIES_BY_ID } from '../data/species'
+import { specimenTagChoices } from '../data/navIcons'
+import { searchSpecies, SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
-import { RestoreGalleryButton } from '../components/RestoreGalleryButton'
 import {
   discardInbox,
   importPendingShares,
@@ -15,10 +14,12 @@ import {
   saveSpecimenFromInbox,
 } from '../lib/collection'
 import { db, type InboxRow } from '../lib/db'
+import { isProbablyImageFile } from '../lib/images'
 import { useToast } from '../lib/toast'
 import {
+  normalizeOptionalName,
+  specimenSaveWarning,
   specimenTags,
-  TAG_IDS,
   toggleTag,
   type SpecimenFields,
 } from '../lib/tags'
@@ -33,12 +34,14 @@ const emptyFields = (): SpecimenFields => ({
   background: null,
   hundo: false,
   nundo: false,
+  extraTags: [],
 })
 
 export function InboxPage() {
   const { showToast } = useToast()
   const items = useLiveQuery(() => db.inbox.orderBy('createdAt').reverse().toArray(), []) ?? []
   const [active, setActive] = useState<InboxRow | null>(null)
+  const [adding, setAdding] = useState(false)
 
   useEffect(() => {
     importPendingShares().catch(() => {
@@ -46,45 +49,46 @@ export function InboxPage() {
     })
   }, [showToast])
 
-  async function onFiles(list: FileList | null) {
-    if (!list) return
-    for (const file of [...list]) {
-      if (!file.type.startsWith('image/')) {
-        showToast('That file is not an image')
-        continue
+  async function onFiles(list: File[]) {
+    if (list.length === 0) return
+    setAdding(true)
+    let added = 0
+    try {
+      for (const file of list) {
+        if (!isProbablyImageFile(file)) {
+          showToast('That file is not an image')
+          continue
+        }
+        try {
+          await ingestFile(file)
+          added += 1
+        } catch (err) {
+          showToast(err instanceof Error ? err.message : 'Could not add screenshot')
+        }
       }
-      try {
-        await ingestFile(file)
-      } catch (err) {
-        showToast(err instanceof Error ? err.message : 'Could not add screenshot')
-      }
+      if (added === 1) showToast('Screenshot added', 'success')
+      else if (added > 1) showToast(`${added} screenshots added`, 'success')
+    } finally {
+      setAdding(false)
     }
   }
 
   return (
     <section>
       <h1 className="page-title" data-tone="inbox">
-        Inbox
+        Transfer
       </h1>
-      <p className="page-sub">Share a screenshot from your phone, then tag it here.</p>
       <div className="row-actions" style={{ marginBottom: '1rem' }}>
-        <label className="btn btn-primary" style={{ display: 'inline-grid', placeItems: 'center' }}>
-          Add screenshots
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            onChange={(e) => {
-              void onFiles(e.target.files)
-              e.target.value = ''
-            }}
-          />
-        </label>
-        <RestoreGalleryButton />
+        <FilePickerButton
+          className="btn btn-primary"
+          label={adding ? 'Adding…' : 'Add screenshots'}
+          disabled={adding}
+          preferScreenshotsFolder
+          onFiles={(list) => void onFiles(list)}
+        />
       </div>
       {items.length === 0 ? (
-        <p className="empty-state">Nothing waiting. Catch something, screenshot it, share it here.</p>
+        <p className="empty-state">Nothing waiting. Catch something, screenshot it, transfer it here.</p>
       ) : (
         <div className={styles.list} style={{ marginTop: '1rem' }}>
           {items.map((item) => (
@@ -93,7 +97,11 @@ export function InboxPage() {
               item={item}
               onTag={() => setActive(item)}
               onDiscard={() => {
-                void discardInbox(item.id).catch(() => showToast('Could not discard'))
+                void discardInbox(item.id)
+                  .then(() => showToast('Screenshot discarded', 'success'))
+                  .catch((err) =>
+                    showToast(err instanceof Error ? err.message : 'Could not discard'),
+                  )
               }}
             />
           ))}
@@ -106,7 +114,9 @@ export function InboxPage() {
           setActive(null)
           if (duplicate) showToast('Same look already in the collection', 'warning')
           if (cloudError) showToast(cloudError, 'warning')
+          else if (!duplicate) showToast('Specimen saved', 'success')
         }}
+        onWarning={(message) => showToast(message, 'warning')}
         onError={(message) => showToast(message)}
       />
     </section>
@@ -148,18 +158,25 @@ function TagSheet({
   item,
   onClose,
   onSaved,
+  onWarning,
   onError,
 }: {
   item: InboxRow | null
   onClose: () => void
   onSaved: (duplicate: boolean, cloudError?: string) => void
+  onWarning: (message: string) => void
   onError: (message: string) => void
 }) {
   const [query, setQuery] = useState('')
   const [fields, setFields] = useState<SpecimenFields>(emptyFields)
   const [busy, setBusy] = useState(false)
+  const categories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
+  const tagChoices = useMemo(() => specimenTagChoices(categories), [categories])
   const tags = specimenTags(fields)
-  const matches = useMemo(() => searchSpecies(query).slice(0, 12), [query])
+  const matches = useMemo(() => {
+    if (!query.trim()) return []
+    return searchSpecies(query).slice(0, 12)
+  }, [query])
   const selected = fields.speciesId ? SPECIES_BY_ID.get(fields.speciesId) : undefined
 
   useEffect(() => {
@@ -169,16 +186,17 @@ function TagSheet({
 
   async function save() {
     if (!item) return
-    if (!fields.speciesId) {
-      onError('Pick a species first')
+    const warning = specimenSaveWarning(fields)
+    if (warning) {
+      onWarning(warning)
       return
     }
     setBusy(true)
     try {
       const result = await saveSpecimenFromInbox(item.id, {
         ...fields,
-        costume: fields.costume === null ? null : fields.costume.trim() || '',
-        background: fields.background === null ? null : fields.background.trim() || '',
+        costume: normalizeOptionalName(fields.costume),
+        background: normalizeOptionalName(fields.background),
       })
       onSaved(result.duplicate, result.cloudError)
     } catch (err) {
@@ -192,49 +210,35 @@ function TagSheet({
     <BottomSheet open={Boolean(item)} title="Tag screenshot" onClose={onClose}>
       <SearchField value={query} onChange={setQuery} placeholder="Species name or number" />
       {selected ? <p className="page-sub">Selected: {selected.name}</p> : null}
-      <div className={styles.speciesList}>
-        {matches.map((species) => (
-          <button
-            key={species.id}
-            type="button"
-            data-on={fields.speciesId === species.id ? 'true' : 'false'}
-            onClick={() => setFields((f) => ({ ...f, speciesId: species.id }))}
-          >
-            #{String(species.id).padStart(4, '0')} {species.name}
-          </button>
-        ))}
-      </div>
-      <div className="field">
-        <span>Form</span>
-        <div className="chip-row">
-          <TrackChip
-            icon={iconForForm(null)}
-            tone={toneForForm(null)}
-            label="Default"
-            active={!fields.form}
-            onClick={() => setFields((f) => ({ ...f, form: null }))}
-          />
-          {COMMON_FORMS.map((form) => (
-            <TrackChip
-              key={form}
-              icon={iconForForm(form)}
-              tone={toneForForm(form)}
-              label={form}
-              active={fields.form === form}
-              onClick={() => setFields((f) => ({ ...f, form }))}
-            />
+      {matches.length > 0 ? (
+        <div className={styles.speciesList}>
+          {matches.map((species) => (
+            <button
+              key={species.id}
+              type="button"
+              data-on={fields.speciesId === species.id ? 'true' : 'false'}
+              onClick={() => {
+                setFields((f) => ({ ...f, speciesId: species.id }))
+                setQuery('')
+              }}
+            >
+              #{String(species.id).padStart(4, '0')} {species.name}
+            </button>
           ))}
         </div>
-      </div>
+      ) : null}
       <div className="field">
         <span>Tags</span>
         <div className="chip-row">
-          {TAG_IDS.map((tag) => (
+          {tagChoices.map((choice) => (
             <TagChip
-              key={tag}
-              tag={tag}
-              selected={tags.includes(tag)}
-              onClick={() => setFields((f) => toggleTag(f, tag))}
+              key={choice.tag}
+              tag={choice.tag}
+              selected={tags.includes(choice.tag)}
+              icon={choice.icon}
+              label={choice.label}
+              labelColor={choice.labelColor}
+              onClick={() => setFields((f) => toggleTag(f, choice.tag))}
             />
           ))}
         </div>
@@ -259,10 +263,6 @@ function TagSheet({
           />
         </label>
       ) : null}
-      <p className="page-sub">
-        Living cover stays green only for a default look (no tags). Extra tags can still fill other
-        dex tracks.
-      </p>
       <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void save()}>
         {busy ? 'Saving…' : 'Save specimen'}
       </button>

@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching'
 import { clientsClaim } from 'workbox-core'
+import { newId } from './lib/id'
 
 declare let self: ServiceWorkerGlobalScope & { __WB_MANIFEST: unknown }
 
@@ -38,7 +39,7 @@ async function handleShareTarget(request: Request) {
     await new Promise<void>((resolve, reject) => {
       const tx = shareDb.transaction(SHARE_STORE, 'readwrite')
       tx.objectStore(SHARE_STORE).put({
-        id: crypto.randomUUID(),
+        id: newId(),
         blob: file,
         createdAt: Date.now(),
       })
@@ -47,8 +48,8 @@ async function handleShareTarget(request: Request) {
     })
     shareDb.close()
   }
-  const inbox = new URL('inbox', new URL(import.meta.env.BASE_URL, self.location.origin))
-  return Response.redirect(inbox.href, 303)
+  const transfer = new URL('transfer', new URL(import.meta.env.BASE_URL, self.location.origin))
+  return Response.redirect(transfer.href, 303)
 }
 
 self.addEventListener('fetch', (event) => {

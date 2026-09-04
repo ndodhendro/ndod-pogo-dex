@@ -1,18 +1,20 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { CardPreview } from '../components/CardPreview'
 import { DexCard } from '../components/DexCard'
 import { SearchField } from '../components/SearchField'
 import { TrackChip } from '../components/TrackChip'
-import { iconForCategory, toneForCategory } from '../data/navIcons'
+import { colorForCategory, iconForCategory, toneForCategory } from '../data/navIcons'
 import { SPECIES, SPECIES_BY_ID, searchSpecies } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { coverPurity, type CoverPurity } from '../lib/covers'
-import { setAsCover } from '../lib/collection'
+import { deleteSpecimen, setAsCover } from '../lib/collection'
+import { categoryChromeStyle } from '../lib/categoryStyle'
+import { dexGridLayout } from '../lib/dexGrid'
 import { db, ensureSeedCategories, type CategoryRow, type CoverRow, type SpecimenRow } from '../lib/db'
-import { useToast } from '../lib/toast'
+import { toastAfterWrite, useToast } from '../lib/toast'
 import { hasAllRequired, specimenTags } from '../lib/tags'
 import styles from './Dex.module.css'
 
@@ -30,21 +32,24 @@ export function DexPage() {
   const { showToast } = useToast()
   const [query, setQuery] = useState('')
   const [preview, setPreview] = useState<SpecimenRow | null>(null)
-  const parentRef = useRef<HTMLDivElement>(null)
-  const [width, setWidth] = useState(360)
+  const [host, setHost] = useState<HTMLDivElement | null>(null)
+  const [width, setWidth] = useState(0)
 
   useEffect(() => {
     void ensureSeedCategories()
   }, [])
 
-  useEffect(() => {
-    const el = parentRef.current
-    if (!el) return
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth))
-    ro.observe(el)
-    setWidth(el.clientWidth)
+  useLayoutEffect(() => {
+    if (!host) return
+    const readWidth = () => {
+      const next = host.clientWidth
+      if (next > 0) setWidth(next)
+    }
+    const ro = new ResizeObserver(readWidth)
+    ro.observe(host)
+    readWidth()
     return () => ro.disconnect()
-  }, [])
+  }, [host])
 
   const categories =
     useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
@@ -63,30 +68,52 @@ export function DexPage() {
   )
 
   const filledCount = allSlots.filter((s) => s.filled).length
-  const columns = Math.max(3, Math.min(6, Math.floor((width + 8) / 112)))
+  const { columns, rowHeight } = dexGridLayout(width)
   const rowCount = Math.ceil(slots.length / columns)
-  const cardWidth = (width - (columns - 1) * 8) / columns
-  const rowHeight = cardWidth * (4 / 3) + 22
   const mediumUrl = usePreviewImage(preview?.imageId)
 
   const virtualizer = useVirtualizer({
     count: rowCount,
-    getScrollElement: () => parentRef.current,
+    getScrollElement: () => host,
     estimateSize: () => rowHeight,
     overscan: 8,
   })
 
-  if (categories.length > 0 && !categoryId) {
-    return <Navigate to={`/dex/${categories[0].id}`} replace />
+  useLayoutEffect(() => {
+    virtualizer.measure()
+  }, [rowHeight, virtualizer])
+
+  if (!categoryId) {
+    if (categories[0]) {
+      return <Navigate to={`/dex/${categories[0].id}`} replace />
+    }
+    return (
+      <section>
+        <h1 className="page-title">Pokédex</h1>
+      </section>
+    )
   }
-  if (categories.length > 0 && categoryId && !categories.some((c) => c.id === categoryId)) {
+  if (categories.length > 0 && !categories.some((c) => c.id === categoryId)) {
     return <Navigate to={`/dex/${categories[0].id}`} replace />
   }
 
   return (
     <section>
-      <h1 className="page-title" data-tone={category ? toneForCategory(category) : 'dex'}>
-        {category?.name ?? 'Dex'}
+      <h1
+        className={`page-title ${styles.title}`}
+        data-tone={category ? toneForCategory(category) : 'dex'}
+        style={category ? categoryChromeStyle(colorForCategory(category)) : undefined}
+      >
+        {category ? (
+          <>
+            <span className={styles.titleIcon} aria-hidden="true">
+              {iconForCategory(category)}
+            </span>
+            {category.name}
+          </>
+        ) : (
+          'Pokédex'
+        )}
       </h1>
       <p className={styles.progress}>
         {filledCount} / {SPECIES.length}
@@ -97,6 +124,7 @@ export function DexPage() {
             key={cat.id}
             icon={iconForCategory(cat)}
             tone={toneForCategory(cat)}
+            labelColor={colorForCategory(cat)}
             label={cat.name}
             active={cat.id === category?.id}
             onClick={() => navigate(`/dex/${cat.id}`)}
@@ -104,7 +132,7 @@ export function DexPage() {
         ))}
       </div>
       <SearchField value={query} onChange={setQuery} placeholder="Filter species" />
-      <div ref={parentRef} className={styles.gridHost} style={{ marginTop: '0.75rem' }}>
+      <div ref={setHost} className={styles.gridHost} style={{ marginTop: '0.75rem' }}>
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualizer.getVirtualItems().map((row) => {
             const start = row.index * columns
@@ -142,7 +170,7 @@ export function DexPage() {
           onSetCover={() => {
             void setAsCover(category.id, preview.id)
               .then((cloudError) => {
-                if (cloudError) showToast(cloudError, 'warning')
+                toastAfterWrite(showToast, 'Cover updated', cloudError)
                 setPreview(null)
               })
               .catch((err) => showToast(err instanceof Error ? err.message : 'Could not set cover'))
@@ -151,6 +179,14 @@ export function DexPage() {
             setPreview(null)
             navigate(`/dex/${category.id}/species/${preview.speciesId}`)
           }}
+          onDelete={() =>
+            deleteSpecimen(preview.id)
+              .then((cloudError) => {
+                toastAfterWrite(showToast, 'Specimen deleted', cloudError)
+                setPreview(null)
+              })
+              .catch((err) => showToast(err instanceof Error ? err.message : 'Could not delete'))
+          }
         />
       ) : null}
     </section>

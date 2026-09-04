@@ -20,8 +20,8 @@ One family everywhere: `Rajdhani` (`--font-sans`), with system-ui fallback. Gami
 Semantic hue is for **labels** (nav, tracks, tags, forms, page titles). Body copy stays `--color-text`. Fill the hue at low opacity; text uses the lighter `*-text` token so it stays readable on `#0e1116`.
 
 | Meaning | Token |
-| Inbox / incoming | `--color-inbox-text` |
-| Dex / Living / primary | `--color-living-text` |
+| Transfer / incoming | `--color-inbox-text` |
+| Dex / Basic / primary | `--color-living-text` |
 | Settings / tools | `--color-settings-text` |
 | Shiny | `--color-shiny-text` |
 | Shadow | `--color-shadow-text` |
@@ -31,7 +31,7 @@ Semantic hue is for **labels** (nav, tracks, tags, forms, page titles). Body cop
 | Hundo | `--color-hundo-text` |
 | Nundo | `--color-nundo-text` |
 
-Set `data-tone` on the control (see global `[data-tone]`). Custom categories use the first required tag’s tone, or `living` if none.
+Set `data-tone` on the control (see global `[data-tone]`). Custom categories use the first required tag’s tone, or `living` if none. A stored category font color overrides that tone on labels and track chips.
 
 ## Chrome
 

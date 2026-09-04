@@ -28,3 +28,19 @@ export function shouldAutoReplaceCover(
   const currentExact = isExactMatch(currentCoverTags, required)
   return incomingExact && !currentExact
 }
+
+/** Prefer a remaining green cover, else the newest in-category photo. */
+export function pickCoverAfterDelete(
+  required: TagId[],
+  remaining: { id: string; tags: TagId[]; createdAt: number }[],
+): string | null {
+  const candidates = remaining.filter((row) => hasAllRequired(row.tags, required))
+  if (candidates.length === 0) return null
+  const sorted = [...candidates].sort((a, b) => {
+    const aExact = isExactMatch(a.tags, required) ? 1 : 0
+    const bExact = isExactMatch(b.tags, required) ? 1 : 0
+    if (aExact !== bExact) return bExact - aExact
+    return b.createdAt - a.createdAt
+  })
+  return sorted[0]?.id ?? null
+}

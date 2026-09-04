@@ -1,7 +1,10 @@
 import { ingestFile } from './collection'
-import { db, ensureSeedCategories } from './db'
+import { db, ensureCustomCategoryTags, ensureSeedCategories } from './db'
+import { applyCategoryPull } from './categorySync'
+import { extraTagList } from './tags'
 import { hashBlob } from './hash'
-import { makeImageVariants } from './images'
+import { newId } from './id'
+import { isProbablyImageFile, makeImageVariants } from './images'
 import { planGalleryRestore } from './restorePlan'
 import { pullCloudCollection, type CloudSpecimen } from './sync'
 
@@ -35,12 +38,14 @@ export async function restoreFromGallery(
     throw new Error('No cloud metadata yet. Save tagged specimens while signed in first.')
   }
 
-  await ensureSeedCategories()
   if (cloud.categories.length > 0) {
-    await db.categories.bulkPut(cloud.categories)
+    await applyCategoryPull(cloud.categories)
+  } else {
+    await ensureSeedCategories()
+    await ensureCustomCategoryTags()
   }
 
-  const images = files.filter((file) => file.type.startsWith('image/') || !file.type)
+  const images = files.filter(isProbablyImageFile)
   const hashed: { hash: string; file: File }[] = []
   for (let i = 0; i < images.length; i++) {
     hashed.push({ hash: await hashBlob(images[i]), file: images[i] })
@@ -107,7 +112,7 @@ export async function restoreFromGallery(
 async function writeRestoredSpecimen(spec: CloudSpecimen, file: File) {
   if (await db.specimens.get(spec.id)) return
   const variants = await makeImageVariants(file)
-  const imageId = crypto.randomUUID()
+  const imageId = newId()
   await db.transaction('rw', db.images, db.specimens, async () => {
     await db.images.add({ id: imageId, ...variants })
     await db.specimens.add({
@@ -120,9 +125,11 @@ async function writeRestoredSpecimen(spec: CloudSpecimen, file: File) {
       background: spec.background,
       hundo: spec.hundo,
       nundo: spec.nundo,
+      extraTags: extraTagList(spec),
       imageId,
       fileHash: spec.fileHash,
       createdAt: spec.createdAt,
+      cloudBackupPending: false,
     })
   })
 }

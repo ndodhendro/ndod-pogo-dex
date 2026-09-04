@@ -39,4 +39,25 @@ describe('cloud seed category ids', () => {
       }),
     ).toBe('seed:shadow')
   })
+
+  it('maps legacy empty-tag seed names to the Basic track', () => {
+    expect(
+      fromCloudCategoryId('99999999-0000-4000-8000-000000000099', userId, {
+        seed: true,
+        name: 'Living',
+      }),
+    ).toBe('seed:living')
+    expect(
+      fromCloudCategoryId('99999999-0000-4000-8000-000000000099', userId, {
+        seed: true,
+        name: 'Pokémon',
+      }),
+    ).toBe('seed:living')
+    expect(
+      fromCloudCategoryId('99999999-0000-4000-8000-000000000099', userId, {
+        seed: true,
+        name: 'Basic',
+      }),
+    ).toBe('seed:living')
+  })
 })
