@@ -1,36 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { isProbablyImageFile, screenshotCropRect } from './images'
+import { isProbablyImageFile, thumbSizeFor } from './images'
 
 function file(name: string, type: string) {
   return new File(['x'], name, { type })
 }
 
-describe('screenshotCropRect', () => {
-  it('crops 738×1600 to 738×955 starting at y=55', () => {
-    expect(screenshotCropRect(738, 1600)).toEqual({
-      x: 0,
-      y: 55,
-      width: 738,
-      height: 955,
-    })
-  })
-
-  it('keeps full width and a 955px-tall slice on other sizes', () => {
-    expect(screenshotCropRect(1080, 2400)).toEqual({
-      x: 0,
-      y: 55,
-      width: 1080,
-      height: 955,
-    })
-  })
-
-  it('clamps to the image when the file is shorter than 1010px', () => {
-    expect(screenshotCropRect(1080, 900)).toEqual({
-      x: 0,
-      y: 55,
-      width: 1080,
-      height: 845,
-    })
+describe('thumbSizeFor', () => {
+  it('keeps the 738×1600 aspect at 3× display width', () => {
+    expect(thumbSizeFor(738, 1600)).toEqual({ width: 384, height: 833 })
   })
 })
 

@@ -9,7 +9,7 @@ import styles from './CardPreview.module.css'
 
 type Props = {
   specimen: SpecimenRow
-  mediumUrl: string
+  imageUrl: string
   canSetCover: boolean
   onClose: () => void
   onSetCover: () => void
@@ -19,7 +19,7 @@ type Props = {
 
 export function CardPreview({
   specimen,
-  mediumUrl,
+  imageUrl,
   canSetCover,
   onClose,
   onSetCover,
@@ -91,7 +91,7 @@ export function CardPreview({
             data-shadow={specimen.shadowStatus === 'shadow' ? 'true' : 'false'}
             data-purified={specimen.shadowStatus === 'purified' ? 'true' : 'false'}
           >
-            <img src={mediumUrl} alt={species?.name ?? 'Specimen'} />
+            <img src={imageUrl} alt={species?.name ?? 'Specimen'} />
             {tags.includes('shiny') ? (
               <>
                 <span className={styles.shine} />

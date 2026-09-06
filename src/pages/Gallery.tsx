@@ -35,7 +35,7 @@ export function GalleryPage() {
     [categoryId, speciesId],
   )
   const [preview, setPreview] = useState<SpecimenRow | null>(null)
-  const mediumUrl = useImageUrl(preview?.imageId, 'medium')
+  const previewUrl = useImageUrl(preview?.imageId, 'original')
 
   if (!species) return <p className="empty-state">Unknown species.</p>
 
@@ -81,10 +81,10 @@ export function GalleryPage() {
           ))}
         </div>
       )}
-      {preview && mediumUrl && category ? (
+      {preview && previewUrl && category ? (
         <CardPreview
           specimen={preview}
-          mediumUrl={mediumUrl}
+          imageUrl={previewUrl}
           canSetCover={hasAllRequired(specimenTags(preview), category.requiredTags)}
           onClose={() => setPreview(null)}
           onSetCover={() => {

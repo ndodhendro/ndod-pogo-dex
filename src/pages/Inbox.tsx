@@ -17,6 +17,7 @@ import { db, type InboxRow } from '../lib/db'
 import { isProbablyImageFile } from '../lib/images'
 import { useToast } from '../lib/toast'
 import {
+  clearVisualTags,
   normalizeOptionalName,
   specimenSaveWarning,
   specimenTags,
@@ -110,9 +111,10 @@ export function InboxPage() {
       <TagSheet
         item={active}
         onClose={() => setActive(null)}
-        onSaved={(duplicate, cloudError) => {
+        onSaved={(duplicate, cloudError, sameScreenshot) => {
           setActive(null)
-          if (duplicate) showToast('Same look already in the collection', 'warning')
+          if (sameScreenshot && duplicate) showToast('Screenshot already in the collection', 'warning')
+          else if (duplicate) showToast('Same look already in the collection', 'warning')
           if (cloudError) showToast(cloudError, 'warning')
           else if (!duplicate) showToast('Specimen saved', 'success')
         }}
@@ -163,7 +165,7 @@ function TagSheet({
 }: {
   item: InboxRow | null
   onClose: () => void
-  onSaved: (duplicate: boolean, cloudError?: string) => void
+  onSaved: (duplicate: boolean, cloudError?: string, sameScreenshot?: boolean) => void
   onWarning: (message: string) => void
   onError: (message: string) => void
 }) {
@@ -198,7 +200,7 @@ function TagSheet({
         costume: normalizeOptionalName(fields.costume),
         background: normalizeOptionalName(fields.background),
       })
-      onSaved(result.duplicate, result.cloudError)
+      onSaved(result.duplicate, result.cloudError, result.sameScreenshot)
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Could not save')
     } finally {
@@ -232,13 +234,15 @@ function TagSheet({
         <div className="chip-row">
           {tagChoices.map((choice) => (
             <TagChip
-              key={choice.tag}
-              tag={choice.tag}
-              selected={tags.includes(choice.tag)}
+              key={choice.tag ?? 'empty-look'}
+              tag={choice.tag ?? 'living'}
+              selected={choice.tag == null ? tags.length === 0 : tags.includes(choice.tag)}
               icon={choice.icon}
               label={choice.label}
               labelColor={choice.labelColor}
-              onClick={() => setFields((f) => toggleTag(f, choice.tag))}
+              onClick={() =>
+                setFields((f) => (choice.tag == null ? clearVisualTags(f) : toggleTag(f, choice.tag)))
+              }
             />
           ))}
         </div>

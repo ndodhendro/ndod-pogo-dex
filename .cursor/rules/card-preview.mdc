@@ -7,7 +7,7 @@ alwaysApply: true
 
 Tapping a `DexCard` opens a modal preview. Do not navigate away from the dex grid. Backdrop dismiss, swipe down, or close control.
 
-The preview shows the specimen photo (medium size, not the grid thumb) and **stacks VFX for every visual tag on that specimen**, not only the current dex track.
+The preview shows the specimen photo at original size (not the grid thumb) and **stacks VFX for every visual tag on that specimen**, not only the current dex track.
 
 | Tag | Preview effect |
 |---|---|

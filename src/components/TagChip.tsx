@@ -1,6 +1,6 @@
 import { TAG_ICONS } from '../data/navIcons'
 import { categoryChromeStyle, FALLBACK_EMOJI } from '../lib/categoryStyle'
-import { isBuiltInTag, labelForTag, type TagId } from '../lib/tags'
+import { isBuiltInTag, isFormTag, labelForTag, type TagId } from '../lib/tags'
 import styles from './TagChip.module.css'
 
 type Props = {
@@ -18,7 +18,7 @@ export function TagChip({ tag, selected, label, icon, labelColor, onClick }: Pro
       type="button"
       className={styles.chip}
       data-tag={tag}
-      data-tone={isBuiltInTag(tag) ? tag : 'living'}
+      data-tone={isBuiltInTag(tag) || isFormTag(tag) ? tag : 'living'}
       data-on={selected ? 'true' : 'false'}
       style={labelColor ? categoryChromeStyle(labelColor) : undefined}
       onClick={onClick}

@@ -1,11 +1,13 @@
-/** Matches Dex grid: min card 112px, 8px gaps (`--space-2`), 738×955 crop frame + label. */
+import { SCREENSHOT_HEIGHT, SCREENSHOT_WIDTH } from './images'
+
+/** Matches Dex grid: min card 112px, 8px gaps (`--space-2`), 738×1600 frame + label. */
 export const DEX_COL_GAP = 8
 export const DEX_MIN_COL = 112
 export const DEX_MIN_COLUMNS = 3
 export const DEX_MAX_COLUMNS = 6
 export const DEX_LABEL_STACK = 22
 export const DEX_ROW_GAP = 8
-export const DEX_CARD_ASPECT = 955 / 738
+export const DEX_CARD_ASPECT = SCREENSHOT_HEIGHT / SCREENSHOT_WIDTH
 
 export function dexGridLayout(width: number) {
   const safeWidth = Math.max(width, DEX_MIN_COL * DEX_MIN_COLUMNS - DEX_COL_GAP)

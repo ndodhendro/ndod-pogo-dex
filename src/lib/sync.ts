@@ -7,6 +7,13 @@ import { mapCloudCategory } from './categorySyncPlan'
 import { db, type CategoryRow, type SpecimenRow } from './db'
 import { hashBlob } from './hash'
 import { getSupabase } from './supabase'
+import {
+  cloudBackupErrorMessage,
+  dedupePayloadByFileHash,
+  isSpecimenFileHashConflict,
+  partitionDuplicateFileHashes,
+} from './specimenHash'
+import { rebaseSpecimenId } from './specimenMerge'
 import { extraTagList, type ShadowStatus, type TagId } from './tags'
 import { coversForPendingSpecimens, specimenNeedsCloudBackup, type BackupProgress } from './syncBackup'
 
@@ -90,15 +97,8 @@ export async function pushCategories(): Promise<string | undefined> {
   await markCategoriesBackedUp(categories.map((row) => row.id))
 }
 
-export async function pushSpecimen(specimen: SpecimenRow): Promise<string | undefined> {
-  const supabase = getSupabase()
-  const userId = await signedInUserId()
-  if (!supabase || !userId) return
-
-  const fileHash = await ensureFileHash(specimen)
-  if (!fileHash) return 'Could not hash screenshot for cloud backup'
-
-  const { error } = await supabase.from('specimens').upsert({
+function specimenCloudRow(userId: string, specimen: SpecimenRow, fileHash: string) {
+  return {
     id: specimen.id,
     user_id: userId,
     species_id: specimen.speciesId,
@@ -113,8 +113,37 @@ export async function pushSpecimen(specimen: SpecimenRow): Promise<string | unde
     image_path: null,
     file_hash: fileHash,
     created_at: new Date(specimen.createdAt).toISOString(),
-  })
-  if (error) return error.message
+  }
+}
+
+export async function pushSpecimen(specimen: SpecimenRow): Promise<string | undefined> {
+  const supabase = getSupabase()
+  const userId = await signedInUserId()
+  if (!supabase || !userId) return
+
+  const fileHash = await ensureFileHash(specimen)
+  if (!fileHash) return 'Could not hash screenshot for cloud backup'
+
+  let row: SpecimenRow = { ...specimen, fileHash }
+  const { error } = await supabase.from('specimens').upsert(specimenCloudRow(userId, row, fileHash))
+  if (!error) return
+  if (!isSpecimenFileHashConflict(error)) return cloudBackupErrorMessage(error.message)
+
+  const { data: existing, error: lookupError } = await supabase
+    .from('specimens')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('file_hash', fileHash)
+    .maybeSingle()
+  if (lookupError) return lookupError.message
+  if (!existing?.id) return cloudBackupErrorMessage(error.message)
+
+  const rebased = await rebaseSpecimenId(row.id, existing.id)
+  if (!rebased) return cloudBackupErrorMessage(error.message)
+  row = { ...rebased, fileHash }
+
+  const { error: retryError } = await supabase.from('specimens').upsert(specimenCloudRow(userId, row, fileHash))
+  if (retryError) return cloudBackupErrorMessage(retryError.message)
 }
 
 export async function pushCoversForSpecies(speciesId: number): Promise<string | undefined> {
@@ -151,7 +180,7 @@ export async function pushMetadataAfterSave(specimen: SpecimenRow): Promise<Clou
     (await pushCategories()) ||
     (await pushSpecimen(specimen)) ||
     (await pushCoversForSpecies(specimen.speciesId))
-  if (message) return { kind: 'error', message }
+  if (message) return { kind: 'error', message: cloudBackupErrorMessage(message) }
   return { kind: 'ok' }
 }
 
@@ -294,34 +323,23 @@ export async function backupAllMetadata(
   onProgress?.({ phase: 'preparing', current: 0, total: pending.length })
   await yieldUi()
 
-  const payload: Record<string, unknown>[] = []
-  const hashedIds: string[] = []
+  const hashed: Array<SpecimenRow & { fileHash: string }> = []
   for (let i = 0; i < pending.length; i++) {
     const specimen = pending[i]
     const fileHash = await ensureFileHash(specimen)
-    if (fileHash) {
-      hashedIds.push(specimen.id)
-      payload.push({
-        id: specimen.id,
-        user_id: userId,
-        species_id: specimen.speciesId,
-        form: specimen.form,
-        shiny: specimen.shiny,
-        shadow_status: specimen.shadowStatus,
-        costume: specimen.costume,
-        background: specimen.background,
-        hundo: specimen.hundo,
-        nundo: specimen.nundo,
-        extra_tags: extraTagList(specimen),
-        image_path: null,
-        file_hash: fileHash,
-        created_at: new Date(specimen.createdAt).toISOString(),
-      })
-    }
+    if (fileHash) hashed.push({ ...specimen, fileHash })
     onProgress?.({ phase: 'preparing', current: i + 1, total: pending.length })
     if (i % 4 === 0) await yieldUi()
   }
 
+  const { keep, extras } = partitionDuplicateFileHashes(hashed)
+  for (const pair of extras) {
+    await rebaseSpecimenId(pair.extra.id, pair.keep.id)
+  }
+
+  const payload = dedupePayloadByFileHash(
+    keep.map((specimen) => specimenCloudRow(userId, specimen, specimen.fileHash)),
+  )
   if (payload.length === 0) return
 
   onProgress?.({ phase: 'uploading', current: 0, total: payload.length })
@@ -330,16 +348,31 @@ export async function backupAllMetadata(
   for (let i = 0; i < payload.length; i += UPSERT_PAGE) {
     const batch = payload.slice(i, i + UPSERT_PAGE)
     const { error } = await supabase.from('specimens').upsert(batch)
-    if (error) return error.message
+    if (error && isSpecimenFileHashConflict(error)) {
+      for (const row of batch) {
+        const local = await db.specimens.get(row.id)
+        if (!local) continue
+        const rowErr = await pushSpecimen(local)
+        if (rowErr) return rowErr
+      }
+    } else if (error) {
+      return cloudBackupErrorMessage(error.message)
+    }
     onProgress?.({ phase: 'uploading', current: i + batch.length, total: payload.length })
     await yieldUi()
   }
 
+  const liveIds: string[] = []
+  for (const specimen of keep) {
+    const live = await db.specimens.where('fileHash').equals(specimen.fileHash).first()
+    if (live) liveIds.push(live.id)
+  }
+  const liveIdSet = new Set(liveIds)
+  const liveRows = (await db.specimens.toArray()).filter((row) => liveIdSet.has(row.id))
+
   const ownedLegacy = await ownedLegacySeedIds(userId)
   if (typeof ownedLegacy === 'string') return ownedLegacy
-  const hashedIdSet = new Set(hashedIds)
-  const hashedPending = pending.filter((row) => hashedIdSet.has(row.id))
-  const coverRows = coversForPendingSpecimens(await db.covers.toArray(), hashedPending).map((row) => ({
+  const coverRows = coversForPendingSpecimens(await db.covers.toArray(), liveRows).map((row) => ({
     user_id: userId,
     category_id: toCloudCategoryId(row.categoryId, userId, ownedLegacy),
     species_id: row.speciesId,
@@ -350,7 +383,7 @@ export async function backupAllMetadata(
     if (error) return error.message
   }
 
-  await markSpecimensBackedUp(hashedIds)
+  await markSpecimensBackedUp(liveIds)
 }
 
 export async function pullCloudCollection(): Promise<{

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   categorySaveWarning,
+  clearVisualTags,
   specimenSaveWarning,
   toggleRequiredTags,
   toggleTag,
@@ -74,6 +75,21 @@ describe('toggleTag', () => {
     expect(galarian.form).toBe('Galarian')
     expect(galarian.extraTags).toEqual(['galarian'])
     expect(toggleTag(galarian, 'galarian').form).toBe(null)
+  })
+
+  it('clears every visual tag and keeps the species', () => {
+    const tagged = toggleTag({ ...toggleTag(base(), 'shiny'), costume: 'Hat' }, 'alolan')
+    expect(clearVisualTags(tagged)).toEqual({
+      speciesId: 25,
+      form: null,
+      shiny: false,
+      shadowStatus: 'none',
+      costume: null,
+      background: null,
+      hundo: false,
+      nundo: false,
+      extraTags: [],
+    })
   })
 })
 

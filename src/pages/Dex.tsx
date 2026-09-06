@@ -70,7 +70,7 @@ export function DexPage() {
   const filledCount = allSlots.filter((s) => s.filled).length
   const { columns, rowHeight } = dexGridLayout(width)
   const rowCount = Math.ceil(slots.length / columns)
-  const mediumUrl = usePreviewImage(preview?.imageId)
+  const previewUrl = usePreviewImage(preview?.imageId)
 
   const virtualizer = useVirtualizer({
     count: rowCount,
@@ -161,10 +161,10 @@ export function DexPage() {
           })}
         </div>
       </div>
-      {preview && category && mediumUrl ? (
+      {preview && category && previewUrl ? (
         <CardPreview
           specimen={preview}
-          mediumUrl={mediumUrl}
+          imageUrl={previewUrl}
           canSetCover={hasAllRequired(specimenTags(preview), category.requiredTags)}
           onClose={() => setPreview(null)}
           onSetCover={() => {
@@ -208,7 +208,7 @@ function DexSlotCard({ slot, onOpen }: { slot: Slot; onOpen: () => void }) {
 }
 
 function usePreviewImage(imageId?: string) {
-  return useImageUrl(imageId, 'medium')
+  return useImageUrl(imageId, 'original')
 }
 
 function buildSlots(

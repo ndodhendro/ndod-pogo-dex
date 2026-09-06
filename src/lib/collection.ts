@@ -6,6 +6,8 @@ import { db, ensureSeedCategories, type CategoryRow, type InboxRow, type Specime
 import { newId } from './id'
 import { makeImageVariants } from './images'
 import { hashBlob } from './hash'
+import { cloudBackupErrorMessage, pickSpecimenToKeepForHash, sameSpecimenMetadata } from './specimenHash'
+import { rebaseSpecimenId } from './specimenMerge'
 import { pushCategory, pushCategories, pushCover, pushCoversForCategory, pushMetadataAfterSave, deleteCloudCategory, deleteCloudSpecimen } from './sync'
 import {
   extraTagList,
@@ -45,7 +47,7 @@ export async function discardInbox(id: string) {
 export async function saveSpecimenFromInbox(
   inboxId: string,
   fields: SpecimenFields,
-): Promise<{ duplicate: boolean; cloudError?: string }> {
+): Promise<{ duplicate: boolean; sameScreenshot?: boolean; cloudError?: string }> {
   await ensureSeedCategories()
   const inbox = await db.inbox.get(inboxId)
   if (!inbox) throw new Error('Transfer item is gone')
@@ -53,17 +55,33 @@ export async function saveSpecimenFromInbox(
   if (!image?.original) throw new Error('Transfer image is gone')
   const fileHash = await hashBlob(image.original)
 
+  const form = fields.form?.trim() ? fields.form.trim() : null
+  const extraTags = extraTagList(fields)
+  const sameFiles = await db.specimens.where('fileHash').equals(fileHash).toArray()
+  if (sameFiles.length > 0) {
+    const keep = pickSpecimenToKeepForHash(sameFiles)
+    for (const extra of sameFiles) {
+      if (extra.id !== keep.id) await rebaseSpecimenId(extra.id, keep.id)
+    }
+    const live = (await db.specimens.get(keep.id)) ?? keep
+    return saveExistingScreenshot(inbox, live, {
+      ...fields,
+      form,
+      extraTags,
+    })
+  }
+
   const specimen: SpecimenRow = {
     id: newId(),
     speciesId: fields.speciesId,
-    form: fields.form?.trim() ? fields.form.trim() : null,
+    form,
     shiny: fields.shiny,
     shadowStatus: fields.shadowStatus,
     costume: fields.costume,
     background: fields.background,
     hundo: fields.hundo,
     nundo: fields.nundo,
-    extraTags: extraTagList(fields),
+    extraTags,
     imageId: inbox.imageId,
     fileHash,
     createdAt: Date.now(),
@@ -83,13 +101,63 @@ export async function saveSpecimenFromInbox(
     }
   })
 
+  return finishSave(specimen, { duplicate })
+}
+
+async function saveExistingScreenshot(
+  inbox: InboxRow,
+  existing: SpecimenRow,
+  fields: SpecimenFields,
+): Promise<{ duplicate: boolean; sameScreenshot?: boolean; cloudError?: string }> {
+  const updated: SpecimenRow = {
+    ...existing,
+    speciesId: fields.speciesId,
+    form: fields.form,
+    shiny: fields.shiny,
+    shadowStatus: fields.shadowStatus,
+    costume: fields.costume,
+    background: fields.background,
+    hundo: fields.hundo,
+    nundo: fields.nundo,
+    extraTags: extraTagList(fields),
+    cloudBackupPending: true,
+  }
+  const unchanged = sameSpecimenMetadata(existing, updated)
+  const incomingTags = specimenTags(updated)
+  const categories = await db.categories.toArray()
+
+  await db.transaction('rw', db.specimens, db.inbox, db.covers, db.images, async () => {
+    if (!unchanged) await db.specimens.put(updated)
+    await db.inbox.delete(inbox.id)
+    const imageStillUsed =
+      (await db.specimens.where('imageId').equals(inbox.imageId).count()) +
+      (await db.inbox.where('imageId').equals(inbox.imageId).count())
+    if (imageStillUsed === 0) await db.images.delete(inbox.imageId)
+    if (!unchanged) {
+      for (const category of categories) {
+        await maybeSetCover(category, updated, incomingTags)
+      }
+    }
+  })
+
+  const row = unchanged ? existing : updated
+  return finishSave(row, { duplicate: unchanged, sameScreenshot: true })
+}
+
+async function finishSave(
+  specimen: SpecimenRow,
+  flags: { duplicate: boolean; sameScreenshot?: boolean },
+): Promise<{ duplicate: boolean; sameScreenshot?: boolean; cloudError?: string }> {
   const result = await pushMetadataAfterSave(specimen)
   if (result.kind === 'ok') {
-    await db.specimens.update(specimen.id, { cloudBackupPending: false })
-    return { duplicate }
+    const live = specimen.fileHash
+      ? await db.specimens.where('fileHash').equals(specimen.fileHash).first()
+      : await db.specimens.get(specimen.id)
+    if (live) await db.specimens.update(live.id, { cloudBackupPending: false })
+    return flags
   }
-  if (result.kind === 'error') return { duplicate, cloudError: result.message }
-  return { duplicate }
+  if (result.kind === 'error') return { ...flags, cloudError: cloudBackupErrorMessage(result.message) }
+  return flags
 }
 
 async function maybeSetCover(

@@ -88,7 +88,7 @@ describe('nav icons', () => {
     expect(choices.map((row) => row.label)).toEqual(['Lucky'])
   })
 
-  it('builds specimen tag chips from single-tag categories', () => {
+  it('builds specimen tag chips from Basic, forms, and single-tag categories', () => {
     const choices = specimenTagChoices([
       { seed: true, name: 'Basic', requiredTags: [] },
       { seed: true, name: 'Shadow', requiredTags: ['shadow'], emoji: '🌑' },
@@ -96,7 +96,18 @@ describe('nav icons', () => {
       { seed: false, name: 'Shiny Hundo', requiredTags: ['shiny', 'hundo'] },
       { seed: true, name: 'Hundo', requiredTags: ['hundo'], emoji: '💯' },
     ])
-    expect(choices.map((row) => row.tag)).toEqual(['shadow', 'hundo'])
-    expect(choices[0]).toMatchObject({ label: 'Shadow', icon: '🌑' })
+    expect(choices.map((row) => row.tag)).toEqual([
+      null,
+      'alolan',
+      'galarian',
+      'hisuian',
+      'paldean',
+      'mega',
+      'shadow',
+      'hundo',
+    ])
+    expect(choices[0]).toMatchObject({ tag: null, label: 'Basic', icon: '🌿' })
+    expect(choices.find((row) => row.tag === 'shadow')).toMatchObject({ label: 'Shadow', icon: '🌑' })
+    expect(choices.find((row) => row.tag === 'alolan')).toMatchObject({ label: 'Alolan', icon: '🌺' })
   })
 })

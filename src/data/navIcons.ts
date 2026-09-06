@@ -4,7 +4,7 @@ import {
   firstGrapheme,
   normalizeHexColor,
 } from '../lib/categoryStyle'
-import { isBuiltInTag, type BuiltInTagId, type TagId } from '../lib/tags'
+import { FORM_TAGS, formNameForTag, isBuiltInTag, type BuiltInTagId, type TagId } from '../lib/tags'
 
 export type UiTone =
   | 'inbox'
@@ -153,6 +153,11 @@ export function lookForTag(tag: TagId, categories: TagCategoryLook[]): { emoji: 
   if (isBuiltInTag(tag)) {
     return { emoji: TAG_ICONS[tag], labelColor: TONE_TEXT_HEX[tag] ?? DEFAULT_LABEL_COLOR }
   }
+  const formName = formNameForTag(tag)
+  if (formName) {
+    const tone = tag.toLowerCase() as UiTone
+    return { emoji: FORM_ICONS[formName] ?? FALLBACK_EMOJI, labelColor: TONE_TEXT_HEX[tone] ?? DEFAULT_LABEL_COLOR }
+  }
   return { emoji: FALLBACK_EMOJI, labelColor: DEFAULT_LABEL_COLOR }
 }
 
@@ -183,14 +188,39 @@ export function requiredTagChoices(
   })
 }
 
-export function specimenTagChoices(categories: TagCategoryLook[]) {
-  const seen = new Set<TagId>()
-  const choices: Array<{
-    tag: TagId
-    label: string
-    icon: string
-    labelColor: string
-  }> = []
+export type SpecimenTagChoice = {
+  tag: TagId | null
+  label: string
+  icon: string
+  labelColor: string
+}
+
+export function specimenTagChoices(categories: TagCategoryLook[]): SpecimenTagChoice[] {
+  const seen = new Set<string>()
+  const choices: SpecimenTagChoice[] = []
+  for (const cat of categories) {
+    if (cat.requiredTags.length !== 0) continue
+    if (seen.has('')) continue
+    seen.add('')
+    choices.push({
+      tag: null,
+      label: cat.name,
+      icon: iconForCategory(cat),
+      labelColor: colorForCategory(cat),
+    })
+  }
+  for (const tag of FORM_TAGS) {
+    if (seen.has(tag)) continue
+    seen.add(tag)
+    const look = lookForTag(tag, categories)
+    const named = categoryForTag(categories, tag)
+    choices.push({
+      tag,
+      label: named?.name ?? formNameForTag(tag) ?? tag,
+      icon: look.emoji,
+      labelColor: look.labelColor,
+    })
+  }
   for (const cat of categories) {
     if (cat.requiredTags.length !== 1) continue
     const tag = cat.requiredTags[0]

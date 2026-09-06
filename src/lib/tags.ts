@@ -41,7 +41,8 @@ export const TAG_LABELS: Record<BuiltInTagId, string> = {
 }
 
 export function labelForTag(tag: TagId): string {
-  return isBuiltInTag(tag) ? TAG_LABELS[tag] : tag
+  if (isBuiltInTag(tag)) return TAG_LABELS[tag]
+  return formNameForTag(tag) ?? tag
 }
 
 export function extraTagList(s: { extraTags?: TagId[] }): TagId[] {
@@ -55,7 +56,10 @@ export function extraTagList(s: { extraTags?: TagId[] }): TagId[] {
   return tags
 }
 
-const FORM_BY_TAG: Record<string, string> = {
+export const FORM_TAGS = ['alolan', 'galarian', 'hisuian', 'paldean', 'mega'] as const
+export type FormTagId = (typeof FORM_TAGS)[number]
+
+const FORM_BY_TAG: Record<FormTagId, string> = {
   alolan: 'Alolan',
   galarian: 'Galarian',
   hisuian: 'Hisuian',
@@ -64,11 +68,25 @@ const FORM_BY_TAG: Record<string, string> = {
 }
 
 export function formNameForTag(tag: string): string | undefined {
-  return FORM_BY_TAG[tag.toLowerCase()]
+  return FORM_BY_TAG[tag.toLowerCase() as FormTagId]
 }
 
-function isFormTag(tag: string) {
+export function isFormTag(tag: string): tag is FormTagId {
   return Boolean(formNameForTag(tag))
+}
+
+export function clearVisualTags(fields: SpecimenFields): SpecimenFields {
+  return {
+    speciesId: fields.speciesId,
+    form: null,
+    shiny: false,
+    shadowStatus: 'none',
+    costume: null,
+    background: null,
+    hundo: false,
+    nundo: false,
+    extraTags: [],
+  }
 }
 
 export function specimenTags(s: SpecimenFields): TagId[] {

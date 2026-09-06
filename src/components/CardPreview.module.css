@@ -32,6 +32,7 @@
   overflow: hidden;
   background: var(--color-surface);
   position: relative;
+  max-height: min(70dvh, 1600px);
 }
 
 .photo img {
