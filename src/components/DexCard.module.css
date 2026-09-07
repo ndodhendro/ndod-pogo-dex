@@ -12,8 +12,9 @@
   width: 100%;
   border-radius: var(--radius-md);
   overflow: hidden;
-  background: var(--color-surface);
-  border: 2px solid transparent;
+  background: var(--color-bg);
+  border: 3px solid transparent;
+  padding: 2px;
   position: relative;
 }
 
@@ -27,6 +28,7 @@
 
 .card[data-empty='true'] .frame {
   border-color: var(--color-border);
+  padding: 0;
   background: repeating-linear-gradient(
     -45deg,
     #141820,
@@ -40,26 +42,35 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-  background: var(--color-surface);
+  object-position: top;
+  background: #ffffff;
+  border-radius: calc(var(--radius-md) - 5px);
 }
 
-.num {
-  position: absolute;
-  left: 0.35rem;
-  bottom: 0.25rem;
-  font-size: var(--font-size-xs);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: var(--letter-ui);
-  color: var(--color-text-muted);
-}
-
+.num,
 .label {
   font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: var(--letter-ui);
   color: var(--color-text-muted);
+  line-height: 1.05;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.caption {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.card[data-purity='green'] .num,
+.card[data-purity='green'] .label {
+  color: var(--color-cover-green);
 }

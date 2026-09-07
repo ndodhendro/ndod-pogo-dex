@@ -19,6 +19,7 @@
   width: 4.5rem;
   aspect-ratio: var(--card-aspect);
   object-fit: contain;
+  object-position: top;
   background: var(--color-surface);
   border-radius: var(--radius-sm);
 }
@@ -28,24 +29,6 @@
   letter-spacing: var(--letter-ui);
 }
 
-.speciesList {
-  display: flex;
-  flex-direction: column;
-  max-height: 14rem;
-  overflow: auto;
-  margin: var(--space-3) 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-}
-
-.speciesList button {
-  padding: var(--space-3);
-  text-align: left;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.speciesList button[data-on='true'] {
-  background: var(--color-accent-soft);
-  color: var(--color-living-text);
-  font-weight: var(--font-weight-medium);
+.confirmCopy {
+  margin: 0 0 var(--space-4);
 }

@@ -1,4 +1,4 @@
-import { hasAllRequired, isExactMatch, type TagId } from './tags'
+import { hasAllRequired, isExactMatch, specimenTags, type SpecimenFields, type TagId } from './tags'
 
 export type CoverPurity = 'green' | 'gray'
 
@@ -43,4 +43,78 @@ export function pickCoverAfterDelete(
     return b.createdAt - a.createdAt
   })
   return sorted[0]?.id ?? null
+}
+
+export type CoverRef = {
+  categoryId: string
+  speciesId: number
+  specimenId: string
+}
+
+export type CoverMutation =
+  | { op: 'put'; categoryId: string; speciesId: number; specimenId: string }
+  | { op: 'delete'; categoryId: string; speciesId: number }
+
+type CoverSpecimen = SpecimenFields & { id: string; createdAt: number }
+
+/**
+ * After a specimen's tags or species change: replace invalid covers that still
+ * point at it, then auto-cover tracks the same way a new save would.
+ */
+export function coverMutationsAfterEdit(
+  previous: { id: string; speciesId: number },
+  updated: CoverSpecimen,
+  categories: { id: string; requiredTags: TagId[] }[],
+  covers: CoverRef[],
+  specimens: CoverSpecimen[],
+): CoverMutation[] {
+  const nextTags = specimenTags(updated)
+  const byKey = new Map(covers.map((row) => [`${row.categoryId}:${row.speciesId}`, { ...row }]))
+  const mutations: CoverMutation[] = []
+
+  function applyPut(categoryId: string, speciesId: number, specimenId: string) {
+    const key = `${categoryId}:${speciesId}`
+    const current = byKey.get(key)
+    if (current?.specimenId === specimenId) return
+    byKey.set(key, { categoryId, speciesId, specimenId })
+    mutations.push({ op: 'put', categoryId, speciesId, specimenId })
+  }
+
+  function applyDelete(categoryId: string, speciesId: number) {
+    const key = `${categoryId}:${speciesId}`
+    if (!byKey.has(key)) return
+    byKey.delete(key)
+    mutations.push({ op: 'delete', categoryId, speciesId })
+  }
+
+  for (const cover of covers) {
+    if (cover.specimenId !== previous.id) continue
+    const category = categories.find((row) => row.id === cover.categoryId)
+    const stillHere =
+      cover.speciesId === updated.speciesId &&
+      Boolean(category) &&
+      hasAllRequired(nextTags, category?.requiredTags ?? [])
+    if (stillHere) continue
+    const remaining = specimens
+      .filter((row) => row.speciesId === cover.speciesId)
+      .map((row) => ({ id: row.id, tags: specimenTags(row), createdAt: row.createdAt }))
+    const nextId = category ? pickCoverAfterDelete(category.requiredTags, remaining) : null
+    if (nextId) applyPut(cover.categoryId, cover.speciesId, nextId)
+    else applyDelete(cover.categoryId, cover.speciesId)
+  }
+
+  for (const category of categories) {
+    if (!hasAllRequired(nextTags, category.requiredTags)) continue
+    const current = byKey.get(`${category.id}:${updated.speciesId}`)
+    let currentTags: TagId[] | null = null
+    if (current) {
+      const coverSpecimen = specimens.find((row) => row.id === current.specimenId)
+      currentTags = coverSpecimen ? specimenTags(coverSpecimen) : null
+    }
+    if (shouldAutoReplaceCover(category.requiredTags, currentTags, nextTags)) {
+      applyPut(category.id, updated.speciesId, updated.id)
+    }
+  }
+
+  return mutations
 }

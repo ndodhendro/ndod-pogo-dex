@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { coverPurity, pickCoverAfterDelete, speciesInCategory, shouldAutoReplaceCover } from './covers'
-import { hasAllRequired, isExactMatch, specimenTags, visualKey } from './tags'
+import { coverMutationsAfterEdit, coverPurity, pickCoverAfterDelete, speciesInCategory, shouldAutoReplaceCover } from './covers'
+import { hasAllRequired, isExactMatch, specimenTags, visualKey, type SpecimenFields } from './tags'
 
 const shadowGray = specimenTags({
   speciesId: 1,
@@ -162,5 +162,100 @@ describe('covers', () => {
     })
     expect(coverPurity(extra, ['shadow', 'hundo'])).toBe('gray')
     expect(coverPurity(exact, ['shadow', 'hundo'])).toBe('green')
+  })
+})
+
+type CoverSpecimen = SpecimenFields & { id: string; createdAt: number }
+
+function spec(partial: Partial<CoverSpecimen> & Pick<CoverSpecimen, 'id'>): CoverSpecimen {
+  return {
+    speciesId: 1,
+    form: null,
+    shiny: false,
+    shadowStatus: 'none',
+    costume: null,
+    background: null,
+    hundo: false,
+    nundo: false,
+    extraTags: [],
+    createdAt: 1,
+    ...partial,
+  }
+}
+
+const shadowCat = { id: 'shadow', requiredTags: ['shadow'] as const }
+const shinyCat = { id: 'shiny', requiredTags: ['shiny'] as const }
+
+describe('coverMutationsAfterEdit', () => {
+  it('replaces a gray cover when the photo is edited to an exact match', () => {
+    const gray = spec({ id: 'gray', shiny: true, shadowStatus: 'shadow', background: 'Tokyo' })
+    const incoming = spec({ id: 'incoming', shadowStatus: 'shadow', createdAt: 2 })
+    expect(
+      coverMutationsAfterEdit(
+        incoming,
+        incoming,
+        [shadowCat],
+        [{ categoryId: 'shadow', speciesId: 1, specimenId: 'gray' }],
+        [gray, incoming],
+      ),
+    ).toEqual([{ op: 'put', categoryId: 'shadow', speciesId: 1, specimenId: 'incoming' }])
+  })
+
+  it('keeps a green cover that gained extra tags', () => {
+    const previous = spec({ id: 'cover', shadowStatus: 'shadow' })
+    const updated = spec({ id: 'cover', shiny: true, shadowStatus: 'shadow' })
+    expect(
+      coverMutationsAfterEdit(
+        previous,
+        updated,
+        [shadowCat],
+        [{ categoryId: 'shadow', speciesId: 1, specimenId: 'cover' }],
+        [updated],
+      ),
+    ).toEqual([])
+  })
+
+  it('picks another in-category photo when the cover loses a required tag', () => {
+    const updated = spec({ id: 'cover', shiny: true })
+    const other = spec({ id: 'other', shadowStatus: 'shadow', createdAt: 2 })
+    expect(
+      coverMutationsAfterEdit(
+        spec({ id: 'cover', shadowStatus: 'shadow' }),
+        updated,
+        [shadowCat],
+        [{ categoryId: 'shadow', speciesId: 1, specimenId: 'cover' }],
+        [updated, other],
+      ),
+    ).toEqual([{ op: 'put', categoryId: 'shadow', speciesId: 1, specimenId: 'other' }])
+  })
+
+  it('deletes the cover when nothing in the species stays in the category', () => {
+    const updated = spec({ id: 'cover' })
+    expect(
+      coverMutationsAfterEdit(
+        spec({ id: 'cover', shadowStatus: 'shadow' }),
+        updated,
+        [shadowCat],
+        [{ categoryId: 'shadow', speciesId: 1, specimenId: 'cover' }],
+        [updated],
+      ),
+    ).toEqual([{ op: 'delete', categoryId: 'shadow', speciesId: 1 }])
+  })
+
+  it('moves covers to the new species and backfills the old slot', () => {
+    const updated = spec({ id: 'cover', speciesId: 25, shadowStatus: 'shadow' })
+    const leftover = spec({ id: 'other', shadowStatus: 'shadow', createdAt: 2 })
+    expect(
+      coverMutationsAfterEdit(
+        spec({ id: 'cover', shadowStatus: 'shadow' }),
+        updated,
+        [shadowCat, shinyCat],
+        [{ categoryId: 'shadow', speciesId: 1, specimenId: 'cover' }],
+        [updated, leftover],
+      ),
+    ).toEqual([
+      { op: 'put', categoryId: 'shadow', speciesId: 1, specimenId: 'other' },
+      { op: 'put', categoryId: 'shadow', speciesId: 25, specimenId: 'cover' },
+    ])
   })
 })

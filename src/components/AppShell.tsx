@@ -1,12 +1,20 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { useEffect } from 'react'
 import { APP_CONFIG } from '../config'
 import { TAB_ICONS, TAB_LOGOS } from '../data/navIcons'
+import { useFrameHeight } from '../hooks/useCropSettings'
 import { db } from '../lib/db'
+import { SCREENSHOT_WIDTH } from '../lib/images'
 import styles from './AppShell.module.css'
 
 export function AppShell() {
   const inboxCount = useLiveQuery(() => db.inbox.count(), []) ?? 0
+  const frameHeight = useFrameHeight()
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--card-aspect', `${SCREENSHOT_WIDTH} / ${frameHeight}`)
+  }, [frameHeight])
 
   return (
     <div className="app-shell">

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { coversForPendingSpecimens, specimenNeedsCloudBackup, backupProgressLabel } from './syncBackup'
+import {
+  coversForPendingSpecimens,
+  specimenNeedsCloudBackup,
+  specimenNeedsCloudPush,
+  backupProgressLabel,
+} from './syncBackup'
 
 describe('specimenNeedsCloudBackup', () => {
   it('retries after a failed or skipped specimen upsert', () => {
@@ -12,6 +17,17 @@ describe('specimenNeedsCloudBackup', () => {
 
   it('retries legacy rows that never recorded a cloud result', () => {
     expect(specimenNeedsCloudBackup({})).toBe(true)
+  })
+})
+
+describe('specimenNeedsCloudPush', () => {
+  it('retries when metadata is still pending even if a photo path exists', () => {
+    expect(specimenNeedsCloudPush({ cloudBackupPending: true }, 'user/hash.jpg')).toBe(true)
+  })
+
+  it('backfills photos for rows that already upserted metadata', () => {
+    expect(specimenNeedsCloudPush({ cloudBackupPending: false }, null)).toBe(true)
+    expect(specimenNeedsCloudPush({ cloudBackupPending: false }, 'user/hash.jpg')).toBe(false)
   })
 })
 

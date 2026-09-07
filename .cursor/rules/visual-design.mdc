@@ -21,7 +21,8 @@ Semantic hue is for **labels** (nav, tracks, tags, forms, page titles). Body cop
 
 | Meaning | Token |
 | Transfer / incoming | `--color-inbox-text` |
-| Dex / Basic / primary | `--color-living-text` |
+| Pokédex | `--color-dex-text` |
+| Basic / primary | `--color-living-text` |
 | Settings / tools | `--color-settings-text` |
 | Shiny | `--color-shiny-text` |
 | Shadow | `--color-shadow-text` |

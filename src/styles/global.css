@@ -10,9 +10,10 @@
   --color-accent: #34d399;
   --color-accent-soft: rgba(52, 211, 153, 0.14);
   --color-danger: #f87171;
+  --color-danger-ink: #1a1010;
   --color-warning: #fbbf24;
-  --color-cover-green: #34d399;
-  --color-cover-gray: #6b7280;
+  --color-cover-green: #6ee7b7;
+  --color-cover-gray: #9aa3b5;
 
   --color-inbox: #2dd4bf;
   --color-inbox-text: #5eead4;
@@ -20,6 +21,9 @@
   --color-living: #34d399;
   --color-living-text: #6ee7b7;
   --color-living-soft: rgba(52, 211, 153, 0.14);
+  --color-dex: #ee1515;
+  --color-dex-text: #ff6b6b;
+  --color-dex-soft: rgba(238, 21, 21, 0.14);
   --color-settings: #94a3b8;
   --color-settings-text: #cbd5e1;
   --color-settings-soft: rgba(148, 163, 184, 0.12);
@@ -86,7 +90,7 @@
   --radius-full: 999px;
 
   --thumb-size: 128px;
-  --card-aspect: 738 / 1600;
+  --card-aspect: 738 / 1055;
   --tap-min: 44px;
   --nav-height: 3.75rem;
   --footer-height: 2.25rem;
@@ -104,7 +108,11 @@
   --tone-fill: var(--color-inbox);
   --tone-soft: var(--color-inbox-soft);
 }
-[data-tone='dex'],
+[data-tone='dex'] {
+  --tone: var(--color-dex-text);
+  --tone-fill: var(--color-dex);
+  --tone-soft: var(--color-dex-soft);
+}
 [data-tone='living'] {
   --tone: var(--color-living-text);
   --tone-fill: var(--color-living);
@@ -245,11 +253,20 @@ a {
 }
 
 .page-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin: 0 0 var(--space-1);
   font-size: var(--font-size-xl);
   font-weight: var(--font-weight-bold);
   line-height: var(--line-tight);
   letter-spacing: var(--letter-ui);
+}
+
+.page-title-icon {
+  display: grid;
+  place-items: center;
+  line-height: 1;
 }
 
 .page-title[data-tone] {
@@ -309,6 +326,10 @@ a {
 }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   min-height: var(--tap-min);
   padding: 0 var(--space-4);
   border-radius: var(--radius-md);
@@ -321,6 +342,12 @@ a {
 .btn-primary {
   background: var(--color-accent);
   color: #06281c;
+  border-color: transparent;
+}
+
+.btn-danger {
+  background: var(--color-danger);
+  color: var(--color-danger-ink);
   border-color: transparent;
 }
 

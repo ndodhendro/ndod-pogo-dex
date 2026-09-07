@@ -1,0 +1,82 @@
+.tabs {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.tabs button {
+  flex: 1;
+  min-height: var(--tap-min);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  letter-spacing: var(--letter-ui);
+}
+
+.tabs button[data-on='true'] {
+  background: var(--tone-soft, var(--color-accent-soft));
+  border-color: transparent;
+  color: var(--tone, var(--color-living-text));
+}
+
+.speciesList {
+  display: flex;
+  flex-direction: column;
+  max-height: 14rem;
+  overflow: auto;
+  margin: var(--space-3) 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.speciesList button {
+  padding: var(--space-3);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.speciesList button[data-on='true'] {
+  background: var(--color-accent-soft);
+  color: var(--color-living-text);
+  font-weight: var(--font-weight-medium);
+}
+
+.cropPreview {
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: #ffffff;
+  margin-bottom: var(--space-4);
+}
+
+.cropPreview img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+.shotPreview {
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: #ffffff;
+  margin-bottom: var(--space-4);
+  max-height: min(42dvh, 22rem);
+}
+
+.shotPreview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: min(42dvh, 22rem);
+  object-fit: contain;
+  object-position: top;
+}

@@ -1,19 +1,23 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
-import { Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { CardPreview } from '../components/CardPreview'
 import { DexCard } from '../components/DexCard'
+import { DexProgress } from '../components/DexProgress'
 import { SearchField } from '../components/SearchField'
-import { TrackChip } from '../components/TrackChip'
-import { colorForCategory, iconForCategory, toneForCategory } from '../data/navIcons'
+import { SearchableSelect } from '../components/SearchableSelect'
+import { SpecimenTagSheet } from '../components/TagSheet'
+import { colorForCategory, iconForCategory, TAB_LOGOS, toneForCategory } from '../data/navIcons'
 import { SPECIES, SPECIES_BY_ID, searchSpecies } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
+import { useFrameHeight } from '../hooks/useCropSettings'
 import { coverPurity, type CoverPurity } from '../lib/covers'
 import { deleteSpecimen, setAsCover } from '../lib/collection'
 import { categoryChromeStyle } from '../lib/categoryStyle'
-import { dexGridLayout } from '../lib/dexGrid'
+import { countFilledSpecies, dexGridLayout } from '../lib/dexGrid'
 import { db, ensureSeedCategories, type CategoryRow, type CoverRow, type SpecimenRow } from '../lib/db'
+import { listNeighbor } from '../lib/previewSwipe'
 import { toastAfterWrite, useToast } from '../lib/toast'
 import { hasAllRequired, specimenTags } from '../lib/tags'
 import styles from './Dex.module.css'
@@ -32,6 +36,7 @@ export function DexPage() {
   const { showToast } = useToast()
   const [query, setQuery] = useState('')
   const [preview, setPreview] = useState<SpecimenRow | null>(null)
+  const [editingTags, setEditingTags] = useState(false)
   const [host, setHost] = useState<HTMLDivElement | null>(null)
   const [width, setWidth] = useState(0)
 
@@ -56,7 +61,18 @@ export function DexPage() {
   const specimens = useLiveQuery(() => db.specimens.toArray(), []) ?? []
   const covers = useLiveQuery(() => db.covers.toArray(), []) ?? []
 
-  const category = categories.find((c) => c.id === categoryId) ?? categories[0]
+  const category = categories.find((c) => c.id === categoryId)
+  const trackOptions = useMemo(
+    () =>
+      categories.map((cat) => ({
+        id: cat.id,
+        icon: iconForCategory(cat),
+        label: cat.name,
+        tone: toneForCategory(cat),
+        labelColor: colorForCategory(cat),
+      })),
+    [categories],
+  )
 
   const allSlots = useMemo(
     () => buildSlots(category, specimens, covers, ''),
@@ -67,10 +83,24 @@ export function DexPage() {
     [allSlots, category, specimens, covers, query],
   )
 
-  const filledCount = allSlots.filter((s) => s.filled).length
-  const { columns, rowHeight } = dexGridLayout(width)
+  const filledCount = useMemo(
+    () => countFilledSpecies(specimens, category?.requiredTags ?? []),
+    [specimens, category],
+  )
+  const catalogSize = SPECIES.length
+  const frameHeight = useFrameHeight()
+  const { columns, rowHeight } = dexGridLayout(width, frameHeight)
   const rowCount = Math.ceil(slots.length / columns)
+  const previewQueue = useMemo(
+    () => slots.flatMap((slot) => (slot.cover ? [slot.cover] : [])),
+    [slots],
+  )
+  const previewIndex = preview ? previewQueue.findIndex((row) => row.id === preview.id) : -1
+  const previewNext = listNeighbor(previewQueue, previewIndex, 1)
+  const previewPrev = listNeighbor(previewQueue, previewIndex, -1)
   const previewUrl = usePreviewImage(preview?.imageId)
+  const nextUrl = usePreviewImage(previewNext?.imageId)
+  const prevUrl = usePreviewImage(previewPrev?.imageId)
 
   const virtualizer = useVirtualizer({
     count: rowCount,
@@ -83,22 +113,27 @@ export function DexPage() {
     virtualizer.measure()
   }, [rowHeight, virtualizer])
 
-  if (!categoryId) {
-    if (categories[0]) {
-      return <Navigate to={`/dex/${categories[0].id}`} replace />
-    }
-    return (
-      <section>
-        <h1 className="page-title">Pokédex</h1>
-      </section>
-    )
-  }
-  if (categories.length > 0 && !categories.some((c) => c.id === categoryId)) {
-    return <Navigate to={`/dex/${categories[0].id}`} replace />
+  if (categories.length > 0 && !category) {
+    return <Navigate to="/dex" replace />
   }
 
   return (
     <section>
+      <p className={`page-sub ${styles.back}`}>
+        <Link to="/dex" data-tone="dex">
+          <span aria-hidden="true">
+            <img
+              className={styles.backLogo}
+              src={`${import.meta.env.BASE_URL}${TAB_LOGOS.dex}`}
+              alt=""
+              width={20}
+              height={20}
+              draggable={false}
+            />
+          </span>
+          Pokédex
+        </Link>
+      </p>
       <h1
         className={`page-title ${styles.title}`}
         data-tone={category ? toneForCategory(category) : 'dex'}
@@ -115,24 +150,32 @@ export function DexPage() {
           'Pokédex'
         )}
       </h1>
-      <p className={styles.progress}>
-        {filledCount} / {SPECIES.length}
-      </p>
-      <div className={styles.tracks}>
-        {categories.map((cat) => (
-          <TrackChip
-            key={cat.id}
-            icon={iconForCategory(cat)}
-            tone={toneForCategory(cat)}
-            labelColor={colorForCategory(cat)}
-            label={cat.name}
-            active={cat.id === category?.id}
-            onClick={() => navigate(`/dex/${cat.id}`)}
-          />
-        ))}
+      <DexProgress
+        filled={filledCount}
+        total={catalogSize}
+        ariaLabel={`${category?.name ?? 'Pokédex'} completion`}
+        tone={category ? toneForCategory(category) : 'dex'}
+        labelColor={category ? colorForCategory(category) : undefined}
+      />
+      <div className={styles.toolbar}>
+        <SearchableSelect
+          className={styles.trackSelect}
+          value={category?.id ?? ''}
+          options={trackOptions}
+          ariaLabel="Track"
+          searchPlaceholder="Search tracks"
+          onChange={(id) => {
+            if (id !== category?.id) navigate(`/dex/${id}`)
+          }}
+        />
+        <SearchField
+          className={styles.speciesSearch}
+          value={query}
+          onChange={setQuery}
+          placeholder="Filter species"
+        />
       </div>
-      <SearchField value={query} onChange={setQuery} placeholder="Filter species" />
-      <div ref={setHost} className={styles.gridHost} style={{ marginTop: '0.75rem' }}>
+      <div ref={setHost} className={styles.gridHost}>
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
           {virtualizer.getVirtualItems().map((row) => {
             const start = row.index * columns
@@ -161,12 +204,21 @@ export function DexPage() {
           })}
         </div>
       </div>
-      {preview && category && previewUrl ? (
+      {preview && category ? (
         <CardPreview
           specimen={preview}
-          imageUrl={previewUrl}
+          imageUrl={previewUrl ?? ''}
+          prev={previewPrev ? { specimen: previewPrev, imageUrl: prevUrl ?? '' } : undefined}
+          next={previewNext ? { specimen: previewNext, imageUrl: nextUrl ?? '' } : undefined}
           canSetCover={hasAllRequired(specimenTags(preview), category.requiredTags)}
-          onClose={() => setPreview(null)}
+          locked={editingTags}
+          onClose={() => {
+            setEditingTags(false)
+            setPreview(null)
+          }}
+          onNext={previewNext ? () => setPreview(previewNext) : undefined}
+          onPrev={previewPrev ? () => setPreview(previewPrev) : undefined}
+          onEditTags={() => setEditingTags(true)}
           onSetCover={() => {
             void setAsCover(category.id, preview.id)
               .then((cloudError) => {
@@ -176,6 +228,7 @@ export function DexPage() {
               .catch((err) => showToast(err instanceof Error ? err.message : 'Could not set cover'))
           }}
           onOpenGallery={() => {
+            setEditingTags(false)
             setPreview(null)
             navigate(`/dex/${category.id}/species/${preview.speciesId}`)
           }}
@@ -183,12 +236,29 @@ export function DexPage() {
             deleteSpecimen(preview.id)
               .then((cloudError) => {
                 toastAfterWrite(showToast, 'Specimen deleted', cloudError)
+                setEditingTags(false)
                 setPreview(null)
               })
               .catch((err) => showToast(err instanceof Error ? err.message : 'Could not delete'))
           }
         />
       ) : null}
+      <SpecimenTagSheet
+        specimen={editingTags ? preview : null}
+        onClose={() => setEditingTags(false)}
+        onSaved={(specimen) => {
+          setEditingTags(false)
+          if (
+            !category ||
+            specimen.speciesId !== preview?.speciesId ||
+            !hasAllRequired(specimenTags(specimen), category.requiredTags)
+          ) {
+            setPreview(null)
+            return
+          }
+          setPreview(specimen)
+        }}
+      />
     </section>
   )
 }

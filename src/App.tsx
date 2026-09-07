@@ -3,6 +3,7 @@ import { AppShell } from './components/AppShell'
 import { AuthGate } from './components/AuthGate'
 import { Toast } from './components/Toast'
 import { UpdatePrompt } from './components/UpdatePrompt'
+import { DexOverviewPage } from './pages/DexOverview'
 import { DexPage } from './pages/Dex'
 import { GalleryPage } from './pages/Gallery'
 import { InboxPage } from './pages/Inbox'
@@ -19,7 +20,7 @@ export function App() {
             <Route path="/" element={<Navigate to="/dex" replace />} />
             <Route path="/transfer" element={<InboxPage />} />
             <Route path="/inbox" element={<Navigate to="/transfer" replace />} />
-            <Route path="/dex" element={<DexPage />} />
+            <Route path="/dex" element={<DexOverviewPage />} />
             <Route path="/dex/:categoryId" element={<DexPage />} />
             <Route path="/dex/:categoryId/species/:speciesId" element={<GalleryPage />} />
             <Route path="/settings" element={<SettingsPage />} />

@@ -1,4 +1,5 @@
 import { extraTagList, type SpecimenFields } from './tags'
+import { storageErrorMessage } from './specimenStorage'
 
 export function isSpecimenFileHashConflict(error: {
   code?: string | null
@@ -13,7 +14,7 @@ export function cloudBackupErrorMessage(message: string): string {
   if (message.includes('specimens_user_file_hash')) {
     return 'Screenshot already in the collection'
   }
-  return message
+  return storageErrorMessage(message)
 }
 
 export function sameSpecimenMetadata(a: SpecimenFields, b: SpecimenFields): boolean {

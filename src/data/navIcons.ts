@@ -5,6 +5,7 @@ import {
   normalizeHexColor,
 } from '../lib/categoryStyle'
 import { FORM_TAGS, formNameForTag, isBuiltInTag, type BuiltInTagId, type TagId } from '../lib/tags'
+import { EXTRA_SPECIMEN_TAGS } from './tagCrops'
 
 export type UiTone =
   | 'inbox'
@@ -62,7 +63,7 @@ export const FORM_ICONS: Record<string, string> = {
 
 export const TONE_TEXT_HEX: Record<UiTone, string> = {
   inbox: '#5eead4',
-  dex: '#6ee7b7',
+  dex: '#ff6b6b',
   settings: '#cbd5e1',
   living: DEFAULT_LABEL_COLOR,
   shiny: '#f5e19a',
@@ -231,6 +232,18 @@ export function specimenTagChoices(categories: TagCategoryLook[]): SpecimenTagCh
       label: cat.name,
       icon: iconForCategory(cat),
       labelColor: colorForCategory(cat),
+    })
+  }
+  for (const extra of EXTRA_SPECIMEN_TAGS) {
+    if (seen.has(extra.tag)) continue
+    seen.add(extra.tag)
+    const look = lookForTag(extra.tag, categories)
+    const named = categoryForTag(categories, extra.tag)
+    choices.push({
+      tag: extra.tag,
+      label: named?.name ?? extra.label,
+      icon: named ? look.emoji : extra.icon,
+      labelColor: look.labelColor,
     })
   }
   return choices

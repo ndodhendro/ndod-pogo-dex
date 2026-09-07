@@ -36,7 +36,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     (text: string, tone: ToastTone = 'error') => {
       const id = `toast-${Date.now()}-${++toastSeq}`
       setToasts((list) => [...list, { id, text, tone }])
-      window.setTimeout(() => dismissToast(id), 5000)
+      window.setTimeout(() => dismissToast(id), 3000)
     },
     [dismissToast],
   )

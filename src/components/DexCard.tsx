@@ -22,9 +22,11 @@ export function DexCard({ name, number, thumbUrl, purity, filled, onClick }: Pro
     >
       <div className={styles.frame}>
         {thumbUrl ? <img src={thumbUrl} alt="" loading="lazy" width={128} height={278} /> : null}
-        <span className={styles.num}>#{String(number).padStart(4, '0')}</span>
       </div>
-      <span className={styles.label}>{name}</span>
+      <div className={styles.caption}>
+        <span className={styles.num}>#{String(number).padStart(4, '0')}</span>
+        <span className={styles.label}>{name}</span>
+      </div>
     </button>
   )
 }

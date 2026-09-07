@@ -105,6 +105,15 @@ describe('nav icons', () => {
       'mega',
       'shadow',
       'hundo',
+      'dynamax',
+      'gigantamax',
+      'lucky',
+      'best-buddy',
+      'xxs',
+      'xxl',
+      'alternate-forme',
+      'gender',
+      'max-cp',
     ])
     expect(choices[0]).toMatchObject({ tag: null, label: 'Basic', icon: '🌿' })
     expect(choices.find((row) => row.tag === 'shadow')).toMatchObject({ label: 'Shadow', icon: '🌑' })

@@ -5,7 +5,11 @@ alwaysApply: true
 
 # Card preview
 
-Tapping a `DexCard` opens a modal preview. Do not navigate away from the dex grid. Backdrop dismiss, swipe down, or close control.
+Tapping a `DexCard` opens a modal preview. Do not navigate away from the dex grid. Backdrop dismiss, swipe up or down on the photo, or Escape / Arrow Up / Arrow Down. After the close threshold, slide the sheet off-screen (up if swipe/key up, down if swipe/key down or backdrop), then unmount. Do not vanish in place. Respect `prefers-reduced-motion` (close without the slide).
+
+Swipe left on the photo for the next filled cover (or the next gallery specimen). Swipe right for the previous. While the finger is down, the previous/next photo stays visible beside the current one (carousel). Do not wrap at the ends. Arrow keys match that: Right = next, Left = previous.
+
+A tap on the preview photo (not a swipe) opens the stored screenshot at its intrinsic size on a black full-screen layer: no VFX, chips, or actions. Tap or Escape returns to the preview card. If the bitmap is larger than the viewport, the user can pan/scroll it; do not shrink it to fit.
 
 The preview shows the specimen photo at original size (not the grid thumb) and **stacks VFX for every visual tag on that specimen**, not only the current dex track.
 
@@ -19,4 +23,6 @@ The preview shows the specimen photo at original size (not the grid thumb) and *
 
 Example: Shadow Dex cover that is shiny+shadow+Tokyo → purple aura **and** sparkles, Tokyo photo, chips for all tags.
 
-Keep VFX on preview only (one card). CSS/Canvas, pause when closed, respect `prefers-reduced-motion` (static glow). Preview actions: `Set as cover`, open species gallery, delete specimen. No pin.
+Keep VFX on preview only (one card). CSS/Canvas, pause when closed, respect `prefers-reduced-motion` (static glow). Preview actions: `Set as cover`, open species gallery, `Edit tags`, delete specimen. No pin.
+
+`Edit tags` opens the same tagging sheet as Transfer (species, tags, crop), pre-filled. After save, preview VFX and chips update. If the specimen no longer belongs on the current dex track, close preview and return to the grid. Do not toggle chips on the preview photo itself.

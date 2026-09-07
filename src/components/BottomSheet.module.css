@@ -11,6 +11,10 @@
   overscroll-behavior: none;
 }
 
+.backdrop[data-nested='true'] {
+  z-index: calc(var(--z-sheet) + 10);
+}
+
 .sheet {
   display: flex;
   flex-direction: column;

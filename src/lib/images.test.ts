@@ -6,8 +6,12 @@ function file(name: string, type: string) {
 }
 
 describe('thumbSizeFor', () => {
-  it('keeps the 738×1600 aspect at 3× display width', () => {
-    expect(thumbSizeFor(738, 1600)).toEqual({ width: 384, height: 833 })
+  it('keeps the cropped 738×1030 aspect at 3× display width', () => {
+    expect(thumbSizeFor(738, 1030)).toEqual({ width: 384, height: 536 })
+  })
+
+  it('keeps the Dynamax 738×1100 aspect at 3× display width', () => {
+    expect(thumbSizeFor(738, 1100)).toEqual({ width: 384, height: 572 })
   })
 })
 

@@ -4,6 +4,7 @@ import styles from './BottomSheet.module.css'
 type Props = {
   open: boolean
   title: string
+  nested?: boolean
   onClose: () => void
   children: ReactNode
 }
@@ -26,7 +27,7 @@ function canScroll(el: HTMLElement, deltaY: number) {
   return el.scrollTop + el.clientHeight < el.scrollHeight - 1
 }
 
-export function BottomSheet({ open, title, onClose, children }: Props) {
+export function BottomSheet({ open, title, nested = false, onClose, children }: Props) {
   const sheetRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -95,6 +96,7 @@ export function BottomSheet({ open, title, onClose, children }: Props) {
   return (
     <div
       className={styles.backdrop}
+      data-nested={nested ? 'true' : undefined}
       role="presentation"
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) onClose()

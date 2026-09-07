@@ -10,7 +10,22 @@ export const TAG_IDS = [
 
 export type BuiltInTagId = (typeof TAG_IDS)[number]
 export type TagId = BuiltInTagId | (string & {})
-export type ShadowStatus = 'none' | 'shadow' | 'purified'
+export type ShadowStatus = 'none' | 'shadow' | 'purified' | 'both'
+
+export function hasShadowStatus(status: ShadowStatus): boolean {
+  return status === 'shadow' || status === 'both'
+}
+
+export function hasPurifiedStatus(status: ShadowStatus): boolean {
+  return status === 'purified' || status === 'both'
+}
+
+function combineShadowStatus(shadow: boolean, purified: boolean): ShadowStatus {
+  if (shadow && purified) return 'both'
+  if (shadow) return 'shadow'
+  if (purified) return 'purified'
+  return 'none'
+}
 
 const BUILTIN_TAGS = new Set<string>(TAG_IDS)
 
@@ -40,9 +55,11 @@ export const TAG_LABELS: Record<BuiltInTagId, string> = {
   nundo: 'Nundo',
 }
 
+import { EXTRA_TAG_LABELS } from '../data/tagCrops'
+
 export function labelForTag(tag: TagId): string {
   if (isBuiltInTag(tag)) return TAG_LABELS[tag]
-  return formNameForTag(tag) ?? tag
+  return formNameForTag(tag) ?? EXTRA_TAG_LABELS[tag] ?? tag
 }
 
 export function extraTagList(s: { extraTags?: TagId[] }): TagId[] {
@@ -54,6 +71,20 @@ export function extraTagList(s: { extraTags?: TagId[] }): TagId[] {
     tags.push(tag)
   }
   return tags
+}
+
+export function fieldsFromSpecimen(row: SpecimenFields): SpecimenFields {
+  return {
+    speciesId: row.speciesId,
+    form: row.form,
+    shiny: row.shiny,
+    shadowStatus: row.shadowStatus,
+    costume: row.costume,
+    background: row.background,
+    hundo: row.hundo,
+    nundo: row.nundo,
+    extraTags: extraTagList(row),
+  }
 }
 
 export const FORM_TAGS = ['alolan', 'galarian', 'hisuian', 'paldean', 'mega'] as const
@@ -75,6 +106,11 @@ export function isFormTag(tag: string): tag is FormTagId {
   return Boolean(formNameForTag(tag))
 }
 
+function formLabelFromExtra(extra: TagId[]): string | null {
+  const names = FORM_TAGS.filter((tag) => extra.includes(tag)).map((tag) => FORM_BY_TAG[tag])
+  return names.length ? names.join(' · ') : null
+}
+
 export function clearVisualTags(fields: SpecimenFields): SpecimenFields {
   return {
     speciesId: fields.speciesId,
@@ -92,8 +128,8 @@ export function clearVisualTags(fields: SpecimenFields): SpecimenFields {
 export function specimenTags(s: SpecimenFields): TagId[] {
   const tags: TagId[] = []
   if (s.shiny) tags.push('shiny')
-  if (s.shadowStatus === 'shadow') tags.push('shadow')
-  if (s.shadowStatus === 'purified') tags.push('purified')
+  if (hasShadowStatus(s.shadowStatus)) tags.push('shadow')
+  if (hasPurifiedStatus(s.shadowStatus)) tags.push('purified')
   if (s.costume !== null) tags.push('costume')
   if (s.background !== null) tags.push('background')
   if (s.hundo) tags.push('hundo')
@@ -134,19 +170,19 @@ export function isExactMatch(tags: TagId[], required: TagId[]): boolean {
 export function toggleTag(fields: SpecimenFields, tag: TagId): SpecimenFields {
   const next = { ...fields }
   if (tag === 'shiny') next.shiny = !next.shiny
-  if (tag === 'hundo') {
-    next.hundo = !next.hundo
-    if (next.hundo) next.nundo = false
-  }
-  if (tag === 'nundo') {
-    next.nundo = !next.nundo
-    if (next.nundo) next.hundo = false
-  }
+  if (tag === 'hundo') next.hundo = !next.hundo
+  if (tag === 'nundo') next.nundo = !next.nundo
   if (tag === 'shadow') {
-    next.shadowStatus = next.shadowStatus === 'shadow' ? 'none' : 'shadow'
+    next.shadowStatus = combineShadowStatus(
+      !hasShadowStatus(next.shadowStatus),
+      hasPurifiedStatus(next.shadowStatus),
+    )
   }
   if (tag === 'purified') {
-    next.shadowStatus = next.shadowStatus === 'purified' ? 'none' : 'purified'
+    next.shadowStatus = combineShadowStatus(
+      hasShadowStatus(next.shadowStatus),
+      !hasPurifiedStatus(next.shadowStatus),
+    )
   }
   if (tag === 'costume') {
     next.costume = next.costume !== null ? null : ''
@@ -157,18 +193,20 @@ export function toggleTag(fields: SpecimenFields, tag: TagId): SpecimenFields {
   if (!isBuiltInTag(tag)) {
     const extra = extraTagList(next)
     const turningOn = !extra.includes(tag)
-    let nextExtra = turningOn ? [...extra, tag] : extra.filter((item) => item !== tag)
-    if (isFormTag(tag)) {
-      if (turningOn) {
-        nextExtra = nextExtra.filter((item) => !isFormTag(item) || item === tag)
-        next.form = formNameForTag(tag) ?? null
-      } else {
-        next.form = null
-      }
-    }
+    const nextExtra = turningOn ? [...extra, tag] : extra.filter((item) => item !== tag)
+    if (isFormTag(tag)) next.form = formLabelFromExtra(nextExtra)
     next.extraTags = nextExtra
   }
   return next
+}
+
+export function cropTagsFromFields(fields: SpecimenFields): TagId[] {
+  const tags = specimenTags(fields)
+  if (fields.form) {
+    const formTag = FORM_TAGS.find((tag) => formNameForTag(tag) === fields.form)
+    if (formTag && !tags.includes(formTag)) return [...tags, formTag]
+  }
+  return tags
 }
 
 export function tagSlugFromName(name: string): string {

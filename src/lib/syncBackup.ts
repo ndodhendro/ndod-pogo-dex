@@ -1,5 +1,16 @@
+import { specimenNeedsPhotoUpload } from './specimenStorage'
+
 export function specimenNeedsCloudBackup(row: { cloudBackupPending?: boolean }): boolean {
   return row.cloudBackupPending !== false
+}
+
+/** Metadata still pending, or the screenshot is not in the Storage bucket yet. */
+export function specimenNeedsCloudPush(
+  row: { cloudBackupPending?: boolean },
+  cloudImagePath: string | null | undefined,
+): boolean {
+  if (specimenNeedsCloudBackup(row)) return true
+  return specimenNeedsPhotoUpload(cloudImagePath)
 }
 
 export type BackupProgress = {

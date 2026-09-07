@@ -1,7 +1,9 @@
 import Dexie, { type Table } from 'dexie'
 import { colorForCategory, iconForCategory } from '../data/navIcons'
 import { SEED_CATEGORIES, LEGACY_SEED_NAMES } from '../data/seedCategories'
+import { SEED_TAG_CROPS } from '../data/tagCrops'
 import { allocateCategoryTag, TAG_IDS, type ShadowStatus, type TagId } from './tags'
+import { clampCropBottom } from './screenshotCrop'
 
 export type SpecimenRow = {
   id: string
@@ -17,7 +19,7 @@ export type SpecimenRow = {
   imageId: string
   fileHash?: string | null
   createdAt: number
-  /** False after a confirmed cloud upsert. Missing/true means Backup tags now should retry. */
+  /** False after a confirmed cloud upsert. Missing/true means Backup collection should retry. */
   cloudBackupPending?: boolean
 }
 
@@ -52,12 +54,18 @@ export type CoverRow = {
   specimenId: string
 }
 
+export type TagCropRow = {
+  tag: string
+  height: number
+}
+
 class PogoDexDB extends Dexie {
   specimens!: Table<SpecimenRow, string>
   images!: Table<ImageRow, string>
   inbox!: Table<InboxRow, string>
   categories!: Table<CategoryRow, string>
   covers!: Table<CoverRow, [string, number]>
+  tagCrops!: Table<TagCropRow, string>
 
   constructor() {
     super('ndod-pogo-dex')
@@ -91,6 +99,9 @@ class PogoDexDB extends Dexie {
     this.version(5).stores({
       categories: 'id, sortOrder, cloudBackupPending',
     })
+    this.version(6).stores({
+      tagCrops: 'tag',
+    })
   }
 }
 
@@ -101,22 +112,33 @@ const SEEDED_FLAG = 'ndod-pogo-dex:seed-categories'
 export async function ensureSeedCategories() {
   const count = await db.categories.count()
   if (count === 0) {
-    if (localStorage.getItem(SEEDED_FLAG) === '1') return
-    await db.categories.bulkAdd(SEED_CATEGORIES)
+    if (localStorage.getItem(SEEDED_FLAG) !== '1') {
+      await db.categories.bulkAdd(SEED_CATEGORIES)
+      localStorage.setItem(SEEDED_FLAG, '1')
+    }
+  } else {
     localStorage.setItem(SEEDED_FLAG, '1')
-    return
+    for (const seed of SEED_CATEGORIES) {
+      const row = await db.categories.get(seed.id)
+      const renamed = row ? LEGACY_SEED_NAMES[row.name] : undefined
+      const patch: Partial<CategoryRow> = {}
+      if (row && renamed && renamed !== row.name) patch.name = renamed
+      if (row && !row.emoji) patch.emoji = seed.emoji
+      if (row && !row.labelColor) patch.labelColor = seed.labelColor
+      if (row && Object.keys(patch).length > 0) await db.categories.update(seed.id, patch)
+    }
+    await ensureCustomCategoryTags()
   }
-  localStorage.setItem(SEEDED_FLAG, '1')
-  for (const seed of SEED_CATEGORIES) {
-    const row = await db.categories.get(seed.id)
-    const renamed = row ? LEGACY_SEED_NAMES[row.name] : undefined
-    const patch: Partial<CategoryRow> = {}
-    if (row && renamed && renamed !== row.name) patch.name = renamed
-    if (row && !row.emoji) patch.emoji = seed.emoji
-    if (row && !row.labelColor) patch.labelColor = seed.labelColor
-    if (row && Object.keys(patch).length > 0) await db.categories.update(seed.id, patch)
-  }
-  await ensureCustomCategoryTags()
+  await ensureSeedTagCrops()
+}
+
+export async function ensureSeedTagCrops() {
+  await db.tagCrops.bulkPut(
+    SEED_TAG_CROPS.map((row) => ({
+      tag: row.tag,
+      height: clampCropBottom(row.height),
+    })),
+  )
 }
 
 /** Custom tracks saved with no picked tags become their own atomic tag (Lucky → lucky). */

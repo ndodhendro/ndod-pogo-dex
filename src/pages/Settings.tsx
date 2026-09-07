@@ -3,8 +3,8 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } fr
 import { BottomSheet } from '../components/BottomSheet'
 import { ColorPicker } from '../components/ColorPicker'
 import { TrackChip } from '../components/TrackChip'
-import { RestoreGalleryButton } from '../components/RestoreGalleryButton'
-import { colorForCategory, iconForCategory, lookForTag, requiredTagChoices, toneForCategory } from '../data/navIcons'
+import { RestoreCloudButton, RestoreGalleryButton } from '../components/RestoreGalleryButton'
+import { colorForCategory, iconForCategory, lookForTag, requiredTagChoices, TAB_ICONS, toneForCategory } from '../data/navIcons'
 import { insertCategoryIdAt, moveCategoryId, sameCategoryOrder } from '../lib/categoryOrder'
 import { categoryChromeStyle, DEFAULT_LABEL_COLOR, FALLBACK_EMOJI, pickEmojiInput } from '../lib/categoryStyle'
 import { clampSwipe, SWIPE_LOCK, SWIPE_OPEN_RATIO, SWIPE_WIDTH } from '../lib/swipeReveal'
@@ -112,7 +112,7 @@ export function SettingsPage() {
     try {
       const message = await backupAllMetadata(setBackupProgress)
       if (message) showToast(message, 'warning')
-      else showToast('Tags backed up', 'success')
+      else showToast('Collection backed up', 'success')
     } finally {
       setBackupBusy(false)
       setBackupProgress(null)
@@ -130,6 +130,9 @@ export function SettingsPage() {
   return (
     <section className={styles.stack}>
       <h1 className="page-title" data-tone="settings">
+        <span className="page-title-icon" aria-hidden="true">
+          {TAB_ICONS.settings}
+        </span>
         Settings
       </h1>
       <div className="group">
@@ -149,7 +152,8 @@ export function SettingsPage() {
       <div className="group">
         <h2>Account</h2>
         <p className="page-sub">
-          {email ? `Signed in as ${email}.` : 'Signed in with Google.'}
+          {email ? `Signed in as ${email}.` : 'Signed in with Google.'} Backup copies tags and
+          screenshots to this account.
         </p>
         <div className="row-actions">
           <button
@@ -158,7 +162,8 @@ export function SettingsPage() {
             disabled={backupBusy}
             onClick={() => void backupNow()}
           >
-            {backupBusy ? 'Backing up…' : 'Backup tags now'}
+            <span aria-hidden="true">☁️</span>
+            {backupBusy ? 'Backing up…' : 'Backup collection'}
           </button>
           <button type="button" className="btn" onClick={() => void onSignOut()}>
             Sign out
@@ -168,7 +173,14 @@ export function SettingsPage() {
       </div>
       <div className="group">
         <h2>Restore</h2>
-        <RestoreGalleryButton />
+        <p className="page-sub">
+          Cloud restore downloads screenshots from the specimens bucket. Gallery restore matches
+          photos on this phone for older backups that never uploaded files.
+        </p>
+        <div className="row-actions">
+          <RestoreCloudButton />
+          <RestoreGalleryButton />
+        </div>
       </div>
       <BottomSheet
         open={open}
@@ -654,21 +666,14 @@ function CategoryOrderList({
             >
               <button
                 type="button"
-                className={styles.swipeDelete}
+                className={`btn btn-danger ${styles.swipeDelete}`}
                 tabIndex={revealOpen ? 0 : -1}
                 aria-hidden={!revealOpen}
                 aria-label={`Remove ${cat.name}`}
                 disabled={Boolean(dragId) || deleteBusy}
                 onClick={() => askRemove(cat)}
               >
-                <span aria-hidden="true" className={styles.swipeDeleteIcon}>
-                  <svg viewBox="0 0 24 24" width="22" height="22">
-                    <path
-                      fill="currentColor"
-                      d="M9.2 3h5.6l.8 2H20v2H4V5h4.4l.8-2zM8 9h2v9H8V9zm3 0h2v9h-2V9zm3 0h2v9h-2V9zM7 21h10a1 1 0 0 0 1-1V8H6v12a1 1 0 0 0 1 1z"
-                    />
-                  </svg>
-                </span>
+                <span aria-hidden="true">🗑️</span>
                 Remove
               </button>
               <div
@@ -754,7 +759,7 @@ function CategoryOrderList({
           </button>
           <button
             type="button"
-            className="btn"
+            className="btn btn-danger"
             disabled={deleteBusy}
             onClick={() => void confirmDelete()}
           >

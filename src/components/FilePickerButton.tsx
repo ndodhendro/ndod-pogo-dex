@@ -7,6 +7,7 @@ const FOCUS_GRACE_MS = 250
 
 type Props = {
   label: string
+  icon?: string
   className?: string
   disabled?: boolean
   accept?: string
@@ -18,6 +19,7 @@ type Props = {
 
 export function FilePickerButton({
   label,
+  icon,
   className,
   disabled,
   accept = 'image/*',
@@ -77,6 +79,7 @@ export function FilePickerButton({
   return (
     <>
       <button type="button" className={className} disabled={disabled} onClick={openPicker}>
+        {icon ? <span aria-hidden="true">{icon}</span> : null}
         {label}
       </button>
       <input

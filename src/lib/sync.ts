@@ -1,3 +1,4 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import {
   fromCloudCategoryId,
   LEGACY_SEED_CLOUD_IDS,
@@ -14,8 +15,13 @@ import {
   partitionDuplicateFileHashes,
 } from './specimenHash'
 import { rebaseSpecimenId } from './specimenMerge'
+import {
+  removeSpecimenObject,
+  specimenObjectPath,
+  uploadSpecimenOriginal,
+} from './specimenStorage'
 import { extraTagList, type ShadowStatus, type TagId } from './tags'
-import { coversForPendingSpecimens, specimenNeedsCloudBackup, type BackupProgress } from './syncBackup'
+import { coversForPendingSpecimens, specimenNeedsCloudPush, type BackupProgress } from './syncBackup'
 
 export type CloudSpecimen = {
   id: string
@@ -29,6 +35,7 @@ export type CloudSpecimen = {
   nundo: boolean
   extraTags?: TagId[]
   fileHash: string
+  imagePath?: string | null
   createdAt: number
 }
 
@@ -97,7 +104,12 @@ export async function pushCategories(): Promise<string | undefined> {
   await markCategoriesBackedUp(categories.map((row) => row.id))
 }
 
-function specimenCloudRow(userId: string, specimen: SpecimenRow, fileHash: string) {
+function specimenCloudRow(
+  userId: string,
+  specimen: SpecimenRow,
+  fileHash: string,
+  imagePath: string | null,
+) {
   return {
     id: specimen.id,
     user_id: userId,
@@ -110,10 +122,25 @@ function specimenCloudRow(userId: string, specimen: SpecimenRow, fileHash: strin
     hundo: specimen.hundo,
     nundo: specimen.nundo,
     extra_tags: extraTagList(specimen),
-    image_path: null,
+    image_path: imagePath,
     file_hash: fileHash,
     created_at: new Date(specimen.createdAt).toISOString(),
   }
+}
+
+async function uploadSpecimenPhoto(
+  supabase: SupabaseClient,
+  userId: string,
+  specimen: SpecimenRow,
+  fileHash: string,
+  existingPath?: string | null,
+): Promise<{ path: string | null; error?: string }> {
+  if (existingPath) return { path: existingPath }
+  const image = await db.images.get(specimen.imageId)
+  if (!image?.original) return { path: null }
+  const uploaded = await uploadSpecimenOriginal(supabase, userId, fileHash, image.original)
+  if ('error' in uploaded) return { path: null, error: uploaded.error }
+  return { path: uploaded.path }
 }
 
 export async function pushSpecimen(specimen: SpecimenRow): Promise<string | undefined> {
@@ -125,13 +152,16 @@ export async function pushSpecimen(specimen: SpecimenRow): Promise<string | unde
   if (!fileHash) return 'Could not hash screenshot for cloud backup'
 
   let row: SpecimenRow = { ...specimen, fileHash }
-  const { error } = await supabase.from('specimens').upsert(specimenCloudRow(userId, row, fileHash))
+  const photo = await uploadSpecimenPhoto(supabase, userId, row, fileHash)
+  if (photo.error) return photo.error
+
+  const { error } = await supabase.from('specimens').upsert(specimenCloudRow(userId, row, fileHash, photo.path))
   if (!error) return
   if (!isSpecimenFileHashConflict(error)) return cloudBackupErrorMessage(error.message)
 
   const { data: existing, error: lookupError } = await supabase
     .from('specimens')
-    .select('id')
+    .select('id, image_path')
     .eq('user_id', userId)
     .eq('file_hash', fileHash)
     .maybeSingle()
@@ -142,7 +172,10 @@ export async function pushSpecimen(specimen: SpecimenRow): Promise<string | unde
   if (!rebased) return cloudBackupErrorMessage(error.message)
   row = { ...rebased, fileHash }
 
-  const { error: retryError } = await supabase.from('specimens').upsert(specimenCloudRow(userId, row, fileHash))
+  const retryPath = photo.path ?? (existing.image_path as string | null) ?? null
+  const { error: retryError } = await supabase
+    .from('specimens')
+    .upsert(specimenCloudRow(userId, row, fileHash, retryPath))
   if (retryError) return cloudBackupErrorMessage(retryError.message)
 }
 
@@ -153,6 +186,13 @@ export async function pushCoversForSpecies(speciesId: number): Promise<string | 
 
   const ownedLegacy = await ownedLegacySeedIds(userId)
   if (typeof ownedLegacy === 'string') return ownedLegacy
+
+  const { error: delErr } = await supabase
+    .from('covers')
+    .delete()
+    .eq('user_id', userId)
+    .eq('species_id', speciesId)
+  if (delErr) return delErr.message
 
   const covers = (await db.covers.toArray()).filter((row) => row.speciesId === speciesId)
   if (covers.length === 0) return
@@ -172,14 +212,19 @@ export type CloudPushResult =
   | { kind: 'skipped' }
   | { kind: 'error'; message: string }
 
-export async function pushMetadataAfterSave(specimen: SpecimenRow): Promise<CloudPushResult> {
+export async function pushMetadataAfterSave(
+  specimen: SpecimenRow,
+  extraSpeciesIds: number[] = [],
+): Promise<CloudPushResult> {
   const supabase = getSupabase()
   const userId = await signedInUserId()
   if (!supabase || !userId) return { kind: 'skipped' }
-  const message =
-    (await pushCategories()) ||
-    (await pushSpecimen(specimen)) ||
-    (await pushCoversForSpecies(specimen.speciesId))
+  const speciesIds = [specimen.speciesId, ...extraSpeciesIds.filter((id) => id !== specimen.speciesId)]
+  let message = (await pushCategories()) || (await pushSpecimen(specimen))
+  for (const speciesId of speciesIds) {
+    if (message) break
+    message = await pushCoversForSpecies(speciesId)
+  }
   if (message) return { kind: 'error', message: cloudBackupErrorMessage(message) }
   return { kind: 'ok' }
 }
@@ -259,12 +304,25 @@ export async function deleteCloudCategory(id: string) {
   if (error) return error.message
 }
 
-export async function deleteCloudSpecimen(id: string, speciesId: number) {
+export async function deleteCloudSpecimen(id: string, speciesId: number, fileHash?: string | null) {
   const supabase = getSupabase()
   const userId = await signedInUserId()
   if (!supabase || !userId) return
+  const { data: existing } = await supabase
+    .from('specimens')
+    .select('image_path, file_hash')
+    .eq('user_id', userId)
+    .eq('id', id)
+    .maybeSingle()
+  const imagePath =
+    (existing?.image_path as string | null) ??
+    (fileHash || existing?.file_hash
+      ? specimenObjectPath(userId, (fileHash || existing?.file_hash) as string)
+      : null)
+  const storageError = await removeSpecimenObject(supabase, imagePath)
   const { error } = await supabase.from('specimens').delete().eq('user_id', userId).eq('id', id)
   if (error) return error.message
+  if (storageError) return storageError
   return pushCoversForSpecies(speciesId)
 }
 
@@ -317,7 +375,21 @@ export async function backupAllMetadata(
   const catErr = await pushCategories()
   if (catErr) return catErr
 
-  const pending = (await db.specimens.toArray()).filter(specimenNeedsCloudBackup)
+  type CloudPathRow = { file_hash: string | null; image_path: string | null }
+  let pathByHash = new Map<string, string | null>()
+  try {
+    const cloudRows = await fetchPaged<CloudPathRow>('specimens', userId)
+    pathByHash = new Map(
+      cloudRows
+        .filter((row) => Boolean(row.file_hash))
+        .map((row) => [row.file_hash as string, row.image_path]),
+    )
+  } catch (err) {
+    return err instanceof Error ? err.message : 'Could not read cloud specimens'
+  }
+
+  const locals = await db.specimens.toArray()
+  const pending = locals.filter((row) => specimenNeedsCloudPush(row, row.fileHash ? pathByHash.get(row.fileHash) : null))
   if (pending.length === 0) return
 
   onProgress?.({ phase: 'preparing', current: 0, total: pending.length })
@@ -337,16 +409,27 @@ export async function backupAllMetadata(
     await rebaseSpecimenId(pair.extra.id, pair.keep.id)
   }
 
-  const payload = dedupePayloadByFileHash(
-    keep.map((specimen) => specimenCloudRow(userId, specimen, specimen.fileHash)),
-  )
-  if (payload.length === 0) return
+  const payload: ReturnType<typeof specimenCloudRow>[] = []
+  for (let i = 0; i < keep.length; i++) {
+    const specimen = keep[i]
+    const photo = await uploadSpecimenPhoto(
+      supabase,
+      userId,
+      specimen,
+      specimen.fileHash,
+      pathByHash.get(specimen.fileHash),
+    )
+    if (photo.error) return photo.error
+    payload.push(specimenCloudRow(userId, specimen, specimen.fileHash, photo.path))
+    onProgress?.({ phase: 'uploading', current: i + 1, total: keep.length })
+    if (i % 2 === 0) await yieldUi()
+  }
 
-  onProgress?.({ phase: 'uploading', current: 0, total: payload.length })
-  await yieldUi()
+  const uniquePayload = dedupePayloadByFileHash(payload)
+  if (uniquePayload.length === 0) return
 
-  for (let i = 0; i < payload.length; i += UPSERT_PAGE) {
-    const batch = payload.slice(i, i + UPSERT_PAGE)
+  for (let i = 0; i < uniquePayload.length; i += UPSERT_PAGE) {
+    const batch = uniquePayload.slice(i, i + UPSERT_PAGE)
     const { error } = await supabase.from('specimens').upsert(batch)
     if (error && isSpecimenFileHashConflict(error)) {
       for (const row of batch) {
@@ -358,7 +441,6 @@ export async function backupAllMetadata(
     } else if (error) {
       return cloudBackupErrorMessage(error.message)
     }
-    onProgress?.({ phase: 'uploading', current: i + batch.length, total: payload.length })
     await yieldUi()
   }
 
@@ -406,6 +488,7 @@ export async function pullCloudCollection(): Promise<{
     nundo: boolean
     extra_tags?: string[] | null
     file_hash: string | null
+    image_path?: string | null
     created_at: string
   }
   type RawCategory = {
@@ -445,6 +528,7 @@ export async function pullCloudCollection(): Promise<{
         nundo: row.nundo,
         extraTags: extraTagList({ extraTags: row.extra_tags ?? [] }),
         fileHash: row.file_hash as string,
+        imagePath: row.image_path ?? null,
         createdAt: new Date(row.created_at).getTime(),
       })),
     covers: rawCovers.map((row) => ({

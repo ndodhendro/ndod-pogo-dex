@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   categorySaveWarning,
   clearVisualTags,
+  fieldsFromSpecimen,
   specimenSaveWarning,
   toggleRequiredTags,
   toggleTag,
@@ -67,14 +68,26 @@ describe('toggleTag', () => {
     expect(toggleTag(withLucky, 'lucky').extraTags).toEqual([])
   })
 
-  it('maps a form tag onto the form field and keeps only one form', () => {
+  it('lets any tags stack, including GO-impossible pairs', () => {
+    const stacked = ['dynamax', 'gigantamax', 'xxs', 'xxl', 'alolan', 'mega'].reduce(
+      (fields, tag) => toggleTag(fields, tag),
+      toggleTag(toggleTag(toggleTag(toggleTag(base(), 'shadow'), 'purified'), 'hundo'), 'nundo'),
+    )
+    expect(stacked.shadowStatus).toBe('both')
+    expect(stacked.hundo).toBe(true)
+    expect(stacked.nundo).toBe(true)
+    expect(stacked.form).toBe('Alolan · Mega')
+    expect(stacked.extraTags).toEqual(['dynamax', 'gigantamax', 'xxs', 'xxl', 'alolan', 'mega'])
+  })
+
+  it('maps form tags onto the form field and keeps every selected form', () => {
     const alolan = toggleTag(base(), 'alolan')
     expect(alolan.form).toBe('Alolan')
     expect(alolan.extraTags).toEqual(['alolan'])
     const galarian = toggleTag(alolan, 'galarian')
-    expect(galarian.form).toBe('Galarian')
-    expect(galarian.extraTags).toEqual(['galarian'])
-    expect(toggleTag(galarian, 'galarian').form).toBe(null)
+    expect(galarian.form).toBe('Alolan · Galarian')
+    expect(galarian.extraTags).toEqual(['alolan', 'galarian'])
+    expect(toggleTag(galarian, 'galarian').form).toBe('Alolan')
   })
 
   it('clears every visual tag and keeps the species', () => {
@@ -112,5 +125,16 @@ describe('resolveRequiredTags', () => {
   it('avoids colliding with built-in or already used tags', () => {
     expect(allocateCategoryTag('Shiny', ['shiny'])).toBe('shiny-2')
     expect(allocateCategoryTag('Lucky', ['lucky'])).toBe('lucky-2')
+  })
+})
+
+describe('fieldsFromSpecimen', () => {
+  it('copies the saved tags without sharing extraTags', () => {
+    const extraTags = ['lucky']
+    const row = { ...base(), shiny: true, extraTags }
+    const fields = fieldsFromSpecimen(row)
+    extraTags.push('xxl')
+    expect(fields.shiny).toBe(true)
+    expect(fields.extraTags).toEqual(['lucky'])
   })
 })

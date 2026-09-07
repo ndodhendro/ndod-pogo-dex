@@ -48,24 +48,11 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-1);
-  background: var(--color-danger);
-  color: #1a1010;
+  padding: 0;
+  border-radius: 0;
   font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: var(--letter-ui);
   line-height: var(--line-tight);
   touch-action: manipulation;
-}
-
-.swipeDeleteIcon {
-  display: grid;
-  place-items: center;
-  width: 1.5rem;
-  height: 1.5rem;
-}
-
-.swipeDeleteIcon svg {
-  display: block;
 }
 
 .catList .catFront {

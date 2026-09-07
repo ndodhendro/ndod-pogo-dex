@@ -1,10 +1,21 @@
+import { MAX_TAG_CROP_HEIGHT } from '../data/tagCrops'
+import { cropBottomFromBitmap, screenshotCropRect } from './screenshotCrop'
+
 const THUMB_DISPLAY_WIDTH = 128
 /** Bitmap is 3× CSS size so phone screens (devicePixelRatio ~3) stay sharp. */
 const THUMB_BITMAP_WIDTH = THUMB_DISPLAY_WIDTH * 3
 
-/** Native screenshot size for this collector's device. */
-export const SCREENSHOT_WIDTH = 738
-export const SCREENSHOT_HEIGHT = 1600
+export {
+  SCREENSHOT_CROP_TOP,
+  SCREENSHOT_FULL_HEIGHT,
+  SCREENSHOT_WIDTH,
+  screenshotCropRect,
+} from './screenshotCrop'
+export type { CropRect } from './screenshotCrop'
+export { MAX_TAG_CROP_HEIGHT as screenshotFrameHeight } from '../data/tagCrops'
+
+/** Default card frame (tallest tag crop). Live layout uses tag crop rows. */
+export const SCREENSHOT_HEIGHT = MAX_TAG_CROP_HEIGHT
 
 /** Gallery / share-target files often have an empty MIME type. Decode decides later. */
 export function isProbablyImageFile(file: File): boolean {
@@ -13,7 +24,7 @@ export function isProbablyImageFile(file: File): boolean {
   return file.type === 'application/octet-stream'
 }
 
-/** Thumb bitmap size. Keeps 738×1600 → 384×833 (displays at ~128px CSS). */
+/** Thumb bitmap size. Keeps the crop aspect at 3× display width. */
 export function thumbSizeFor(
   width: number,
   height: number,
@@ -95,6 +106,48 @@ function downsample(img: HTMLImageElement, destW: number, destH: number): HTMLCa
   return out
 }
 
+async function copyPaintCrop(
+  source: CanvasImageSource,
+  srcW: number,
+  srcH: number,
+  fallback: Blob,
+  cropBottom: number,
+): Promise<Blob> {
+  const crop = screenshotCropRect(srcW, srcH, cropBottom)
+  if (!crop) return fallback
+  const full = document.createElement('canvas')
+  full.width = srcW
+  full.height = srcH
+  const fullCtx = full.getContext('2d', { willReadFrequently: true })
+  if (!fullCtx) throw new Error('Canvas unavailable')
+  fullCtx.imageSmoothingEnabled = false
+  fullCtx.drawImage(source, 0, 0)
+  const pixels = fullCtx.getImageData(crop.x, crop.y, crop.width, crop.height)
+  const canvas = document.createElement('canvas')
+  canvas.width = crop.width
+  canvas.height = crop.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas unavailable')
+  ctx.putImageData(pixels, 0, 0)
+  return canvasToJpeg(canvas, 0.92)
+}
+
+/** Copy the Paint rectangle pixel-for-pixel (no scale, no smoothing). */
+export async function cropScreenshot(blob: Blob, cropBottom: number): Promise<Blob> {
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(blob)
+    try {
+      return await copyPaintCrop(bitmap, bitmap.width, bitmap.height, blob, cropBottom)
+    } finally {
+      bitmap.close()
+    }
+  }
+  const img = await loadImage(blob)
+  const srcW = img.naturalWidth || img.width
+  const srcH = img.naturalHeight || img.height
+  return copyPaintCrop(img, srcW, srcH, blob, cropBottom)
+}
+
 async function makeThumb(blob: Blob): Promise<Blob> {
   const img = await loadImage(blob)
   const srcW = img.naturalWidth || img.width
@@ -103,7 +156,21 @@ async function makeThumb(blob: Blob): Promise<Blob> {
   return canvasToJpeg(downsample(img, width, height), 0.86)
 }
 
-export async function makeImageVariants(original: Blob) {
-  const thumb = await makeThumb(original)
-  return { original, thumb, medium: original }
+export async function makeImageVariants(source: Blob, cropBottom?: number) {
+  const cropped = cropBottom == null ? source : await cropScreenshot(source, cropBottom)
+  const thumb = await makeThumb(cropped)
+  return { original: cropped, thumb, medium: cropped }
+}
+
+export async function cropBottomFromBlob(blob: Blob): Promise<number> {
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(blob)
+    try {
+      return cropBottomFromBitmap(bitmap.width, bitmap.height)
+    } finally {
+      bitmap.close()
+    }
+  }
+  const img = await loadImage(blob)
+  return cropBottomFromBitmap(img.naturalWidth || img.width, img.naturalHeight || img.height)
 }

@@ -1,11 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BottomSheet } from '../components/BottomSheet'
 import { FilePickerButton } from '../components/FilePickerButton'
-import { SearchField } from '../components/SearchField'
-import { TagChip } from '../components/TagChip'
-import { specimenTagChoices } from '../data/navIcons'
-import { searchSpecies, SPECIES_BY_ID } from '../data/species'
+import { TagSheet } from '../components/TagSheet'
+import { TAB_ICONS } from '../data/navIcons'
 import { useImageUrl } from '../hooks/useImageUrl'
 import {
   discardInbox,
@@ -16,32 +14,14 @@ import {
 import { db, type InboxRow } from '../lib/db'
 import { isProbablyImageFile } from '../lib/images'
 import { useToast } from '../lib/toast'
-import {
-  clearVisualTags,
-  normalizeOptionalName,
-  specimenSaveWarning,
-  specimenTags,
-  toggleTag,
-  type SpecimenFields,
-} from '../lib/tags'
 import styles from './Inbox.module.css'
-
-const emptyFields = (): SpecimenFields => ({
-  speciesId: 0,
-  form: null,
-  shiny: false,
-  shadowStatus: 'none',
-  costume: null,
-  background: null,
-  hundo: false,
-  nundo: false,
-  extraTags: [],
-})
 
 export function InboxPage() {
   const { showToast } = useToast()
   const items = useLiveQuery(() => db.inbox.orderBy('createdAt').reverse().toArray(), []) ?? []
   const [active, setActive] = useState<InboxRow | null>(null)
+  const [pendingDiscard, setPendingDiscard] = useState<InboxRow | null>(null)
+  const [discardBusy, setDiscardBusy] = useState(false)
   const [adding, setAdding] = useState(false)
 
   useEffect(() => {
@@ -74,9 +54,28 @@ export function InboxPage() {
     }
   }
 
+  async function confirmDiscard() {
+    const item = pendingDiscard
+    if (!item || discardBusy) return
+    setDiscardBusy(true)
+    try {
+      await discardInbox(item.id)
+      if (active?.id === item.id) setActive(null)
+      setPendingDiscard(null)
+      showToast('Screenshot discarded', 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not discard')
+    } finally {
+      setDiscardBusy(false)
+    }
+  }
+
   return (
     <section>
       <h1 className="page-title" data-tone="inbox">
+        <span className="page-title-icon" aria-hidden="true">
+          {TAB_ICONS.inbox}
+        </span>
         Transfer
       </h1>
       <div className="row-actions" style={{ marginBottom: '1rem' }}>
@@ -97,30 +96,64 @@ export function InboxPage() {
               key={item.id}
               item={item}
               onTag={() => setActive(item)}
-              onDiscard={() => {
-                void discardInbox(item.id)
-                  .then(() => showToast('Screenshot discarded', 'success'))
-                  .catch((err) =>
-                    showToast(err instanceof Error ? err.message : 'Could not discard'),
-                  )
-              }}
+              onDiscard={() => setPendingDiscard(item)}
             />
           ))}
         </div>
       )}
       <TagSheet
-        item={active}
+        open={Boolean(active)}
+        title="Tag screenshot"
+        resetKey={active?.id ?? ''}
+        imageId={active?.imageId}
+        saveLabel="Save specimen"
+        tone="inbox"
         onClose={() => setActive(null)}
-        onSaved={(duplicate, cloudError, sameScreenshot) => {
+        onSave={async (fields, cropBottom) => {
+          if (!active) return
+          const result = await saveSpecimenFromInbox(active.id, fields, cropBottom)
           setActive(null)
-          if (sameScreenshot && duplicate) showToast('Screenshot already in the collection', 'warning')
-          else if (duplicate) showToast('Same look already in the collection', 'warning')
-          if (cloudError) showToast(cloudError, 'warning')
-          else if (!duplicate) showToast('Specimen saved', 'success')
+          if (result.sameScreenshot && result.duplicate) {
+            showToast('Screenshot already in the collection', 'warning')
+          } else if (result.duplicate) {
+            showToast('Same look already in the collection', 'warning')
+          }
+          if (result.cloudError) showToast(result.cloudError, 'warning')
+          else if (!result.duplicate) showToast('Specimen saved', 'success')
         }}
         onWarning={(message) => showToast(message, 'warning')}
         onError={(message) => showToast(message)}
       />
+      <BottomSheet
+        open={Boolean(pendingDiscard)}
+        title="Discard screenshot"
+        onClose={() => {
+          if (discardBusy) return
+          setPendingDiscard(null)
+        }}
+      >
+        <p className={`page-sub ${styles.confirmCopy}`}>
+          Discard this screenshot? It will leave Transfer and will not be saved to your collection.
+        </p>
+        <div className="row-actions">
+          <button
+            type="button"
+            className="btn"
+            disabled={discardBusy}
+            onClick={() => setPendingDiscard(null)}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            disabled={discardBusy}
+            onClick={() => void confirmDiscard()}
+          >
+            {discardBusy ? 'Discarding…' : 'Discard'}
+          </button>
+        </div>
+      </BottomSheet>
     </section>
   )
 }
@@ -148,128 +181,10 @@ function InboxItem({
         <button type="button" className="btn btn-primary" onClick={onTag}>
           Tag
         </button>
-        <button type="button" className="btn" onClick={onDiscard}>
+        <button type="button" className="btn btn-danger" onClick={onDiscard}>
           Discard
         </button>
       </div>
     </div>
-  )
-}
-
-function TagSheet({
-  item,
-  onClose,
-  onSaved,
-  onWarning,
-  onError,
-}: {
-  item: InboxRow | null
-  onClose: () => void
-  onSaved: (duplicate: boolean, cloudError?: string, sameScreenshot?: boolean) => void
-  onWarning: (message: string) => void
-  onError: (message: string) => void
-}) {
-  const [query, setQuery] = useState('')
-  const [fields, setFields] = useState<SpecimenFields>(emptyFields)
-  const [busy, setBusy] = useState(false)
-  const categories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
-  const tagChoices = useMemo(() => specimenTagChoices(categories), [categories])
-  const tags = specimenTags(fields)
-  const matches = useMemo(() => {
-    if (!query.trim()) return []
-    return searchSpecies(query).slice(0, 12)
-  }, [query])
-  const selected = fields.speciesId ? SPECIES_BY_ID.get(fields.speciesId) : undefined
-
-  useEffect(() => {
-    setQuery('')
-    setFields(emptyFields())
-  }, [item?.id])
-
-  async function save() {
-    if (!item) return
-    const warning = specimenSaveWarning(fields)
-    if (warning) {
-      onWarning(warning)
-      return
-    }
-    setBusy(true)
-    try {
-      const result = await saveSpecimenFromInbox(item.id, {
-        ...fields,
-        costume: normalizeOptionalName(fields.costume),
-        background: normalizeOptionalName(fields.background),
-      })
-      onSaved(result.duplicate, result.cloudError, result.sameScreenshot)
-    } catch (err) {
-      onError(err instanceof Error ? err.message : 'Could not save')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <BottomSheet open={Boolean(item)} title="Tag screenshot" onClose={onClose}>
-      <SearchField value={query} onChange={setQuery} placeholder="Species name or number" />
-      {selected ? <p className="page-sub">Selected: {selected.name}</p> : null}
-      {matches.length > 0 ? (
-        <div className={styles.speciesList}>
-          {matches.map((species) => (
-            <button
-              key={species.id}
-              type="button"
-              data-on={fields.speciesId === species.id ? 'true' : 'false'}
-              onClick={() => {
-                setFields((f) => ({ ...f, speciesId: species.id }))
-                setQuery('')
-              }}
-            >
-              #{String(species.id).padStart(4, '0')} {species.name}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      <div className="field">
-        <span>Tags</span>
-        <div className="chip-row">
-          {tagChoices.map((choice) => (
-            <TagChip
-              key={choice.tag ?? 'empty-look'}
-              tag={choice.tag ?? 'living'}
-              selected={choice.tag == null ? tags.length === 0 : tags.includes(choice.tag)}
-              icon={choice.icon}
-              label={choice.label}
-              labelColor={choice.labelColor}
-              onClick={() =>
-                setFields((f) => (choice.tag == null ? clearVisualTags(f) : toggleTag(f, choice.tag)))
-              }
-            />
-          ))}
-        </div>
-      </div>
-      {fields.costume !== null ? (
-        <label className="field">
-          <span>Costume name</span>
-          <input
-            value={fields.costume}
-            onChange={(e) => setFields((f) => ({ ...f, costume: e.target.value }))}
-            placeholder="Holiday hat"
-          />
-        </label>
-      ) : null}
-      {fields.background !== null ? (
-        <label className="field">
-          <span>Background</span>
-          <input
-            value={fields.background}
-            onChange={(e) => setFields((f) => ({ ...f, background: e.target.value }))}
-            placeholder="Tokyo"
-          />
-        </label>
-      ) : null}
-      <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void save()}>
-        {busy ? 'Saving…' : 'Save specimen'}
-      </button>
-    </BottomSheet>
   )
 }

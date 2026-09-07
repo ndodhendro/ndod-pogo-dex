@@ -30,3 +30,32 @@ export function planGalleryRestore(
 
   return { restoreIds, unmatchedHashes, alreadyLocalHashes }
 }
+
+export type CloudPhotoRestorePlan = {
+  download: Array<{ id: string; imagePath: string }>
+  alreadyLocal: number
+  missingPhoto: number
+}
+
+export function planCloudPhotoRestore(
+  cloud: Array<{ id: string; fileHash: string; imagePath?: string | null }>,
+  localHashes: Set<string>,
+): CloudPhotoRestorePlan {
+  const download: Array<{ id: string; imagePath: string }> = []
+  let alreadyLocal = 0
+  let missingPhoto = 0
+
+  for (const row of cloud) {
+    if (localHashes.has(row.fileHash)) {
+      alreadyLocal += 1
+      continue
+    }
+    if (!row.imagePath) {
+      missingPhoto += 1
+      continue
+    }
+    download.push({ id: row.id, imagePath: row.imagePath })
+  }
+
+  return { download, alreadyLocal, missingPhoto }
+}

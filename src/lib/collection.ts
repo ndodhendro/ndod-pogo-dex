@@ -1,14 +1,16 @@
+import { forgetImageUrls } from '../hooks/useImageUrl'
 import { colorForCategory, iconForCategory } from '../data/navIcons'
 import { categoryOrderPatch } from './categoryOrder'
 import { firstGrapheme, normalizeHexColor } from './categoryStyle'
-import { coverPurity, pickCoverAfterDelete, shouldAutoReplaceCover } from './covers'
+import { coverMutationsAfterEdit, coverPurity, pickCoverAfterDelete, shouldAutoReplaceCover } from './covers'
 import { db, ensureSeedCategories, type CategoryRow, type InboxRow, type SpecimenRow } from './db'
 import { newId } from './id'
-import { makeImageVariants } from './images'
+import { cropBottomFromBlob, makeImageVariants } from './images'
 import { hashBlob } from './hash'
 import { cloudBackupErrorMessage, pickSpecimenToKeepForHash, sameSpecimenMetadata } from './specimenHash'
 import { rebaseSpecimenId } from './specimenMerge'
 import { pushCategory, pushCategories, pushCover, pushCoversForCategory, pushMetadataAfterSave, deleteCloudCategory, deleteCloudSpecimen } from './sync'
+import { removeSpecimenPhoto } from './specimenStorage'
 import {
   extraTagList,
   hasAllRequired,
@@ -47,6 +49,7 @@ export async function discardInbox(id: string) {
 export async function saveSpecimenFromInbox(
   inboxId: string,
   fields: SpecimenFields,
+  cropBottom: number,
 ): Promise<{ duplicate: boolean; sameScreenshot?: boolean; cloudError?: string }> {
   await ensureSeedCategories()
   const inbox = await db.inbox.get(inboxId)
@@ -54,6 +57,9 @@ export async function saveSpecimenFromInbox(
   const image = await db.images.get(inbox.imageId)
   if (!image?.original) throw new Error('Transfer image is gone')
   const fileHash = await hashBlob(image.original)
+  const variants = await makeImageVariants(image.original, cropBottom)
+  await db.images.update(inbox.imageId, variants)
+  forgetImageUrls(inbox.imageId)
 
   const form = fields.form?.trim() ? fields.form.trim() : null
   const extraTags = extraTagList(fields)
@@ -144,20 +150,98 @@ async function saveExistingScreenshot(
   return finishSave(row, { duplicate: unchanged, sameScreenshot: true })
 }
 
+export async function updateSpecimen(
+  id: string,
+  fields: SpecimenFields,
+  cropBottom: number,
+): Promise<{ duplicate: boolean; cloudError?: string; specimen: SpecimenRow }> {
+  const existing = await db.specimens.get(id)
+  if (!existing) throw new Error('Specimen is gone')
+  const image = await db.images.get(existing.imageId)
+  if (!image?.original) throw new Error('Image is gone')
+
+  const form = fields.form?.trim() ? fields.form.trim() : null
+  const extraTags = extraTagList(fields)
+  const updated: SpecimenRow = {
+    ...existing,
+    speciesId: fields.speciesId,
+    form,
+    shiny: fields.shiny,
+    shadowStatus: fields.shadowStatus,
+    costume: fields.costume,
+    background: fields.background,
+    hundo: fields.hundo,
+    nundo: fields.nundo,
+    extraTags,
+    cloudBackupPending: true,
+  }
+  const metaUnchanged = sameSpecimenMetadata(existing, updated)
+  const currentCrop = await cropBottomFromBlob(image.original)
+  const cropChanged = currentCrop !== cropBottom
+
+  if (cropChanged) {
+    const variants = await makeImageVariants(image.original, cropBottom)
+    await db.images.update(existing.imageId, variants)
+    forgetImageUrls(existing.imageId)
+    updated.fileHash = await hashBlob(variants.original)
+  }
+
+  if (metaUnchanged && !cropChanged) {
+    return { duplicate: false, specimen: existing }
+  }
+
+  const others = await db.specimens.toArray()
+  const duplicate = others.some((row) => row.id !== id && visualKey(row) === visualKey(updated))
+
+  await db.transaction('rw', db.specimens, db.covers, db.categories, async () => {
+    await db.specimens.put(updated)
+    const specimens = await db.specimens.toArray()
+    const categories = await db.categories.toArray()
+    const covers = await db.covers.toArray()
+    const mutations = coverMutationsAfterEdit(existing, updated, categories, covers, specimens)
+    for (const mutation of mutations) {
+      if (mutation.op === 'put') {
+        await db.covers.put({
+          categoryId: mutation.categoryId,
+          speciesId: mutation.speciesId,
+          specimenId: mutation.specimenId,
+        })
+      } else {
+        await db.covers.delete([mutation.categoryId, mutation.speciesId])
+      }
+    }
+  })
+
+  const extraSpecies = existing.speciesId === updated.speciesId ? [] : [existing.speciesId]
+  const saved = await finishSave(updated, { duplicate }, extraSpecies)
+  if (
+    cropChanged &&
+    existing.fileHash &&
+    existing.fileHash !== updated.fileHash &&
+    saved.specimen.cloudBackupPending === false
+  ) {
+    await removeSpecimenPhoto(existing.fileHash)
+  }
+  return saved
+}
+
 async function finishSave(
   specimen: SpecimenRow,
   flags: { duplicate: boolean; sameScreenshot?: boolean },
-): Promise<{ duplicate: boolean; sameScreenshot?: boolean; cloudError?: string }> {
-  const result = await pushMetadataAfterSave(specimen)
+  extraSpeciesIds: number[] = [],
+): Promise<{ duplicate: boolean; sameScreenshot?: boolean; cloudError?: string; specimen: SpecimenRow }> {
+  const result = await pushMetadataAfterSave(specimen, extraSpeciesIds)
   if (result.kind === 'ok') {
     const live = specimen.fileHash
       ? await db.specimens.where('fileHash').equals(specimen.fileHash).first()
       : await db.specimens.get(specimen.id)
     if (live) await db.specimens.update(live.id, { cloudBackupPending: false })
-    return flags
+    return { ...flags, specimen: live ?? specimen }
   }
-  if (result.kind === 'error') return { ...flags, cloudError: cloudBackupErrorMessage(result.message) }
-  return flags
+  if (result.kind === 'error') {
+    return { ...flags, cloudError: cloudBackupErrorMessage(result.message), specimen }
+  }
+  return { ...flags, specimen }
 }
 
 async function maybeSetCover(
@@ -230,7 +314,7 @@ export async function deleteSpecimen(id: string) {
     }
   })
 
-  return deleteCloudSpecimen(id, speciesId)
+  return deleteCloudSpecimen(id, speciesId, specimen.fileHash)
 }
 
 function resolvedLook(

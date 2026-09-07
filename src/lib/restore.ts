@@ -1,15 +1,18 @@
 import { ingestFile } from './collection'
 import { db, ensureCustomCategoryTags, ensureSeedCategories } from './db'
 import { applyCategoryPull } from './categorySync'
-import { extraTagList } from './tags'
+import { extraTagList, cropTagsFromFields } from './tags'
+import { cropHeightForTags } from '../data/tagCrops'
 import { hashBlob } from './hash'
 import { newId } from './id'
 import { isProbablyImageFile, makeImageVariants } from './images'
-import { planGalleryRestore } from './restorePlan'
+import { planCloudPhotoRestore, planGalleryRestore } from './restorePlan'
+import { downloadSpecimenOriginal } from './specimenStorage'
+import { getSupabase } from './supabase'
 import { pullCloudCollection, type CloudSpecimen } from './sync'
 
 export type RestoreProgress = {
-  phase: 'loading' | 'hashing' | 'writing'
+  phase: 'loading' | 'hashing' | 'downloading' | 'writing'
   current: number
   total: number
 }
@@ -19,12 +22,91 @@ export type RestoreResult = {
   alreadyLocal: number
   inbox: number
   cloudWithoutPhoto: number
+  failed?: number
 }
 
 function yieldUi() {
   return new Promise<void>((resolve) => {
     window.setTimeout(resolve, 0)
   })
+}
+
+async function applyCloudCategories(
+  cloud: NonNullable<Awaited<ReturnType<typeof pullCloudCollection>>>,
+) {
+  if (cloud.categories.length > 0) {
+    await applyCategoryPull(cloud.categories)
+  } else {
+    await ensureSeedCategories()
+    await ensureCustomCategoryTags()
+  }
+}
+
+async function applyCloudCovers(cloud: NonNullable<Awaited<ReturnType<typeof pullCloudCollection>>>) {
+  for (const cover of cloud.covers) {
+    if (await db.specimens.get(cover.specimenId)) {
+      await db.covers.put(cover)
+    }
+  }
+}
+
+export async function restoreFromCloud(
+  onProgress?: (progress: RestoreProgress) => void,
+): Promise<RestoreResult> {
+  onProgress?.({ phase: 'loading', current: 0, total: 1 })
+  const supabase = getSupabase()
+  const cloud = await pullCloudCollection()
+  if (!supabase || !cloud) throw new Error('Sign in with Google first')
+  if (cloud.specimens.length === 0) {
+    throw new Error('No cloud metadata yet. Save tagged specimens while signed in first.')
+  }
+
+  await applyCloudCategories(cloud)
+
+  const localWithHash = await db.specimens.filter((row) => Boolean(row.fileHash)).toArray()
+  const localHashes = new Set(localWithHash.map((row) => row.fileHash as string))
+  const plan = planCloudPhotoRestore(cloud.specimens, localHashes)
+  if (plan.download.length === 0 && plan.missingPhoto === cloud.specimens.length) {
+    throw new Error(
+      'No screenshots in the cloud bucket yet. Backup this collection first, or restore from gallery.',
+    )
+  }
+
+  const cloudById = new Map(cloud.specimens.map((row) => [row.id, row]))
+  let restored = 0
+  let failed = 0
+  for (let i = 0; i < plan.download.length; i++) {
+    const item = plan.download[i]
+    const spec = cloudById.get(item.id)
+    onProgress?.({ phase: 'downloading', current: i + 1, total: plan.download.length })
+    if (!spec) continue
+    const downloaded = await downloadSpecimenOriginal(supabase, item.imagePath)
+    if ('error' in downloaded) {
+      if (downloaded.error.includes('Storage bucket "specimens"')) {
+        throw new Error(downloaded.error)
+      }
+      failed += 1
+      continue
+    }
+    const got = await hashBlob(downloaded.blob)
+    if (got !== spec.fileHash) {
+      failed += 1
+      continue
+    }
+    await writeRestoredSpecimen(spec, downloaded.blob, true)
+    restored += 1
+    if (i % 2 === 0) await yieldUi()
+  }
+
+  await applyCloudCovers(cloud)
+
+  return {
+    restored,
+    alreadyLocal: plan.alreadyLocal,
+    inbox: 0,
+    cloudWithoutPhoto: plan.missingPhoto,
+    failed,
+  }
 }
 
 export async function restoreFromGallery(
@@ -38,12 +120,7 @@ export async function restoreFromGallery(
     throw new Error('No cloud metadata yet. Save tagged specimens while signed in first.')
   }
 
-  if (cloud.categories.length > 0) {
-    await applyCategoryPull(cloud.categories)
-  } else {
-    await ensureSeedCategories()
-    await ensureCustomCategoryTags()
-  }
+  await applyCloudCategories(cloud)
 
   const images = files.filter(isProbablyImageFile)
   const hashed: { hash: string; file: File }[] = []
@@ -76,7 +153,7 @@ export async function restoreFromGallery(
     if (!spec) continue
     const file = blobByHash.get(spec.fileHash)
     if (!file) continue
-    await writeRestoredSpecimen(spec, file)
+    await writeRestoredSpecimen(spec, file, false)
     restored += 1
     if (i % 2 === 0) {
       onProgress?.({ phase: 'writing', current: i + 1, total: plan.restoreIds.length })
@@ -95,11 +172,7 @@ export async function restoreFromGallery(
     inbox += 1
   }
 
-  for (const cover of cloud.covers) {
-    if (await db.specimens.get(cover.specimenId)) {
-      await db.covers.put(cover)
-    }
-  }
+  await applyCloudCovers(cloud)
 
   return {
     restored,
@@ -109,9 +182,14 @@ export async function restoreFromGallery(
   }
 }
 
-async function writeRestoredSpecimen(spec: CloudSpecimen, file: File) {
+async function writeRestoredSpecimen(spec: CloudSpecimen, file: Blob, alreadyCropped: boolean) {
   if (await db.specimens.get(spec.id)) return
-  const variants = await makeImageVariants(file)
+  const heightMap = Object.fromEntries(
+    (await db.tagCrops.toArray()).map((row) => [row.tag, row.height]),
+  )
+  const variants = alreadyCropped
+    ? await makeImageVariants(file)
+    : await makeImageVariants(file, cropHeightForTags(cropTagsFromFields(spec), heightMap))
   const imageId = newId()
   await db.transaction('rw', db.images, db.specimens, async () => {
     await db.images.add({ id: imageId, ...variants })

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CardPreview } from '../components/CardPreview'
 import { DexCard } from '../components/DexCard'
+import { SpecimenTagSheet } from '../components/TagSheet'
 import { colorForCategory, iconForCategory, toneForCategory } from '../data/navIcons'
 import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
@@ -10,6 +11,7 @@ import { coverPurity } from '../lib/covers'
 import { deleteSpecimen, setAsCover } from '../lib/collection'
 import { categoryChromeStyle } from '../lib/categoryStyle'
 import { db, type SpecimenRow } from '../lib/db'
+import { listNeighbor } from '../lib/previewSwipe'
 import { toastAfterWrite, useToast } from '../lib/toast'
 import { hasAllRequired, specimenTags } from '../lib/tags'
 import styles from './Gallery.module.css'
@@ -35,7 +37,13 @@ export function GalleryPage() {
     [categoryId, speciesId],
   )
   const [preview, setPreview] = useState<SpecimenRow | null>(null)
+  const [editingTags, setEditingTags] = useState(false)
+  const previewIndex = preview ? specimens.findIndex((row) => row.id === preview.id) : -1
+  const previewNext = listNeighbor(specimens, previewIndex, 1)
+  const previewPrev = listNeighbor(specimens, previewIndex, -1)
   const previewUrl = useImageUrl(preview?.imageId, 'original')
+  const nextUrl = useImageUrl(previewNext?.imageId, 'original')
+  const prevUrl = useImageUrl(previewPrev?.imageId, 'original')
 
   if (!species) return <p className="empty-state">Unknown species.</p>
 
@@ -81,12 +89,21 @@ export function GalleryPage() {
           ))}
         </div>
       )}
-      {preview && previewUrl && category ? (
+      {preview && category ? (
         <CardPreview
           specimen={preview}
-          imageUrl={previewUrl}
+          imageUrl={previewUrl ?? ''}
+          prev={previewPrev ? { specimen: previewPrev, imageUrl: prevUrl ?? '' } : undefined}
+          next={previewNext ? { specimen: previewNext, imageUrl: nextUrl ?? '' } : undefined}
           canSetCover={hasAllRequired(specimenTags(preview), category.requiredTags)}
-          onClose={() => setPreview(null)}
+          locked={editingTags}
+          onClose={() => {
+            setEditingTags(false)
+            setPreview(null)
+          }}
+          onNext={previewNext ? () => setPreview(previewNext) : undefined}
+          onPrev={previewPrev ? () => setPreview(previewPrev) : undefined}
+          onEditTags={() => setEditingTags(true)}
           onSetCover={() => {
             void setAsCover(category.id, preview.id)
               .then((cloudError) => {
@@ -95,17 +112,33 @@ export function GalleryPage() {
               })
               .catch((err) => showToast(err instanceof Error ? err.message : 'Could not set cover'))
           }}
-          onOpenGallery={() => setPreview(null)}
+          onOpenGallery={() => {
+            setEditingTags(false)
+            setPreview(null)
+          }}
           onDelete={() =>
             deleteSpecimen(preview.id)
               .then((cloudError) => {
                 toastAfterWrite(showToast, 'Specimen deleted', cloudError)
+                setEditingTags(false)
                 setPreview(null)
               })
               .catch((err) => showToast(err instanceof Error ? err.message : 'Could not delete'))
           }
         />
       ) : null}
+      <SpecimenTagSheet
+        specimen={editingTags ? preview : null}
+        onClose={() => setEditingTags(false)}
+        onSaved={(specimen) => {
+          setEditingTags(false)
+          if (specimen.speciesId !== Number(speciesId)) {
+            setPreview(null)
+            return
+          }
+          setPreview(specimen)
+        }}
+      />
     </section>
   )
 }
