@@ -211,6 +211,7 @@ export function DexPage() {
           prev={previewPrev ? { specimen: previewPrev, imageUrl: prevUrl ?? '' } : undefined}
           next={previewNext ? { specimen: previewNext, imageUrl: nextUrl ?? '' } : undefined}
           canSetCover={hasAllRequired(specimenTags(preview), category.requiredTags)}
+          requiredTags={category.requiredTags}
           locked={editingTags}
           onClose={() => {
             setEditingTags(false)

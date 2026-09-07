@@ -17,7 +17,8 @@
 .sheet {
   width: min(28rem, 100%);
   max-height: 94dvh;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
@@ -39,14 +40,25 @@
   position: relative;
   margin: 0 auto var(--space-4);
   width: min(100%, 22rem);
-  overflow: hidden;
+  overflow: visible;
   touch-action: none;
   user-select: none;
   cursor: zoom-in;
 }
 
+.photoWrap[data-carousel='true'] {
+  overflow: hidden;
+}
+
+.photoWrap:not([data-carousel='true']) .slide:first-child,
+.photoWrap:not([data-carousel='true']) .slide:last-child {
+  visibility: hidden;
+}
+
 .photoTrack {
   --carousel-gap: var(--space-3);
+  position: relative;
+  z-index: 1;
   display: flex;
   width: 100%;
   gap: var(--carousel-gap);
@@ -80,48 +92,114 @@
 }
 
 .photo[data-shadow='true'] {
-  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.7), 0 0 28px 8px rgba(124, 58, 237, 0.45);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-shadow-text) 55%, transparent);
 }
 
 .photo[data-purified='true'] {
-  box-shadow: 0 0 0 2px rgba(147, 197, 253, 0.8), 0 0 28px 10px rgba(191, 219, 254, 0.35);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 55%, transparent);
 }
 
 .photo[data-shadow='true'][data-purified='true'] {
   box-shadow:
-    0 0 0 2px rgba(124, 58, 237, 0.7),
-    0 0 22px 6px rgba(124, 58, 237, 0.4),
-    0 0 36px 12px rgba(191, 219, 254, 0.28);
+    inset 0 0 0 1px color-mix(in srgb, var(--color-shadow-text) 55%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, #fff 40%, transparent);
 }
 
-.shine,
-.sparkles,
+.tagAura {
+  pointer-events: none;
+  position: absolute;
+  inset: -1.35rem;
+  z-index: 0;
+  border-radius: calc(var(--radius-lg) + 0.85rem);
+}
+
+.tagAura[data-tone='shadow'] {
+  --flame-ember: var(--color-shadow);
+  --flame-tip: var(--color-shadow-text);
+}
+
+.tagAura[data-tone='purified'] {
+  --flame-ember: rgba(255, 255, 255, 0.72);
+  --flame-tip: #fff;
+}
+
+.flame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  animation: flameFlicker 5.42s linear infinite;
+}
+
+.flameEmber,
+.flameTip {
+  fill: none;
+  rx: var(--radius-lg);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.flameEmber {
+  stroke: var(--flame-ember);
+  stroke-width: 13px;
+}
+
+.flameTip {
+  stroke: var(--flame-tip);
+  stroke-width: 6px;
+}
+
+.shinyLayer {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  contain: layout style;
+}
+
+.sparkleStar {
+  position: absolute;
+  left: var(--sparkle-x);
+  top: var(--sparkle-y);
+  width: var(--sparkle-size);
+  height: var(--sparkle-size);
+  color: #fff;
+  opacity: 0;
+  transform: translate3d(-50%, -50%, 0);
+  animation: sparklePop var(--sparkle-dur) linear infinite;
+  animation-delay: var(--sparkle-delay);
+}
+
+.sparkleStar::before,
+.sparkleStar::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: currentColor;
+  border-radius: 1px;
+  transform: translate(-50%, -50%);
+}
+
+.sparkleStar::before {
+  width: 16%;
+  height: 100%;
+}
+
+.sparkleStar::after {
+  width: 100%;
+  height: 16%;
+}
+
+.sparkleStar[data-gold='true'] {
+  color: var(--color-shiny-text);
+}
+
 .hundo {
   pointer-events: none;
   position: absolute;
   inset: 0;
-}
-
-.shine::after {
-  content: '';
-  position: absolute;
-  inset: -20%;
-  background: linear-gradient(
-    115deg,
-    transparent 40%,
-    rgba(255, 255, 255, 0.28) 48%,
-    transparent 56%
-  );
-  animation: sweep 2.8s ease-in-out infinite;
-}
-
-.sparkles {
-  background-image:
-    radial-gradient(circle at 20% 30%, #fff 0 1.5px, transparent 2px),
-    radial-gradient(circle at 70% 22%, var(--color-shiny) 0 1.5px, transparent 2px),
-    radial-gradient(circle at 80% 70%, #fff 0 1.5px, transparent 2px),
-    radial-gradient(circle at 30% 78%, var(--color-shiny) 0 1.5px, transparent 2px);
-  animation: twinkle 1.8s ease-in-out infinite;
 }
 
 .hundo::before,
@@ -158,6 +236,35 @@
   font-weight: var(--font-weight-medium);
   letter-spacing: var(--letter-ui);
   font-variant-numeric: tabular-nums;
+}
+
+.sheet[data-preview-fx='off'] .photo {
+  border: 6px solid transparent;
+  padding: 2px;
+  background: var(--color-bg);
+}
+
+.sheet[data-preview-fx='off'] .photo[data-purity='green'] {
+  border-color: var(--color-cover-green);
+}
+
+.sheet[data-preview-fx='off'] .photo[data-purity='gray'] {
+  border-color: var(--color-cover-gray);
+}
+
+.sheet[data-preview-fx='off'] .photo img {
+  border-radius: calc(var(--radius-lg) - 8px);
+  background: #ffffff;
+}
+
+.sheet[data-preview-fx='off'] .number,
+.sheet[data-preview-fx='off'] .meta h2 {
+  color: var(--color-text-muted);
+}
+
+.sheet[data-preview-fx='off'] .meta[data-purity='green'] .number,
+.sheet[data-preview-fx='off'] .meta[data-purity='green'] h2 {
+  color: var(--color-cover-green);
 }
 
 .form {
@@ -215,36 +322,53 @@
   }
 }
 
+.sheet[data-preview-fx='off'] .flame,
+.sheet[data-preview-fx='off'] .sparkleStar,
+.sheet[data-preview-fx='off'] .hundo::before,
+.sheet[data-preview-fx='off'] .hundo::after {
+  animation: none;
+}
+
+.sheet[data-preview-fx='off'] .sparkleStar {
+  opacity: 0.55;
+  transform: translate3d(-50%, -50%, 0);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sheet,
   .photoTrack,
   .backdrop {
     transition: none;
   }
-  .shine::after,
-  .sparkles,
+  .sparkleStar,
   .hundo::before,
-  .hundo::after {
+  .hundo::after,
+  .flame {
     animation: none;
   }
-}
-
-@keyframes sweep {
-  from {
-    transform: translateX(-40%);
-  }
-  to {
-    transform: translateX(40%);
+  .sparkleStar {
+    opacity: 0.55;
   }
 }
 
-@keyframes twinkle {
+@keyframes sparklePop {
   0%,
+  14%,
   100% {
-    opacity: 0.45;
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) scale(0.2) rotate(-8deg);
   }
-  50% {
+  5% {
     opacity: 1;
+    transform: translate3d(-50%, -50%, 0) scale(1.2) rotate(10deg);
+  }
+  9% {
+    opacity: 0.7;
+    transform: translate3d(-50%, -50%, 0) scale(0.65) rotate(18deg);
+  }
+  13% {
+    opacity: 0;
+    transform: translate3d(-50%, -50%, 0) scale(0.25) rotate(28deg);
   }
 }
 
@@ -257,5 +381,15 @@
   40% {
     opacity: 1;
     transform: scale(1.1);
+  }
+}
+
+@keyframes flameFlicker {
+  0%,
+  100% {
+    opacity: 0.78;
+  }
+  45% {
+    opacity: 1;
   }
 }

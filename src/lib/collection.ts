@@ -364,7 +364,7 @@ export async function updateCategory(
   const trimmed = name.trim()
   if (!trimmed) throw new Error('Name is required')
   const row = await db.categories.get(id)
-  if (!row) throw new Error('Category is gone')
+  if (!row) throw new Error('Tag is gone')
   const others = (await db.categories.toArray()).filter((row) => row.id !== id)
   const nextTags = resolveRequiredTags(requiredTags, {
     name: trimmed,
@@ -406,7 +406,7 @@ export async function refreshCoversForCategory(category: CategoryRow) {
 
 export async function deleteCategory(id: string) {
   const row = await db.categories.get(id)
-  if (!row) throw new Error('Category is gone')
+  if (!row) throw new Error('Tag is gone')
   await db.transaction('rw', db.categories, db.covers, async () => {
     await db.covers.where('categoryId').equals(id).delete()
     await db.categories.delete(id)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { categoryForTag, lookForTag } from '../data/navIcons'
 import { SPECIES_BY_ID } from '../data/species'
@@ -12,7 +12,9 @@ import {
   type PreviewSwipeAction,
   type PreviewSwipeAxis,
 } from '../lib/previewSwipe'
-import { specimenTags, labelForTag } from '../lib/tags'
+import { coverPurity } from '../lib/covers'
+import { specimenTags, labelForTag, type TagId } from '../lib/tags'
+import { usePreviewAnimations } from '../lib/previewPrefs'
 import { TagChip } from './TagChip'
 import styles from './CardPreview.module.css'
 
@@ -27,6 +29,7 @@ type Props = {
   prev?: PreviewSlide | null
   next?: PreviewSlide | null
   canSetCover: boolean
+  requiredTags?: TagId[]
   locked?: boolean
   onClose: () => void
   onNext?: () => void
@@ -43,6 +46,7 @@ export function CardPreview({
   prev,
   next,
   canSetCover,
+  requiredTags = [],
   locked = false,
   onClose,
   onNext,
@@ -55,6 +59,7 @@ export function CardPreview({
   const species = SPECIES_BY_ID.get(specimen.speciesId)
   const tags = specimenTags(specimen)
   const categories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
+  const previewAnimations = usePreviewAnimations()
   const photoRef = useRef<HTMLDivElement>(null)
   const startRef = useRef<{ x: number; y: number } | null>(null)
   const axisRef = useRef<PreviewSwipeAxis>(null)
@@ -284,6 +289,13 @@ export function CardPreview({
 
   const dragging = drag.x !== 0 || drag.y !== 0
   const trackDragging = dragging && !settling && drag.y === 0
+  const carousel = trackDragging || settling === 'next' || settling === 'prev'
+  const showFx = previewAnimations
+  const animatePreview =
+    showFx &&
+    (typeof window === 'undefined' || !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  const showAura = showFx && !carousel
+  const purity = coverPurity(tags, requiredTags)
 
   return (
     <div
@@ -299,6 +311,7 @@ export function CardPreview({
         aria-label="Specimen preview"
         data-dragging={drag.y !== 0 && !settling ? 'true' : undefined}
         data-closing={closing ? 'true' : undefined}
+        data-preview-fx={showFx ? 'on' : 'off'}
         style={{ transform: `translateY(${drag.y}px)` }}
         onTransitionEnd={onSheetTransitionEnd}
         onClick={(e) => e.stopPropagation()}
@@ -306,11 +319,18 @@ export function CardPreview({
         <div
           ref={photoRef}
           className={styles.photoWrap}
+          data-carousel={carousel ? 'true' : undefined}
           onPointerDown={swiping ? onPointerDown : undefined}
           onPointerMove={swiping ? onPointerMove : undefined}
           onPointerUp={swiping ? endPointer : undefined}
           onPointerCancel={swiping ? endPointer : undefined}
         >
+          {showAura && tags.includes('shadow') ? (
+            <TagAura specimenId={specimen.id} tone="shadow" animate={animatePreview} />
+          ) : null}
+          {showAura && tags.includes('purified') ? (
+            <TagAura specimenId={specimen.id} tone="purified" animate={animatePreview} />
+          ) : null}
           <div
             className={styles.photoTrack}
             data-dragging={trackDragging ? 'true' : undefined}
@@ -318,12 +338,27 @@ export function CardPreview({
             style={{ transform: `translateX(calc(-100% - var(--carousel-gap) + ${drag.x}px))` }}
             onTransitionEnd={onTrackTransitionEnd}
           >
-            <PreviewPhoto key={prev?.specimen.id ?? 'prev'} slide={prev} />
-            <PreviewPhoto key={specimen.id} slide={{ specimen, imageUrl }} />
-            <PreviewPhoto key={next?.specimen.id ?? 'next'} slide={next} />
+            <PreviewPhoto
+              key={prev?.specimen.id ?? 'prev'}
+              slide={prev}
+              requiredTags={requiredTags}
+              showFx={showFx}
+            />
+            <PreviewPhoto
+              key={specimen.id}
+              slide={{ specimen, imageUrl }}
+              requiredTags={requiredTags}
+              showFx={showFx}
+            />
+            <PreviewPhoto
+              key={next?.specimen.id ?? 'next'}
+              slide={next}
+              requiredTags={requiredTags}
+              showFx={showFx}
+            />
           </div>
         </div>
-        <div className={styles.meta}>
+        <div className={styles.meta} data-purity={showFx ? undefined : (purity ?? '')}>
           <p className={styles.number}>#{String(specimen.speciesId).padStart(4, '0')}</p>
           <h2>{species?.name ?? 'Unknown'}</h2>
           {specimen.form ? <p className={styles.form}>{specimen.form}</p> : null}
@@ -425,26 +460,165 @@ export function CardPreview({
   )
 }
 
-function PreviewPhoto({ slide }: { slide?: PreviewSlide | null }) {
+function TagAura({
+  specimenId,
+  tone,
+  animate,
+}: {
+  specimenId: string
+  tone: 'shadow' | 'purified'
+  animate: boolean
+}) {
+  const uid = useId().replace(/:/g, '')
+  const filterId = `tag-flame-${tone}-${specimenId}-${uid}`
+  const offsetRef = useRef<SVGFEOffsetElement>(null)
+  const tile = 80
+
+  useEffect(() => {
+    const node = offsetRef.current
+    if (!node || !animate) return
+    const durationMs = 7080
+    const started = performance.now()
+    let raf = 0
+    const tick = (now: number) => {
+      const t = ((now - started) / durationMs) % 1
+      node.setAttribute('dy', String(-tile * t))
+      raf = window.requestAnimationFrame(tick)
+    }
+    raf = window.requestAnimationFrame(tick)
+    return () => window.cancelAnimationFrame(raf)
+  }, [animate, tile])
+
+  return (
+    <span className={styles.tagAura} data-tone={tone} aria-hidden="true">
+      <svg className={styles.flame} overflow="visible">
+        <defs>
+          <filter
+            id={filterId}
+            x="-40%"
+            y="-40%"
+            width="180%"
+            height="180%"
+            colorInterpolationFilters="sRGB"
+          >
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.11 0.11"
+              numOctaves="3"
+              seed="3"
+              stitchTiles="stitch"
+              x="0"
+              y="0"
+              width={tile}
+              height={tile}
+              result="unit"
+            />
+            <feTile in="unit" x="-50%" y="-80%" width="200%" height="260%" result="period" />
+            <feOffset
+              ref={offsetRef}
+              in="period"
+              dx="0"
+              dy="0"
+              x="-50%"
+              y="-80%"
+              width="200%"
+              height="260%"
+              result="shifted"
+            />
+            <feDisplacementMap
+              in="SourceGraphic"
+              in2="shifted"
+              scale="22"
+              xChannelSelector="R"
+              yChannelSelector="G"
+            />
+            <feGaussianBlur stdDeviation="1.15" />
+          </filter>
+        </defs>
+        <rect
+          className={styles.flameEmber}
+          x="22"
+          y="22"
+          width="calc(100% - 44px)"
+          height="calc(100% - 44px)"
+          filter={`url(#${filterId})`}
+        />
+        <rect
+          className={styles.flameTip}
+          x="22"
+          y="22"
+          width="calc(100% - 44px)"
+          height="calc(100% - 44px)"
+          filter={`url(#${filterId})`}
+        />
+      </svg>
+    </span>
+  )
+}
+
+function ShinySparkles() {
+  return (
+    <span className={styles.shinyLayer} aria-hidden="true">
+      {SHINY_SPARKLES.map((sparkle, i) => (
+        <span
+          key={i}
+          className={styles.sparkleStar}
+          data-gold={sparkle.gold ? 'true' : undefined}
+          style={
+            {
+              '--sparkle-x': sparkle.x,
+              '--sparkle-y': sparkle.y,
+              '--sparkle-size': `${sparkle.size}px`,
+              '--sparkle-dur': sparkle.dur,
+              '--sparkle-delay': sparkle.delay,
+            } as CSSProperties
+          }
+        />
+      ))}
+    </span>
+  )
+}
+
+const SHINY_SPARKLES = [
+  { x: '20%', y: '14%', size: 26, dur: '6.2s', delay: '0s' },
+  { x: '70%', y: '11%', size: 20, dur: '5.4s', delay: '0.8s', gold: true },
+  { x: '48%', y: '20%', size: 30, dur: '7.2s', delay: '1.7s' },
+  { x: '32%', y: '34%', size: 18, dur: '5.8s', delay: '2.3s', gold: true },
+  { x: '76%', y: '32%', size: 24, dur: '6.6s', delay: '0.5s' },
+  { x: '14%', y: '48%', size: 20, dur: '5s', delay: '2.9s' },
+  { x: '56%', y: '44%', size: 28, dur: '7.6s', delay: '1.3s', gold: true },
+  { x: '82%', y: '54%', size: 18, dur: '5.6s', delay: '3.4s' },
+  { x: '38%', y: '58%', size: 22, dur: '6.4s', delay: '1.9s' },
+  { x: '64%', y: '66%', size: 20, dur: '5.2s', delay: '2.7s', gold: true },
+  { x: '24%', y: '70%', size: 16, dur: '6.8s', delay: '3.8s' },
+  { x: '50%', y: '28%', size: 16, dur: '4.8s', delay: '4.2s' },
+] as const
+
+function PreviewPhoto({
+  slide,
+  requiredTags,
+  showFx,
+}: {
+  slide?: PreviewSlide | null
+  requiredTags: TagId[]
+  showFx: boolean
+}) {
   const tags = slide ? specimenTags(slide.specimen) : []
   const name = slide ? SPECIES_BY_ID.get(slide.specimen.speciesId)?.name : undefined
+  const purity = slide ? coverPurity(tags, requiredTags) : null
   return (
     <div className={styles.slide}>
       <div
         className={styles.photo}
-        data-shadow={tags.includes('shadow') ? 'true' : 'false'}
-        data-purified={tags.includes('purified') ? 'true' : 'false'}
+        data-purity={!showFx ? (purity ?? '') : undefined}
+        data-shadow={showFx && tags.includes('shadow') ? 'true' : 'false'}
+        data-purified={showFx && tags.includes('purified') ? 'true' : 'false'}
       >
         {slide?.imageUrl ? (
           <img src={slide.imageUrl} alt={name ?? 'Specimen'} draggable={false} />
         ) : null}
-        {tags.includes('shiny') ? (
-          <>
-            <span className={styles.shine} />
-            <span className={styles.sparkles} />
-          </>
-        ) : null}
-        {tags.includes('hundo') ? <span className={styles.hundo} /> : null}
+        {showFx && tags.includes('shiny') ? <ShinySparkles /> : null}
+        {showFx && tags.includes('hundo') ? <span className={styles.hundo} /> : null}
       </div>
     </div>
   )

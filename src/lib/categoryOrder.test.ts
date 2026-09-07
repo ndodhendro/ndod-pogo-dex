@@ -16,9 +16,9 @@ describe('category order', () => {
   })
 
   it('rejects a partial or unknown list', () => {
-    expect(() => categoryOrderPatch(['a', 'b'], ['a'])).toThrow('Category list is out of date')
-    expect(() => categoryOrderPatch(['a', 'b'], ['a', 'x'])).toThrow('Category list is out of date')
-    expect(() => categoryOrderPatch(['a', 'b'], ['a', 'a'])).toThrow('Category list is out of date')
+    expect(() => categoryOrderPatch(['a', 'b'], ['a'])).toThrow('Tag list is out of date')
+    expect(() => categoryOrderPatch(['a', 'b'], ['a', 'x'])).toThrow('Tag list is out of date')
+    expect(() => categoryOrderPatch(['a', 'b'], ['a', 'a'])).toThrow('Tag list is out of date')
   })
 
   it('moves a category by one slot', () => {

@@ -15,6 +15,7 @@ import { backupAllMetadata } from '../lib/sync'
 import { backupProgressLabel, type BackupProgress } from '../lib/syncBackup'
 import { toastAfterWrite, useToast } from '../lib/toast'
 import { categorySaveWarning, toggleRequiredTags, type TagId } from '../lib/tags'
+import { setPreviewAnimations, usePreviewAnimations } from '../lib/previewPrefs'
 import styles from './Settings.module.css'
 
 export function SettingsPage() {
@@ -35,6 +36,8 @@ export function SettingsPage() {
   const [email, setEmail] = useState<string | null>(null)
   const [backupBusy, setBackupBusy] = useState(false)
   const [backupProgress, setBackupProgress] = useState<BackupProgress | null>(null)
+  const previewAnimations = usePreviewAnimations()
+  const [tagsOpen, setTagsOpen] = useState(false)
 
   useEffect(() => {
     void ensureSeedCategories()
@@ -96,9 +99,9 @@ export function SettingsPage() {
         ? await updateCategory(editing.id, name, picked, look)
         : await addCategory(name, picked, look)
       closeSheet()
-      toastAfterWrite(showToast, editing ? 'Category saved' : 'Category added', cloudError)
+      toastAfterWrite(showToast, editing ? 'Tag saved' : 'Tag added', cloudError)
     } catch (err) {
-      showToast(err instanceof Error ? err.message : editing ? 'Could not save category' : 'Could not add category')
+      showToast(err instanceof Error ? err.message : editing ? 'Could not save tag' : 'Could not add tag')
     } finally {
       busyRef.current = false
       setBusy(false)
@@ -136,18 +139,57 @@ export function SettingsPage() {
         Settings
       </h1>
       <div className="group">
-        <h2>Categories</h2>
-        
-        <button type="button" className={`btn btn-primary ${styles.addCategory}`} onClick={openNew}>
-          Add category
+        <h2 className={styles.sectionHeading}>
+          <button
+            type="button"
+            className={styles.sectionToggle}
+            aria-expanded={tagsOpen}
+            aria-controls="settings-tags"
+            onClick={() => setTagsOpen((open) => !open)}
+          >
+            <span className={styles.sectionToggleLabel}>
+              <span className={styles.sectionChevron} aria-hidden="true">
+                ▶
+              </span>
+              Tags
+            </span>
+          </button>
+        </h2>
+        {tagsOpen ? (
+          <div id="settings-tags" className={styles.tagsBody}>
+            <button type="button" className={`btn btn-primary ${styles.addCategory}`} onClick={openNew}>
+              Add tag
+            </button>
+            <CategoryOrderList
+              categories={categories}
+              onEdit={openEdit}
+              onCloudWarning={(message) => showToast(message, 'warning')}
+              onSaved={(message) => showToast(message, 'success')}
+              onError={(message) => showToast(message)}
+            />
+          </div>
+        ) : null}
+      </div>
+      <div className="group">
+        <h2>Preview</h2>
+        <p className="page-sub">
+          Sparkles, auras, and pulses on the preview card. Off uses the same green and gray cover
+          colors as the dex grid.
+        </p>
+        <button
+          type="button"
+          className={styles.prefToggle}
+          role="switch"
+          aria-checked={previewAnimations}
+          data-tone="settings"
+          onClick={() => setPreviewAnimations(!previewAnimations)}
+        >
+          <span className={styles.prefLabel}>
+            <span aria-hidden="true">✨</span>
+            Preview animations
+          </span>
+          <span className={styles.switch} data-on={previewAnimations ? 'true' : undefined} />
         </button>
-        <CategoryOrderList
-          categories={categories}
-          onEdit={openEdit}
-          onCloudWarning={(message) => showToast(message, 'warning')}
-          onSaved={(message) => showToast(message, 'success')}
-          onError={(message) => showToast(message)}
-        />
       </div>
       <div className="group">
         <h2>Account</h2>
@@ -184,7 +226,7 @@ export function SettingsPage() {
       </div>
       <BottomSheet
         open={open}
-        title={editing ? 'Edit category' : 'New category'}
+        title={editing ? 'Edit tag' : 'New tag'}
         onClose={closeSheet}
       >
         <form
@@ -225,7 +267,7 @@ export function SettingsPage() {
                 autoComplete="off"
                 spellCheck={false}
                 enterKeyHint="next"
-                aria-label="Category emoji"
+                aria-label="Tag emoji"
                 onKeyDown={(event) => {
                   if (event.key !== 'Enter') return
                   event.preventDefault()
@@ -243,7 +285,7 @@ export function SettingsPage() {
             <div className={styles.lookPreview}>
               <TrackChip
                 icon={emoji || FALLBACK_EMOJI}
-                label={name.trim() || 'Category'}
+                label={name.trim() || 'Tag'}
                 tone={toneForCategory({ name, requiredTags: picked })}
                 labelColor={labelColor}
                 active
@@ -267,7 +309,7 @@ export function SettingsPage() {
             </div>
           </div>
           <button type="submit" className={`btn btn-primary ${styles.sheetSave}`} disabled={busy}>
-            {busy ? 'Saving…' : 'Save category'}
+            {busy ? 'Saving…' : 'Save tag'}
           </button>
         </form>
       </BottomSheet>
@@ -387,7 +429,7 @@ function CategoryOrderList({
     try {
       const cloudError = await reorderCategories(nextIds)
       if (cloudError) onCloudWarning(cloudError)
-      else onSaved('Category order saved')
+      else onSaved('Tag order saved')
     } catch (err) {
       setDraft(null)
       draftRef.current = null
@@ -470,7 +512,7 @@ function CategoryOrderList({
       const cloudError = await deleteCategory(cat.id)
       setPendingDelete(null)
       if (cloudError) onCloudWarning(cloudError)
-      else onSaved('Category removed')
+      else onSaved('Tag removed')
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Could not delete')
     } finally {
@@ -738,7 +780,7 @@ function CategoryOrderList({
       </div>
       <BottomSheet
         open={Boolean(pendingDelete)}
-        title="Remove category"
+        title="Remove tag"
         onClose={() => {
           if (deleteBusy) return
           setPendingDelete(null)
