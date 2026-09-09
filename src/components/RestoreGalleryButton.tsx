@@ -30,7 +30,10 @@ export function RestoreCloudButton() {
       if (result.cloudWithoutPhoto) {
         parts.push(`${result.cloudWithoutPhoto} still need a gallery photo`)
       }
-      if (result.failed) parts.push(`${result.failed} failed to download`)
+      if (result.failed) {
+        const detail = result.downloadError ? ` (${result.downloadError})` : ''
+        parts.push(`${result.failed} failed to download${detail}`)
+      }
       showToast(parts.join('. ') + '.', result.failed ? 'warning' : 'success')
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not restore')

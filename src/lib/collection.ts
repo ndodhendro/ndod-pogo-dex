@@ -74,6 +74,7 @@ export async function saveSpecimenFromInbox(
   if (!inbox) throw new Error('Transfer item is gone')
   const image = await db.images.get(inbox.imageId)
   if (!image?.original) throw new Error('Transfer image is gone')
+  // Hash the gallery screenshot before crop so Restore from gallery can match camera-roll files.
   const fileHash = await hashBlob(image.original)
   const variants = await makeImageVariants(image.original, cropBottom)
   await db.images.update(inbox.imageId, variants)

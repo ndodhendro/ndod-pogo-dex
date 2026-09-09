@@ -23,6 +23,7 @@ export type RestoreResult = {
   inbox: number
   cloudWithoutPhoto: number
   failed?: number
+  downloadError?: string
 }
 
 function yieldUi() {
@@ -81,6 +82,7 @@ export async function restoreFromCloud(
   const cloudById = new Map(cloud.specimens.map((row) => [row.id, row]))
   let restored = 0
   let failed = 0
+  let downloadError: string | undefined
   for (let i = 0; i < plan.download.length; i++) {
     const item = plan.download[i]
     const spec = cloudById.get(item.id)
@@ -92,14 +94,18 @@ export async function restoreFromCloud(
         throw new Error(downloaded.error)
       }
       failed += 1
+      downloadError = downloaded.error
       continue
     }
-    const got = await hashBlob(downloaded.blob)
-    if (got !== spec.fileHash) {
+    // Cloud objects are cropped card JPEGs. fileHash is the gallery screenshot
+    // (hashed before crop) so Restore from gallery can match the camera roll.
+    try {
+      await writeRestoredSpecimen(spec, downloaded.blob, true)
+    } catch (err) {
       failed += 1
+      downloadError = err instanceof Error ? err.message : 'Could not write screenshot'
       continue
     }
-    await writeRestoredSpecimen(spec, downloaded.blob, true)
     restored += 1
     if (i % 2 === 0) await yieldUi()
   }
@@ -112,6 +118,7 @@ export async function restoreFromCloud(
     inbox: 0,
     cloudWithoutPhoto: plan.missingPhoto,
     failed,
+    downloadError,
   }
 }
 
