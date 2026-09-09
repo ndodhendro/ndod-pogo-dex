@@ -2,6 +2,10 @@
   margin: 0 0 var(--space-3);
 }
 
+.progress[data-compact='true'] {
+  margin: 0 0 var(--space-1);
+}
+
 .meta {
   display: flex;
   align-items: baseline;
@@ -12,6 +16,10 @@
   font-size: var(--font-size-sm);
   font-variant-numeric: tabular-nums;
   letter-spacing: var(--letter-ui);
+}
+
+.progress[data-compact='true'] .meta {
+  margin: 0 0 0.125rem;
 }
 
 .heading {

@@ -12,15 +12,18 @@ import { SpecimenTagSheet } from '../components/TagSheet'
 import { TagChip } from '../components/TagChip'
 import { GENERATION_IDS, groupByGeneration, type Generation } from '../data/generations'
 import { colorForCategory, dexFilterTagChoices, iconForCategory, toneForCategory } from '../data/navIcons'
+import { useDexCollapse } from '../hooks/useDexCollapse'
 import { useImageUrl } from '../hooks/useImageUrl'
-import { useFrameHeight } from '../hooks/useCropSettings'
+import { useTrackFrameHeight } from '../hooks/useCropSettings'
 import { coverPurity, findCover, type CoverPurity } from '../lib/covers'
 import { deleteSpecimen, setAsCover } from '../lib/collection'
 import { categoryChromeStyle } from '../lib/categoryStyle'
 import {
   buildDexVirtualRows,
+  dexAnimatedCardRowHeight,
   dexGenHeaderHeight,
   dexGridLayout,
+  dexOpenAmount,
   keepDexSlot,
   pickDexCover,
   specimenMatchesDexFilters,
@@ -74,7 +77,7 @@ export function DexPage() {
   const [editingTags, setEditingTags] = useState(false)
   const [host, setHost] = useState<HTMLDivElement | null>(null)
   const [width, setWidth] = useState(0)
-  const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(() => new Set())
+  const { collapsed, amounts, toggle, setCollapsedTo } = useDexCollapse()
 
   useEffect(() => {
     void ensureSeedCategories()
@@ -143,17 +146,17 @@ export function DexPage() {
     () => countFilledSlots(specimens, category?.requiredTags ?? [], catalogs, roster),
     [specimens, category, catalogs, roster],
   )
-  const filtering = silhouetteOnly || filterTags.length > 0
-  const filterCount = (silhouetteOnly ? 1 : 0) + filterTags.length
+  const filtering = silhouetteOnly || filterTags.length > 0 || Boolean(query.trim())
+  const filterCount = (silhouetteOnly ? 1 : 0) + filterTags.length + (query.trim() ? 1 : 0)
   const limitedEmpty =
     Boolean(category) &&
     trackIsLimited(category?.requiredTags ?? [], catalogs) &&
     catalogSize === 0
-  const frameHeight = useFrameHeight()
+  const frameHeight = useTrackFrameHeight(requiredTags)
   const { columns, rowHeight } = dexGridLayout(width, frameHeight)
   const rows = useMemo(
-    () => buildDexVirtualRows(groups, columns, collapsed),
-    [groups, columns, collapsed],
+    () => buildDexVirtualRows(groups, columns, collapsed, { amounts, rowHeight }),
+    [groups, columns, collapsed, amounts, rowHeight],
   )
   const visibleSlots = useMemo(
     () => groups.flatMap((group) => (collapsed.has(group.generation.id) ? [] : group.items)),
@@ -178,7 +181,12 @@ export function DexPage() {
     estimateSize: (index) => {
       const row = rows[index]
       if (!row || row.kind === 'header') return dexGenHeaderHeight(row?.lead ?? true)
-      return rowHeight
+      return dexAnimatedCardRowHeight(
+        row.rowIndex,
+        row.rowCount,
+        rowHeight,
+        dexOpenAmount(row.generationId, collapsed, amounts),
+      )
     },
     getItemKey: (index) => rows[index]?.key ?? index,
     overscan: 8,
@@ -186,7 +194,7 @@ export function DexPage() {
 
   useLayoutEffect(() => {
     virtualizer.measure()
-  }, [rowHeight, virtualizer])
+  }, [amounts, rowHeight, virtualizer])
 
   if (categories.length > 0 && !category) {
     return <Navigate to="/dex" replace />
@@ -194,46 +202,31 @@ export function DexPage() {
 
   return (
     <section className={styles.page}>
-      <h1
-        className={`page-title ${styles.title}`}
-        data-tone={category ? toneForCategory(category) : 'dex'}
-        style={category ? categoryChromeStyle(colorForCategory(category)) : undefined}
-      >
-        {category ? (
-          <>
-            <span className={styles.titleIcon} aria-hidden="true">
-              {iconForCategory(category)}
-            </span>
-            {category.name}
-          </>
-        ) : (
-          'Pokédex'
-        )}
-      </h1>
-      <DexProgress
-        filled={filledCount}
-        total={catalogSize}
-        ariaLabel={`${category?.name ?? 'Pokédex'} completion`}
-        tone={category ? toneForCategory(category) : 'dex'}
-        labelColor={category ? colorForCategory(category) : undefined}
-      />
-      <div className={styles.toolbar}>
+      <div className={styles.titleRow}>
         <SearchableSelect
           className={styles.trackSelect}
           value={category?.id ?? ''}
           options={trackOptions}
           ariaLabel="Track"
           searchPlaceholder="Search tracks"
-          iconOnly
+          chevron={false}
+          sizeToLongest
           onChange={(id) => {
             if (id !== category?.id) navigate(`/dex/${id}`)
           }}
         />
+        <SearchField
+          className={styles.speciesSearch}
+          value={query}
+          onChange={setQuery}
+          placeholder="Species"
+          aria-label="Species"
+        />
         <button
           type="button"
           className={`btn ${styles.iconBtn}`}
-          data-tone="settings"
-          data-on={filtering ? 'true' : 'false'}
+          data-tone={category ? toneForCategory(category) : 'dex'}
+          data-on={filterCount > 0 ? 'true' : 'false'}
           aria-label={filterCount > 0 ? `Filters, ${filterCount} active` : 'Filters'}
           aria-haspopup="dialog"
           aria-expanded={filtersOpen}
@@ -242,25 +235,30 @@ export function DexPage() {
           <span aria-hidden="true">🏷️</span>
           {filterCount > 0 ? <span className={styles.badge}>{filterCount}</span> : null}
         </button>
-        <SearchField
-          className={styles.speciesSearch}
-          value={query}
-          onChange={setQuery}
-          placeholder="Species"
-        />
         <button
           type="button"
           className={`btn ${styles.iconBtn}`}
+          data-tone={category ? toneForCategory(category) : 'dex'}
           disabled={visibleIds.length === 0}
           aria-label={allExpanded ? 'Collapse All' : 'Expand All'}
           onClick={() => {
-            if (allExpanded) setCollapsed(new Set(GENERATION_IDS))
-            else setCollapsed(new Set())
+            if (allExpanded) setCollapsedTo(visibleIds, new Set(GENERATION_IDS))
+            else setCollapsedTo(visibleIds, new Set())
           }}
         >
-          <span aria-hidden="true">{allExpanded ? '▾' : '▸'}</span>
+          <span className={styles.allChevron} data-expanded={allExpanded ? 'true' : 'false'} aria-hidden="true">
+            ▾
+          </span>
         </button>
       </div>
+      <DexProgress
+        compact
+        filled={filledCount}
+        total={catalogSize}
+        ariaLabel={`${category?.name ?? 'Pokédex'} completion`}
+        tone={category ? toneForCategory(category) : 'dex'}
+        labelColor={category ? colorForCategory(category) : undefined}
+      />
       {limitedEmpty ? (
         <p className="empty-state">
           No released species yet. Add them in{' '}
@@ -297,14 +295,7 @@ export function DexPage() {
                   <GenerationHeader
                     generation={row.generation}
                     expanded={!collapsed.has(row.generation.id)}
-                    onToggle={() =>
-                      setCollapsed((current) => {
-                        const next = new Set(current)
-                        if (next.has(row.generation.id)) next.delete(row.generation.id)
-                        else next.add(row.generation.id)
-                        return next
-                      })
-                    }
+                    onToggle={() => toggle(row.generation.id)}
                   />
                 </div>
               )
@@ -316,18 +307,25 @@ export function DexPage() {
                 style={{
                   height: `${item.size}px`,
                   transform: `translateY(${item.start}px)`,
-                  gridTemplateColumns: `repeat(${columns}, 1fr)`,
                 }}
               >
-                {row.slots.map((slot) => (
-                  <DexSlotCard
-                    key={`${slot.speciesId}:${slot.variant}`}
-                    slot={slot}
-                    onOpen={() => {
-                      if (slot.cover) setPreview(slot.cover)
-                    }}
-                  />
-                ))}
+                <div
+                  className={styles.rowGrid}
+                  style={{
+                    height: `${rowHeight}px`,
+                    gridTemplateColumns: `repeat(${columns}, 1fr)`,
+                  }}
+                >
+                  {row.slots.map((slot) => (
+                    <DexSlotCard
+                      key={`${slot.speciesId}:${slot.variant}`}
+                      slot={slot}
+                      onOpen={() => {
+                        if (slot.cover) setPreview(slot.cover)
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
             )
           })}
@@ -401,7 +399,27 @@ export function DexPage() {
           setPreview(specimen)
         }}
       />
-      <BottomSheet open={filtersOpen} title="Filters" onClose={() => setFiltersOpen(false)}>
+      <BottomSheet
+        open={filtersOpen}
+        title="Filters"
+        showClose={false}
+        onClose={() => setFiltersOpen(false)}
+        headerAction={
+          <button
+            type="button"
+            className="btn btn-ghost"
+            disabled={!filtering}
+            onClick={() => {
+              setSilhouetteOnly(false)
+              setFilterTags([])
+              setQuery('')
+            }}
+          >
+            <span aria-hidden="true">✖️</span>
+            Clear
+          </button>
+        }
+      >
         <p className="page-sub">Show species that have every selected tag on one screenshot.</p>
         <div className="chip-row">
           <button
@@ -427,19 +445,6 @@ export function DexPage() {
             />
           ))}
         </div>
-        {filtering ? (
-          <button
-            type="button"
-            className={`btn ${styles.sheetClear}`}
-            onClick={() => {
-              setSilhouetteOnly(false)
-              setFilterTags([])
-            }}
-          >
-            <span aria-hidden="true">✖️</span>
-            Clear filters
-          </button>
-        ) : null}
       </BottomSheet>
     </section>
   )
@@ -466,7 +471,7 @@ function GenerationHeader({
       <span className={styles.genName}>{generation.name}</span>
       <span className={styles.genRule} aria-hidden="true" />
       <span className={styles.genChevron} aria-hidden="true">
-        {expanded ? '▾' : '▸'}
+        ▾
       </span>
     </button>
   )
@@ -481,6 +486,7 @@ function DexSlotCard({ slot, onOpen }: { slot: Slot; onOpen: () => void }) {
       thumbUrl={slot.filled ? url : null}
       purity={slot.purity}
       filled={slot.filled}
+      fill
       onClick={slot.filled ? onOpen : undefined}
     />
   )

@@ -1,3 +1,12 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(
+    100dvh - var(--nav-height) - env(safe-area-inset-top, 0px) -
+      env(safe-area-inset-bottom, 0px) - (var(--space-4) * 2)
+  );
+}
+
 .list {
   display: grid;
   gap: var(--space-3);

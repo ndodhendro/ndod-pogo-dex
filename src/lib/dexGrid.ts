@@ -12,21 +12,78 @@ export const DEX_LABEL_STACK = 36
 export const DEX_ROW_GAP = 8
 export const DEX_GEN_HEADER_HEIGHT = 44
 export const DEX_GEN_SECTION_GAP = 16
+export const DEX_SECTION_ANIM_MS = 240
 
 export type DexVirtualRow<T> =
   | { kind: 'header'; key: string; generation: Generation; lead: boolean }
-  | { kind: 'cards'; key: string; generationId: number; slots: T[] }
+  | {
+      kind: 'cards'
+      key: string
+      generationId: number
+      rowIndex: number
+      rowCount: number
+      slots: T[]
+    }
 
 export function dexGenHeaderHeight(lead: boolean) {
   return lead ? DEX_GEN_HEADER_HEIGHT : DEX_GEN_HEADER_HEIGHT + DEX_GEN_SECTION_GAP
+}
+
+export function dexOpenAmount(
+  generationId: number,
+  collapsed: ReadonlySet<number>,
+  amounts: ReadonlyMap<number, number>,
+): number {
+  const amount = amounts.get(generationId)
+  if (typeof amount === 'number') return amount
+  return collapsed.has(generationId) ? 0 : 1
+}
+
+/** Generations whose card rows can leave the virtual list (fully closed). */
+export function hiddenDexGenerations(
+  collapsed: ReadonlySet<number>,
+  amounts: ReadonlyMap<number, number>,
+): ReadonlySet<number> {
+  const hidden = new Set<number>()
+  for (const id of collapsed) {
+    if (dexOpenAmount(id, collapsed, amounts) <= 0) hidden.add(id)
+  }
+  return hidden
+}
+
+export function easeOutCubic(t: number): number {
+  const x = Math.min(1, Math.max(0, t))
+  return 1 - (1 - x) ** 3
+}
+
+export function interpolateOpenAmount(from: number, to: number, t: number): number {
+  return from + (to - from) * easeOutCubic(t)
+}
+
+/** Clip a generation from the bottom as it opens or closes. */
+export function dexAnimatedCardRowHeight(
+  rowIndex: number,
+  rowCount: number,
+  rowHeight: number,
+  openAmount: number,
+): number {
+  if (rowCount <= 0 || rowHeight <= 0 || openAmount <= 0) return 0
+  if (openAmount >= 1) return rowHeight
+  const visible = rowCount * rowHeight * openAmount
+  const start = rowIndex * rowHeight
+  if (visible <= start) return 0
+  if (visible >= start + rowHeight) return rowHeight
+  return visible - start
 }
 
 export function buildDexVirtualRows<T extends { speciesId: number }>(
   groups: readonly { generation: Generation; items: readonly T[] }[],
   columns: number,
   collapsed: ReadonlySet<number>,
+  open?: { amounts: ReadonlyMap<number, number>; rowHeight: number },
 ): DexVirtualRow<T>[] {
   const cols = Math.max(1, columns)
+  const amounts = open?.amounts ?? new Map<number, number>()
   const rows: DexVirtualRow<T>[] = []
   for (const group of groups) {
     rows.push({
@@ -35,14 +92,25 @@ export function buildDexVirtualRows<T extends { speciesId: number }>(
       generation: group.generation,
       lead: rows.length === 0,
     })
-    if (collapsed.has(group.generation.id)) continue
+    const amount = dexOpenAmount(group.generation.id, collapsed, amounts)
+    if (amount <= 0) continue
+    const rowCount = Math.ceil(group.items.length / cols)
+    let rowIndex = 0
     for (let i = 0; i < group.items.length; i += cols) {
-      rows.push({
-        kind: 'cards',
-        key: `c-${group.generation.id}-${i}`,
-        generationId: group.generation.id,
-        slots: group.items.slice(i, i + cols),
-      })
+      const size = open
+        ? dexAnimatedCardRowHeight(rowIndex, rowCount, open.rowHeight, amount)
+        : 1
+      if (size > 0) {
+        rows.push({
+          kind: 'cards',
+          key: `c-${group.generation.id}-${i}`,
+          generationId: group.generation.id,
+          rowIndex,
+          rowCount,
+          slots: group.items.slice(i, i + cols),
+        })
+      }
+      rowIndex += 1
     }
   }
   return rows

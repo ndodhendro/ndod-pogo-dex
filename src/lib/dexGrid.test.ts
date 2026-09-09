@@ -5,10 +5,14 @@ import {
   countFilledSpecies,
   DEX_GEN_HEADER_HEIGHT,
   DEX_GEN_SECTION_GAP,
+  dexAnimatedCardRowHeight,
   dexCompletionPercent,
   dexGenHeaderHeight,
   dexGridLayout,
+  dexOpenAmount,
   formatDexCompletionPercent,
+  hiddenDexGenerations,
+  interpolateOpenAmount,
   keepDexSlot,
   pickDexCover,
   specimenMatchesDexFilters,
@@ -33,6 +37,13 @@ describe('dexGridLayout', () => {
   it('adds columns on a wide host', () => {
     expect(dexGridLayout(800).columns).toBeGreaterThan(3)
     expect(dexGridLayout(800).columns).toBeLessThanOrEqual(6)
+  })
+
+  it('sizes rows to the open track crop, not the tallest catalog crop', () => {
+    const basic = dexGridLayout(360, 710)
+    const gigantamax = dexGridLayout(360, 1055)
+    expect(basic.columns).toBe(3)
+    expect(basic.rowHeight).toBeLessThan(gigantamax.rowHeight)
   })
 })
 
@@ -154,8 +165,56 @@ describe('buildDexVirtualRows', () => {
     expect(rows[1]).toMatchObject({ kind: 'header', generation: johto, lead: false })
   })
 
+  it('records row index and count for slide clipping', () => {
+    const rows = buildDexVirtualRows(groups, 3, new Set())
+    const cards = rows.filter((row) => row.kind === 'cards')
+    expect(cards).toMatchObject([
+      { generationId: kanto.id, rowIndex: 0, rowCount: 2 },
+      { generationId: kanto.id, rowIndex: 1, rowCount: 2 },
+      { generationId: johto.id, rowIndex: 0, rowCount: 1 },
+    ])
+  })
+
+  it('omits card rows below the slide clip', () => {
+    const rows = buildDexVirtualRows(groups, 3, new Set(), {
+      amounts: new Map([[kanto.id, 0.4]]),
+      rowHeight: 100,
+    })
+    expect(
+      rows.filter((row) => row.kind === 'cards' && row.generationId === kanto.id),
+    ).toMatchObject([{ rowIndex: 0, rowCount: 2 }])
+  })
+
   it('sizes follow-up headers with a section gap', () => {
     expect(dexGenHeaderHeight(true)).toBe(DEX_GEN_HEADER_HEIGHT)
     expect(dexGenHeaderHeight(false)).toBe(DEX_GEN_HEADER_HEIGHT + DEX_GEN_SECTION_GAP)
+  })
+})
+
+describe('dex section slide', () => {
+  it('treats a missing amount as open unless that generation is collapsed', () => {
+    expect(dexOpenAmount(1, new Set(), new Map())).toBe(1)
+    expect(dexOpenAmount(1, new Set([1]), new Map())).toBe(0)
+    expect(dexOpenAmount(1, new Set([1]), new Map([[1, 0.4]]))).toBe(0.4)
+  })
+
+  it('keeps collapsing generations in the list until the slide finishes', () => {
+    expect(hiddenDexGenerations(new Set([1, 2]), new Map([[1, 0.2]]))).toEqual(new Set([2]))
+    expect(hiddenDexGenerations(new Set([1]), new Map())).toEqual(new Set([1]))
+  })
+
+  it('clips card rows from the bottom of the generation', () => {
+    expect(dexAnimatedCardRowHeight(0, 4, 100, 1)).toBe(100)
+    expect(dexAnimatedCardRowHeight(3, 4, 100, 0)).toBe(0)
+    expect(dexAnimatedCardRowHeight(0, 4, 100, 0.5)).toBe(100)
+    expect(dexAnimatedCardRowHeight(1, 4, 100, 0.5)).toBe(100)
+    expect(dexAnimatedCardRowHeight(2, 4, 100, 0.5)).toBe(0)
+    expect(dexAnimatedCardRowHeight(1, 4, 100, 0.4)).toBe(60)
+  })
+
+  it('eases the open amount toward the target', () => {
+    expect(interpolateOpenAmount(1, 0, 0)).toBe(1)
+    expect(interpolateOpenAmount(1, 0, 1)).toBe(0)
+    expect(interpolateOpenAmount(0, 1, 0.5)).toBeGreaterThan(0.5)
   })
 })

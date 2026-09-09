@@ -1,7 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect } from 'react'
-import { APP_CONFIG } from '../config'
 import { TAB_ICONS, TAB_LOGOS } from '../data/navIcons'
 import { useFrameHeight } from '../hooks/useCropSettings'
 import { db } from '../lib/db'
@@ -63,10 +62,6 @@ export function AppShell() {
           <span className={styles.label}>Settings</span>
         </NavLink>
       </nav>
-      <footer className={styles.footer}>
-        <span className={styles.version}>v{APP_CONFIG.version}</span>
-        <span className={styles.credit}>{APP_CONFIG.credit}</span>
-      </footer>
     </div>
   )
 }

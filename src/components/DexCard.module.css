@@ -74,3 +74,27 @@
 .card[data-purity='green'] .label {
   color: var(--color-cover-green);
 }
+
+.card[data-fill='true'] {
+  height: 100%;
+  min-height: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+.card[data-fill='true'] .frame {
+  aspect-ratio: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.card[data-fill='true'] .frame img {
+  object-fit: cover;
+  object-position: top;
+}
+
+.card[data-fill='true'] .caption {
+  flex: 0 0 auto;
+  height: 36px;
+  justify-content: center;
+}

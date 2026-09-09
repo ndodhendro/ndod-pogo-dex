@@ -242,9 +242,7 @@ a {
 
 .app-shell {
   min-height: 100dvh;
-  padding-bottom: calc(
-    var(--nav-height) + var(--footer-height) + env(safe-area-inset-bottom, 0px)
-  );
+  padding-bottom: calc(var(--nav-height) + env(safe-area-inset-bottom, 0px));
 }
 
 .app-main {

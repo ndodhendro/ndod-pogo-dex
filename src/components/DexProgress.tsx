@@ -13,6 +13,7 @@ type Props = {
   heading?: ReactNode
   className?: string
   announce?: boolean
+  compact?: boolean
 }
 
 export function DexProgress({
@@ -24,6 +25,7 @@ export function DexProgress({
   heading,
   className,
   announce = true,
+  compact = false,
 }: Props) {
   const percent = dexCompletionPercent(filled, total)
   const completionLabel = formatDexCompletionPercent(filled, total)
@@ -31,6 +33,7 @@ export function DexProgress({
     <div
       className={[styles.progress, className].filter(Boolean).join(' ')}
       data-tone={tone}
+      data-compact={compact ? 'true' : undefined}
       style={labelColor ? categoryChromeStyle(labelColor) : undefined}
     >
       <div className={styles.meta}>

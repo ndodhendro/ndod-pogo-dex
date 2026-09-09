@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { BottomSheet } from '../components/BottomSheet'
 import { FilePickerButton } from '../components/FilePickerButton'
 import { TagSheet } from '../components/TagSheet'
+import { AppFooter } from '../components/AppFooter'
 import { TAB_ICONS } from '../data/navIcons'
 import { useImageUrl } from '../hooks/useImageUrl'
 import {
@@ -71,7 +72,7 @@ export function InboxPage() {
   }
 
   return (
-    <section>
+    <section className={styles.page}>
       <h1 className="page-title" data-tone="inbox">
         <span className="page-title-icon" aria-hidden="true">
           {TAB_ICONS.inbox}
@@ -101,6 +102,7 @@ export function InboxPage() {
           ))}
         </div>
       )}
+      <AppFooter />
       <TagSheet
         open={Boolean(active)}
         title="Tag screenshot"

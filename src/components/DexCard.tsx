@@ -7,16 +7,18 @@ type Props = {
   thumbUrl?: string | null
   purity?: CoverPurity | null
   filled?: boolean
+  fill?: boolean
   onClick?: () => void
 }
 
-export function DexCard({ name, number, thumbUrl, purity, filled, onClick }: Props) {
+export function DexCard({ name, number, thumbUrl, purity, filled, fill, onClick }: Props) {
   return (
     <button
       type="button"
       className={styles.card}
       data-purity={purity ?? ''}
       data-empty={filled ? 'false' : 'true'}
+      data-fill={fill ? 'true' : undefined}
       onClick={onClick}
       disabled={!onClick}
     >

@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { BottomSheet } from '../components/BottomSheet'
 import { ColorPicker } from '../components/ColorPicker'
+import { AppFooter } from '../components/AppFooter'
 import { RosterSheet } from '../components/RosterSheet'
 import { TrackChip } from '../components/TrackChip'
 import { RestoreCloudButton, RestoreGalleryButton } from '../components/RestoreGalleryButton'
@@ -174,20 +175,27 @@ export function SettingsPage() {
             </span>
           </button>
         </h2>
-        {tagsOpen ? (
-          <div id="settings-tags" className={styles.tagsBody}>
-            <button type="button" className={`btn btn-primary ${styles.addCategory}`} onClick={openNew}>
-              Add tag
-            </button>
-            <CategoryOrderList
-              categories={categories}
-              onEdit={openEdit}
-              onCloudWarning={(message) => showToast(message, 'warning')}
-              onSaved={(message) => showToast(message, 'success')}
-              onError={(message) => showToast(message)}
-            />
+        <div
+          id="settings-tags"
+          className={styles.tagsSlide}
+          data-open={tagsOpen ? 'true' : 'false'}
+          inert={!tagsOpen}
+        >
+          <div className={styles.tagsClip}>
+            <div className={styles.tagsBody}>
+              <button type="button" className={`btn btn-primary ${styles.addCategory}`} onClick={openNew}>
+                Add tag
+              </button>
+              <CategoryOrderList
+                categories={categories}
+                onEdit={openEdit}
+                onCloudWarning={(message) => showToast(message, 'warning')}
+                onSaved={(message) => showToast(message, 'success')}
+                onError={(message) => showToast(message)}
+              />
+            </div>
           </div>
-        ) : null}
+        </div>
       </div>
       <div className="group">
         <h2>Preview</h2>
@@ -243,9 +251,11 @@ export function SettingsPage() {
           <RestoreGalleryButton />
         </div>
       </div>
+      <AppFooter />
       <BottomSheet
         open={open}
         title={editing ? 'Edit tag' : 'New tag'}
+        showClose={false}
         onClose={closeSheet}
       >
         <form

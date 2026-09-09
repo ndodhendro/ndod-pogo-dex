@@ -21,6 +21,8 @@ type Props = {
   searchPlaceholder?: string
   ariaLabel?: string
   iconOnly?: boolean
+  chevron?: boolean
+  sizeToLongest?: boolean
 }
 
 export function SearchableSelect({
@@ -31,6 +33,8 @@ export function SearchableSelect({
   searchPlaceholder = 'Search',
   ariaLabel,
   iconOnly = false,
+  chevron = true,
+  sizeToLongest = false,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
@@ -61,7 +65,22 @@ export function SearchableSelect({
   if (!selected) return null
 
   return (
-    <div ref={rootRef} className={[styles.wrap, className].filter(Boolean).join(' ')}>
+    <div
+      ref={rootRef}
+      className={[styles.wrap, className].filter(Boolean).join(' ')}
+      data-size-longest={sizeToLongest && !iconOnly ? 'true' : undefined}
+    >
+      {sizeToLongest && !iconOnly ? (
+        <span className={styles.sizer} data-sizer="" aria-hidden="true">
+          {options.map((option) => (
+            <span key={option.id} className={styles.sizerRow}>
+              <span className={styles.icon}>{option.icon}</span>
+              <span className={styles.label}>{option.label}</span>
+              {chevron ? <span className={styles.chevron}>▾</span> : null}
+            </span>
+          ))}
+        </span>
+      ) : null}
       <button
         type="button"
         className={styles.trigger}
@@ -80,9 +99,11 @@ export function SearchableSelect({
         {iconOnly ? null : (
           <>
             <span className={styles.label}>{selected.label}</span>
-            <span className={styles.chevron} aria-hidden="true">
-              ▾
-            </span>
+            {chevron ? (
+              <span className={styles.chevron} aria-hidden="true">
+                ▾
+              </span>
+            ) : null}
           </>
         )}
       </button>
