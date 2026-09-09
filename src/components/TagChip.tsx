@@ -12,13 +12,19 @@ type Props = {
   onClick?: () => void
 }
 
+function chipTone(tag: TagId) {
+  if (tag === 'silhouette') return 'nundo'
+  if (isBuiltInTag(tag) || isFormTag(tag)) return tag
+  return 'living'
+}
+
 export function TagChip({ tag, selected, label, icon, labelColor, onClick }: Props) {
   return (
     <button
       type="button"
       className={styles.chip}
       data-tag={tag}
-      data-tone={isBuiltInTag(tag) || isFormTag(tag) ? tag : 'living'}
+      data-tone={chipTone(tag)}
       data-on={selected ? 'true' : 'false'}
       style={labelColor ? categoryChromeStyle(labelColor) : undefined}
       onClick={onClick}

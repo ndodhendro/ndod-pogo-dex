@@ -2,6 +2,7 @@ import Dexie, { type Table } from 'dexie'
 import { colorForCategory, iconForCategory } from '../data/navIcons'
 import { SEED_CATEGORIES, LEGACY_SEED_NAMES } from '../data/seedCategories'
 import { SEED_TAG_CROPS } from '../data/tagCrops'
+import type { SlotMode } from './roster'
 import { allocateCategoryTag, TAG_IDS, type ShadowStatus, type TagId } from './tags'
 import { clampCropBottom } from './screenshotCrop'
 
@@ -16,6 +17,7 @@ export type SpecimenRow = {
   hundo: boolean
   nundo: boolean
   extraTags?: TagId[]
+  silhouette?: boolean
   imageId: string
   fileHash?: string | null
   createdAt: number
@@ -51,7 +53,23 @@ export type CategoryRow = {
 export type CoverRow = {
   categoryId: string
   speciesId: number
+  /** Empty string for species-mode tracks. */
+  variant: string
   specimenId: string
+}
+
+export type TagCatalogRow = {
+  tag: string
+  limitPokedex: boolean
+  slotMode: SlotMode
+  cloudBackupPending?: boolean
+}
+
+export type TagRosterRow = {
+  tag: string
+  speciesId: number
+  variant: string
+  cloudBackupPending?: boolean
 }
 
 export type TagCropRow = {
@@ -64,8 +82,10 @@ class PogoDexDB extends Dexie {
   images!: Table<ImageRow, string>
   inbox!: Table<InboxRow, string>
   categories!: Table<CategoryRow, string>
-  covers!: Table<CoverRow, [string, number]>
+  covers!: Table<CoverRow, [string, number, string]>
   tagCrops!: Table<TagCropRow, string>
+  tagCatalogs!: Table<TagCatalogRow, string>
+  tagRoster!: Table<TagRosterRow, [string, number, string]>
 
   constructor() {
     super('ndod-pogo-dex')
@@ -101,6 +121,33 @@ class PogoDexDB extends Dexie {
     })
     this.version(6).stores({
       tagCrops: 'tag',
+    })
+    this.version(7).stores({
+      tagCatalogs: 'tag',
+      tagRoster: '[tag+speciesId+variant], tag, speciesId',
+      coverCopy: '[categoryId+speciesId+variant], [categoryId+speciesId], specimenId, categoryId',
+    }).upgrade(async (tx) => {
+      const rows = (await tx.table('covers').toArray()) as CoverRow[]
+      await tx.table('coverCopy').bulkPut(
+        rows.map((row) => ({
+          categoryId: row.categoryId,
+          speciesId: row.speciesId,
+          variant: typeof row.variant === 'string' ? row.variant : '',
+          specimenId: row.specimenId,
+        })),
+      )
+    })
+    this.version(8).stores({
+      covers: null,
+    })
+    this.version(9).stores({
+      covers: '[categoryId+speciesId+variant], [categoryId+speciesId], specimenId, categoryId',
+    }).upgrade(async (tx) => {
+      const rows = await tx.table('coverCopy').toArray()
+      if (rows.length > 0) await tx.table('covers').bulkPut(rows)
+    })
+    this.version(10).stores({
+      coverCopy: null,
     })
   }
 }

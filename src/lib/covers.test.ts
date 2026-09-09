@@ -54,6 +54,20 @@ describe('tags', () => {
     expect(visualKey({ ...base, extraTags: ['lucky'] })).not.toBe(visualKey(base))
   })
 
+  it('treats a silhouette as a different look from a catch', () => {
+    const base = {
+      speciesId: 25,
+      form: null,
+      shiny: false,
+      shadowStatus: 'none' as const,
+      costume: null,
+      background: null,
+      hundo: false,
+      nundo: false,
+    }
+    expect(visualKey({ ...base, silhouette: true })).not.toBe(visualKey(base))
+  })
+
   it('treats costume and background values as part of uniqueness', () => {
     const base = {
       speciesId: 25,
@@ -137,6 +151,15 @@ describe('covers', () => {
     expect(pickCoverAfterDelete(['shadow', 'hundo'], [{ id: 'gray-old', tags: shadowGray, createdAt: 1 }])).toBe(
       null,
     )
+    expect(
+      pickCoverAfterDelete(
+        ['shadow'],
+        [
+          { id: 'sil', tags: shadowPure, createdAt: 3, silhouette: true },
+          { id: 'catch', tags: shadowPure, createdAt: 1 },
+        ],
+      ),
+    ).toBe('catch')
   })
 
   it('requires exact [shadow, hundo] for a green Shadow Hundo cover', () => {
@@ -162,6 +185,21 @@ describe('covers', () => {
     })
     expect(coverPurity(extra, ['shadow', 'hundo'])).toBe('gray')
     expect(coverPurity(exact, ['shadow', 'hundo'])).toBe('green')
+  })
+
+  it('marks a silhouette gray even when the tags are exact', () => {
+    expect(coverPurity(shadowPure, ['shadow'], true)).toBe('gray')
+    expect(coverPurity([], [], true)).toBe('gray')
+  })
+
+  it('auto-replaces a silhouette cover with the first exact catch', () => {
+    expect(shouldAutoReplaceCover(['shadow'], shadowPure, shadowPure, { currentSilhouette: true })).toBe(true)
+  })
+
+  it('does not let a silhouette replace a green cover', () => {
+    expect(
+      shouldAutoReplaceCover(['shadow'], shadowPure, shadowPure, { incomingSilhouette: true }),
+    ).toBe(false)
   })
 })
 
@@ -198,7 +236,7 @@ describe('coverMutationsAfterEdit', () => {
         [{ categoryId: 'shadow', speciesId: 1, specimenId: 'gray' }],
         [gray, incoming],
       ),
-    ).toEqual([{ op: 'put', categoryId: 'shadow', speciesId: 1, specimenId: 'incoming' }])
+    ).toEqual([{ op: 'put', categoryId: 'shadow', speciesId: 1, variant: '', specimenId: 'incoming' }])
   })
 
   it('keeps a green cover that gained extra tags', () => {
@@ -226,7 +264,7 @@ describe('coverMutationsAfterEdit', () => {
         [{ categoryId: 'shadow', speciesId: 1, specimenId: 'cover' }],
         [updated, other],
       ),
-    ).toEqual([{ op: 'put', categoryId: 'shadow', speciesId: 1, specimenId: 'other' }])
+    ).toEqual([{ op: 'put', categoryId: 'shadow', speciesId: 1, variant: '', specimenId: 'other' }])
   })
 
   it('deletes the cover when nothing in the species stays in the category', () => {
@@ -239,7 +277,7 @@ describe('coverMutationsAfterEdit', () => {
         [{ categoryId: 'shadow', speciesId: 1, specimenId: 'cover' }],
         [updated],
       ),
-    ).toEqual([{ op: 'delete', categoryId: 'shadow', speciesId: 1 }])
+    ).toEqual([{ op: 'delete', categoryId: 'shadow', speciesId: 1, variant: '' }])
   })
 
   it('moves covers to the new species and backfills the old slot', () => {
@@ -254,8 +292,22 @@ describe('coverMutationsAfterEdit', () => {
         [updated, leftover],
       ),
     ).toEqual([
-      { op: 'put', categoryId: 'shadow', speciesId: 1, specimenId: 'other' },
-      { op: 'put', categoryId: 'shadow', speciesId: 25, specimenId: 'cover' },
+      { op: 'put', categoryId: 'shadow', speciesId: 1, variant: '', specimenId: 'other' },
+      { op: 'put', categoryId: 'shadow', speciesId: 25, variant: '', specimenId: 'cover' },
     ])
+  })
+
+  it('replaces a silhouette cover when a later exact catch is saved', () => {
+    const sil = spec({ id: 'sil', shadowStatus: 'shadow', silhouette: true })
+    const incoming = spec({ id: 'incoming', shadowStatus: 'shadow', createdAt: 2 })
+    expect(
+      coverMutationsAfterEdit(
+        incoming,
+        incoming,
+        [shadowCat],
+        [{ categoryId: 'shadow', speciesId: 1, specimenId: 'sil' }],
+        [sil, incoming],
+      ),
+    ).toEqual([{ op: 'put', categoryId: 'shadow', speciesId: 1, variant: '', specimenId: 'incoming' }])
   })
 })

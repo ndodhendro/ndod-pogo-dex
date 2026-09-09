@@ -43,6 +43,8 @@ export type SpecimenFields = {
   hundo: boolean
   nundo: boolean
   extraTags?: TagId[]
+  /** Seen in the wild, not caught. Not a tag; never counts as a pure cover. */
+  silhouette?: boolean
 }
 
 export const TAG_LABELS: Record<BuiltInTagId, string> = {
@@ -73,6 +75,10 @@ export function extraTagList(s: { extraTags?: TagId[] }): TagId[] {
   return tags
 }
 
+export function isSilhouette(s: { silhouette?: boolean } | null | undefined): boolean {
+  return s?.silhouette === true
+}
+
 export function fieldsFromSpecimen(row: SpecimenFields): SpecimenFields {
   return {
     speciesId: row.speciesId,
@@ -84,6 +90,7 @@ export function fieldsFromSpecimen(row: SpecimenFields): SpecimenFields {
     hundo: row.hundo,
     nundo: row.nundo,
     extraTags: extraTagList(row),
+    silhouette: isSilhouette(row),
   }
 }
 
@@ -122,6 +129,7 @@ export function clearVisualTags(fields: SpecimenFields): SpecimenFields {
     hundo: false,
     nundo: false,
     extraTags: [],
+    silhouette: isSilhouette(fields),
   }
 }
 
@@ -147,6 +155,7 @@ export function visualKey(s: SpecimenFields): string {
     s.shadowStatus,
     (s.background ?? '').trim().toLowerCase(),
     extraTagList(s).slice().sort().join(','),
+    isSilhouette(s) ? 'sil' : '',
   ].join('|')
 }
 

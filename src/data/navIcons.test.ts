@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { colorForCategory, iconForCategory, iconForForm, lookForTag, requiredTagChoices, specimenTagChoices, suggestedLook, toneForCategory, toneForForm } from './navIcons'
+import { colorForCategory, iconForCategory, iconForForm, lookForTag, requiredTagChoices, specimenTagChoices, dexFilterTagChoices, suggestedLook, toneForCategory, toneForForm } from './navIcons'
 
 describe('nav icons', () => {
   it('maps seed category names', () => {
@@ -118,5 +118,16 @@ describe('nav icons', () => {
     expect(choices[0]).toMatchObject({ tag: null, label: 'Basic', icon: '🌿' })
     expect(choices.find((row) => row.tag === 'shadow')).toMatchObject({ label: 'Shadow', icon: '🌑' })
     expect(choices.find((row) => row.tag === 'alolan')).toMatchObject({ label: 'Alolan', icon: '🌺' })
+  })
+
+  it('drops Basic and tags already required by the current track', () => {
+    const categories = [
+      { seed: true, name: 'Basic', requiredTags: [] },
+      { seed: true, name: 'Shadow', requiredTags: ['shadow'], emoji: '🌑' },
+      { seed: true, name: 'Shiny', requiredTags: ['shiny'], emoji: '✨' },
+    ]
+    expect(dexFilterTagChoices(categories, ['shadow']).map((row) => row.tag)).not.toContain(null)
+    expect(dexFilterTagChoices(categories, ['shadow']).map((row) => row.tag)).not.toContain('shadow')
+    expect(dexFilterTagChoices(categories, ['shadow']).map((row) => row.tag)).toContain('shiny')
   })
 })

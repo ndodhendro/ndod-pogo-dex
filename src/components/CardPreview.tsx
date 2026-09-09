@@ -13,7 +13,7 @@ import {
   type PreviewSwipeAxis,
 } from '../lib/previewSwipe'
 import { coverPurity } from '../lib/covers'
-import { specimenTags, labelForTag, type TagId } from '../lib/tags'
+import { isSilhouette, specimenTags, labelForTag, type TagId } from '../lib/tags'
 import { usePreviewAnimations } from '../lib/previewPrefs'
 import { TagChip } from './TagChip'
 import styles from './CardPreview.module.css'
@@ -295,7 +295,7 @@ export function CardPreview({
     showFx &&
     (typeof window === 'undefined' || !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const showAura = showFx && !carousel
-  const purity = coverPurity(tags, requiredTags)
+  const purity = coverPurity(tags, requiredTags, isSilhouette(specimen))
 
   return (
     <div
@@ -383,6 +383,9 @@ export function CardPreview({
                 />
               )
             })}
+            {isSilhouette(specimen) ? (
+              <TagChip tag="silhouette" selected icon="⬛" label="Silhouette" />
+            ) : null}
           </div>
         </div>
         {confirmDelete ? (
@@ -579,7 +582,14 @@ function ShinySparkles() {
   )
 }
 
-const SHINY_SPARKLES = [
+const SHINY_SPARKLES: ReadonlyArray<{
+  x: string
+  y: string
+  size: number
+  dur: string
+  delay: string
+  gold?: boolean
+}> = [
   { x: '20%', y: '14%', size: 26, dur: '6.2s', delay: '0s' },
   { x: '70%', y: '11%', size: 20, dur: '5.4s', delay: '0.8s', gold: true },
   { x: '48%', y: '20%', size: 30, dur: '7.2s', delay: '1.7s' },
@@ -592,7 +602,7 @@ const SHINY_SPARKLES = [
   { x: '64%', y: '66%', size: 20, dur: '5.2s', delay: '2.7s', gold: true },
   { x: '24%', y: '70%', size: 16, dur: '6.8s', delay: '3.8s' },
   { x: '50%', y: '28%', size: 16, dur: '4.8s', delay: '4.2s' },
-] as const
+]
 
 function PreviewPhoto({
   slide,
@@ -605,7 +615,7 @@ function PreviewPhoto({
 }) {
   const tags = slide ? specimenTags(slide.specimen) : []
   const name = slide ? SPECIES_BY_ID.get(slide.specimen.speciesId)?.name : undefined
-  const purity = slide ? coverPurity(tags, requiredTags) : null
+  const purity = slide ? coverPurity(tags, requiredTags, isSilhouette(slide.specimen)) : null
   return (
     <div className={styles.slide}>
       <div

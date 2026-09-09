@@ -1,7 +1,7 @@
 import { ingestFile } from './collection'
 import { db, ensureCustomCategoryTags, ensureSeedCategories } from './db'
 import { applyCategoryPull } from './categorySync'
-import { extraTagList, cropTagsFromFields } from './tags'
+import { extraTagList, cropTagsFromFields, isSilhouette } from './tags'
 import { cropHeightForTags } from '../data/tagCrops'
 import { hashBlob } from './hash'
 import { newId } from './id'
@@ -9,7 +9,7 @@ import { isProbablyImageFile, makeImageVariants } from './images'
 import { planCloudPhotoRestore, planGalleryRestore } from './restorePlan'
 import { downloadSpecimenOriginal } from './specimenStorage'
 import { getSupabase } from './supabase'
-import { pullCloudCollection, type CloudSpecimen } from './sync'
+import { applyCloudCatalogs, pullCloudCollection, type CloudSpecimen } from './sync'
 
 export type RestoreProgress = {
   phase: 'loading' | 'hashing' | 'downloading' | 'writing'
@@ -45,7 +45,12 @@ async function applyCloudCategories(
 async function applyCloudCovers(cloud: NonNullable<Awaited<ReturnType<typeof pullCloudCollection>>>) {
   for (const cover of cloud.covers) {
     if (await db.specimens.get(cover.specimenId)) {
-      await db.covers.put(cover)
+      await db.covers.put({
+        categoryId: cover.categoryId,
+        speciesId: cover.speciesId,
+        variant: cover.variant ?? '',
+        specimenId: cover.specimenId,
+      })
     }
   }
 }
@@ -62,6 +67,7 @@ export async function restoreFromCloud(
   }
 
   await applyCloudCategories(cloud)
+  await applyCloudCatalogs(cloud)
 
   const localWithHash = await db.specimens.filter((row) => Boolean(row.fileHash)).toArray()
   const localHashes = new Set(localWithHash.map((row) => row.fileHash as string))
@@ -121,6 +127,7 @@ export async function restoreFromGallery(
   }
 
   await applyCloudCategories(cloud)
+  await applyCloudCatalogs(cloud)
 
   const images = files.filter(isProbablyImageFile)
   const hashed: { hash: string; file: File }[] = []
@@ -204,6 +211,7 @@ async function writeRestoredSpecimen(spec: CloudSpecimen, file: Blob, alreadyCro
       hundo: spec.hundo,
       nundo: spec.nundo,
       extraTags: extraTagList(spec),
+      silhouette: isSilhouette(spec),
       imageId,
       fileHash: spec.fileHash,
       createdAt: spec.createdAt,

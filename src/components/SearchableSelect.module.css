@@ -23,6 +23,12 @@
   border-color: var(--tone-fill, var(--color-border));
 }
 
+.trigger[data-icon-only='true'] {
+  width: var(--tap-min);
+  padding: 0;
+  justify-content: center;
+}
+
 .icon {
   flex-shrink: 0;
   line-height: 1;

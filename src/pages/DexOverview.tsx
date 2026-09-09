@@ -3,8 +3,7 @@ import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { DexProgress } from '../components/DexProgress'
 import { colorForCategory, iconForCategory, TAB_LOGOS, toneForCategory } from '../data/navIcons'
-import { SPECIES } from '../data/species'
-import { countFilledSpecies } from '../lib/dexGrid'
+import { countFilledSlots } from '../lib/roster'
 import { db, ensureSeedCategories } from '../lib/db'
 import styles from './DexOverview.module.css'
 
@@ -12,7 +11,8 @@ export function DexOverviewPage() {
   const categories =
     useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
   const specimens = useLiveQuery(() => db.specimens.toArray(), []) ?? []
-  const catalogSize = SPECIES.length
+  const catalogs = useLiveQuery(() => db.tagCatalogs.toArray(), []) ?? []
+  const roster = useLiveQuery(() => db.tagRoster.toArray(), []) ?? []
 
   useEffect(() => {
     void ensureSeedCategories()
@@ -22,9 +22,9 @@ export function DexOverviewPage() {
     () =>
       categories.map((category) => ({
         category,
-        filled: countFilledSpecies(specimens, category.requiredTags),
+        ...countFilledSlots(specimens, category.requiredTags, catalogs, roster),
       })),
-    [categories, specimens],
+    [categories, specimens, catalogs, roster],
   )
 
   return (
@@ -46,7 +46,7 @@ export function DexOverviewPage() {
         <p className="empty-state">No tracks yet. Add a category in Settings.</p>
       ) : (
         <div className={`group ${styles.list}`}>
-          {tracks.map(({ category, filled }) => (
+          {tracks.map(({ category, filled, total }) => (
             <Link
               key={category.id}
               className={styles.row}
@@ -56,7 +56,7 @@ export function DexOverviewPage() {
               <DexProgress
                 className={styles.rowProgress}
                 filled={filled}
-                total={catalogSize}
+                total={total}
                 ariaLabel={`${category.name} completion`}
                 tone={toneForCategory(category)}
                 labelColor={colorForCategory(category)}

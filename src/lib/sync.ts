@@ -5,8 +5,9 @@ import {
   toCloudCategoryId,
 } from '../data/seedCategories'
 import { mapCloudCategory } from './categorySyncPlan'
-import { db, type CategoryRow, type SpecimenRow } from './db'
+import { db, type CategoryRow, type SpecimenRow, type TagCatalogRow, type TagRosterRow } from './db'
 import { hashBlob } from './hash'
+import { normalizeVariant, type SlotMode } from './roster'
 import { getSupabase } from './supabase'
 import {
   cloudBackupErrorMessage,
@@ -20,7 +21,7 @@ import {
   specimenObjectPath,
   uploadSpecimenOriginal,
 } from './specimenStorage'
-import { extraTagList, type ShadowStatus, type TagId } from './tags'
+import { extraTagList, isSilhouette, type ShadowStatus, type TagId } from './tags'
 import { coversForPendingSpecimens, specimenNeedsCloudPush, type BackupProgress } from './syncBackup'
 
 export type CloudSpecimen = {
@@ -34,6 +35,7 @@ export type CloudSpecimen = {
   hundo: boolean
   nundo: boolean
   extraTags?: TagId[]
+  silhouette?: boolean
   fileHash: string
   imagePath?: string | null
   createdAt: number
@@ -42,7 +44,20 @@ export type CloudSpecimen = {
 export type CloudCover = {
   categoryId: string
   speciesId: number
+  variant: string
   specimenId: string
+}
+
+export type CloudTagCatalog = {
+  tag: string
+  limitPokedex: boolean
+  slotMode: SlotMode
+}
+
+export type CloudTagRoster = {
+  tag: string
+  speciesId: number
+  variant: string
 }
 
 async function signedInUserId(): Promise<string | null> {
@@ -53,6 +68,7 @@ async function signedInUserId(): Promise<string | null> {
 }
 
 const ownedLegacyByUser = new Map<string, Set<string>>()
+const UPSERT_PAGE = 100
 
 async function ownedLegacySeedIds(userId: string): Promise<Set<string> | string> {
   const cached = ownedLegacyByUser.get(userId)
@@ -122,6 +138,7 @@ function specimenCloudRow(
     hundo: specimen.hundo,
     nundo: specimen.nundo,
     extra_tags: extraTagList(specimen),
+    silhouette: isSilhouette(specimen),
     image_path: imagePath,
     file_hash: fileHash,
     created_at: new Date(specimen.createdAt).toISOString(),
@@ -201,6 +218,7 @@ export async function pushCoversForSpecies(speciesId: number): Promise<string | 
       user_id: userId,
       category_id: toCloudCategoryId(row.categoryId, userId, ownedLegacy),
       species_id: row.speciesId,
+      variant: row.variant ?? '',
       specimen_id: row.specimenId,
     })),
   )
@@ -229,7 +247,12 @@ export async function pushMetadataAfterSave(
   return { kind: 'ok' }
 }
 
-export async function pushCover(categoryId: string, speciesId: number, specimenId: string) {
+export async function pushCover(
+  categoryId: string,
+  speciesId: number,
+  specimenId: string,
+  variant = '',
+) {
   const supabase = getSupabase()
   const userId = await signedInUserId()
   if (!supabase || !userId) return
@@ -239,6 +262,7 @@ export async function pushCover(categoryId: string, speciesId: number, specimenI
     user_id: userId,
     category_id: toCloudCategoryId(categoryId, userId, ownedLegacy),
     species_id: speciesId,
+    variant,
     specimen_id: specimenId,
   })
   if (error) return error.message
@@ -264,6 +288,7 @@ export async function pushCoversForCategory(categoryId: string): Promise<string 
       user_id: userId,
       category_id: cloudCategoryId,
       species_id: row.speciesId,
+      variant: row.variant ?? '',
       specimen_id: row.specimenId,
     })),
   )
@@ -288,6 +313,90 @@ export async function pushCategory(row: CategoryRow) {
   })
   if (error) return error.message
   await markCategoriesBackedUp([row.id])
+}
+
+export async function pushTagCatalog(row: TagCatalogRow) {
+  const supabase = getSupabase()
+  const userId = await signedInUserId()
+  if (!supabase || !userId) return
+  const { error } = await supabase.from('tag_catalogs').upsert({
+    user_id: userId,
+    tag: row.tag,
+    limit_pokedex: row.limitPokedex,
+    slot_mode: row.slotMode,
+  })
+  if (error) return error.message
+  await db.tagCatalogs.update(row.tag, { cloudBackupPending: false })
+}
+
+export async function pushTagCatalogs(): Promise<string | undefined> {
+  const supabase = getSupabase()
+  const userId = await signedInUserId()
+  if (!supabase || !userId) return
+  const rows = await db.tagCatalogs.toArray()
+  if (rows.length === 0) return
+  const { error } = await supabase.from('tag_catalogs').upsert(
+    rows.map((row) => ({
+      user_id: userId,
+      tag: row.tag,
+      limit_pokedex: row.limitPokedex,
+      slot_mode: row.slotMode,
+    })),
+  )
+  if (error) return error.message
+  await db.tagCatalogs.toCollection().modify({ cloudBackupPending: false })
+}
+
+export async function pushTagRosterEntry(row: TagRosterRow) {
+  const supabase = getSupabase()
+  const userId = await signedInUserId()
+  if (!supabase || !userId) return
+  const { error } = await supabase.from('tag_roster').upsert({
+    user_id: userId,
+    tag: row.tag,
+    species_id: row.speciesId,
+    variant: normalizeVariant(row.variant),
+  })
+  if (error) return error.message
+  await db.tagRoster.update([row.tag, row.speciesId, normalizeVariant(row.variant)], {
+    cloudBackupPending: false,
+  })
+}
+
+export async function pushTagRoster(): Promise<string | undefined> {
+  const supabase = getSupabase()
+  const userId = await signedInUserId()
+  if (!supabase || !userId) return
+  const rows = await db.tagRoster.toArray()
+  const { error: delErr } = await supabase.from('tag_roster').delete().eq('user_id', userId)
+  if (delErr) return delErr.message
+  if (rows.length === 0) return
+  for (let i = 0; i < rows.length; i += UPSERT_PAGE) {
+    const { error } = await supabase.from('tag_roster').upsert(
+      rows.slice(i, i + UPSERT_PAGE).map((row) => ({
+        user_id: userId,
+        tag: row.tag,
+        species_id: row.speciesId,
+        variant: normalizeVariant(row.variant),
+      })),
+    )
+    if (error) return error.message
+  }
+  await db.tagRoster.toCollection().modify({ cloudBackupPending: false })
+}
+
+export async function deleteCloudTagRosterEntry(tag: string, speciesId: number, variant: string) {
+  const supabase = getSupabase()
+  const userId = await signedInUserId()
+  if (!supabase || !userId) return
+  const { error } = await supabase
+    .from('tag_roster')
+    .delete()
+    .eq('user_id', userId)
+    .eq('tag', tag)
+    .eq('species_id', speciesId)
+    .eq('variant', normalizeVariant(variant))
+  if (error) return error.message
 }
 
 export async function deleteCloudCategory(id: string) {
@@ -345,7 +454,6 @@ async function fetchPaged<T>(table: string, userId: string): Promise<T[]> {
   return rows
 }
 
-const UPSERT_PAGE = 100
 const BACKUP_FP_KEY = 'ndod.meta.backupFp'
 
 function yieldUi() {
@@ -374,6 +482,10 @@ export async function backupAllMetadata(
 
   const catErr = await pushCategories()
   if (catErr) return catErr
+  const catalogErr = await pushTagCatalogs()
+  if (catalogErr) return catalogErr
+  const rosterErr = await pushTagRoster()
+  if (rosterErr) return rosterErr
 
   type CloudPathRow = { file_hash: string | null; image_path: string | null }
   let pathByHash = new Map<string, string | null>()
@@ -458,6 +570,7 @@ export async function backupAllMetadata(
     user_id: userId,
     category_id: toCloudCategoryId(row.categoryId, userId, ownedLegacy),
     species_id: row.speciesId,
+    variant: row.variant ?? '',
     specimen_id: row.specimenId,
   }))
   for (let i = 0; i < coverRows.length; i += UPSERT_PAGE) {
@@ -472,6 +585,8 @@ export async function pullCloudCollection(): Promise<{
   categories: CategoryRow[]
   specimens: CloudSpecimen[]
   covers: CloudCover[]
+  catalogs: CloudTagCatalog[]
+  roster: CloudTagRoster[]
 } | null> {
   const userId = await signedInUserId()
   if (!userId) return null
@@ -487,6 +602,7 @@ export async function pullCloudCollection(): Promise<{
     hundo: boolean
     nundo: boolean
     extra_tags?: string[] | null
+    silhouette?: boolean | null
     file_hash: string | null
     image_path?: string | null
     created_at: string
@@ -503,7 +619,18 @@ export async function pullCloudCollection(): Promise<{
   type RawCover = {
     category_id: string
     species_id: number
+    variant?: string | null
     specimen_id: string
+  }
+  type RawCatalog = {
+    tag: string
+    limit_pokedex: boolean
+    slot_mode: SlotMode
+  }
+  type RawRoster = {
+    tag: string
+    species_id: number
+    variant?: string | null
   }
 
   const [rawCats, rawSpecs, rawCovers] = await Promise.all([
@@ -511,6 +638,8 @@ export async function pullCloudCollection(): Promise<{
     fetchPaged<RawSpecimen>('specimens', userId),
     fetchPaged<RawCover>('covers', userId),
   ])
+  const rawCatalogs = await fetchPagedOptional<RawCatalog>('tag_catalogs', userId)
+  const rawRoster = await fetchPagedOptional<RawRoster>('tag_roster', userId)
 
   return {
     categories: rawCats.map((row) => mapCloudCategory(row, userId)),
@@ -527,6 +656,7 @@ export async function pullCloudCollection(): Promise<{
         hundo: row.hundo,
         nundo: row.nundo,
         extraTags: extraTagList({ extraTags: row.extra_tags ?? [] }),
+        silhouette: Boolean(row.silhouette),
         fileHash: row.file_hash as string,
         imagePath: row.image_path ?? null,
         createdAt: new Date(row.created_at).getTime(),
@@ -534,7 +664,96 @@ export async function pullCloudCollection(): Promise<{
     covers: rawCovers.map((row) => ({
       categoryId: fromCloudCategoryId(row.category_id, userId),
       speciesId: row.species_id,
+      variant: row.variant ?? '',
       specimenId: row.specimen_id,
     })),
+    catalogs: rawCatalogs.map((row) => ({
+      tag: row.tag,
+      limitPokedex: row.limit_pokedex,
+      slotMode: row.slot_mode === 'variant' ? 'variant' : 'species',
+    })),
+    roster: rawRoster.map((row) => ({
+      tag: row.tag,
+      speciesId: row.species_id,
+      variant: row.variant ?? '',
+    })),
+  }
+}
+
+async function fetchPagedOptional<T>(table: string, userId: string): Promise<T[]> {
+  try {
+    return await fetchPaged<T>(table, userId)
+  } catch {
+    return []
+  }
+}
+
+export async function applyCloudCatalogs(cloud: {
+  catalogs: CloudTagCatalog[]
+  roster: CloudTagRoster[]
+}) {
+  if (cloud.catalogs.length === 0 && cloud.roster.length === 0) return
+  const pendingCatalogs = await db.tagCatalogs.filter((row) => row.cloudBackupPending !== false).toArray()
+  const pendingCatalogTags = new Set(pendingCatalogs.map((row) => row.tag))
+  const pendingRoster = await db.tagRoster.filter((row) => row.cloudBackupPending !== false).toArray()
+  const pendingRosterKeys = new Set(
+    pendingRoster.map((row) => `${row.tag}:${row.speciesId}:${normalizeVariant(row.variant)}`),
+  )
+
+  await db.transaction('rw', db.tagCatalogs, db.tagRoster, async () => {
+    const localCatalogs = await db.tagCatalogs.toArray()
+    for (const row of localCatalogs) {
+      if (!pendingCatalogTags.has(row.tag)) await db.tagCatalogs.delete(row.tag)
+    }
+    for (const row of cloud.catalogs) {
+      if (pendingCatalogTags.has(row.tag)) continue
+      await db.tagCatalogs.put({
+        tag: row.tag,
+        limitPokedex: row.limitPokedex,
+        slotMode: row.slotMode,
+        cloudBackupPending: false,
+      })
+    }
+
+    const localRoster = await db.tagRoster.toArray()
+    for (const row of localRoster) {
+      const key = `${row.tag}:${row.speciesId}:${normalizeVariant(row.variant)}`
+      if (!pendingRosterKeys.has(key)) await db.tagRoster.delete([row.tag, row.speciesId, normalizeVariant(row.variant)])
+    }
+    for (const row of cloud.roster) {
+      const key = `${row.tag}:${row.speciesId}:${normalizeVariant(row.variant)}`
+      if (pendingRosterKeys.has(key)) continue
+      await db.tagRoster.put({
+        tag: row.tag,
+        speciesId: row.speciesId,
+        variant: normalizeVariant(row.variant),
+        cloudBackupPending: false,
+      })
+    }
+  })
+}
+
+export async function hydrateCatalogsFromCloud(): Promise<string | undefined> {
+  const userId = await signedInUserId()
+  if (!userId) return
+  try {
+    type RawCatalog = { tag: string; limit_pokedex: boolean; slot_mode: SlotMode }
+    type RawRoster = { tag: string; species_id: number; variant?: string | null }
+    const rawCatalogs = await fetchPagedOptional<RawCatalog>('tag_catalogs', userId)
+    const rawRoster = await fetchPagedOptional<RawRoster>('tag_roster', userId)
+    await applyCloudCatalogs({
+      catalogs: rawCatalogs.map((row) => ({
+        tag: row.tag,
+        limitPokedex: row.limit_pokedex,
+        slotMode: row.slot_mode === 'variant' ? 'variant' : 'species',
+      })),
+      roster: rawRoster.map((row) => ({
+        tag: row.tag,
+        speciesId: row.species_id,
+        variant: row.variant ?? '',
+      })),
+    })
+  } catch (err) {
+    return err instanceof Error ? err.message : 'Could not load Pokédex rosters'
   }
 }

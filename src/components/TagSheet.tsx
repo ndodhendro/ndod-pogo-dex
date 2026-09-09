@@ -1,24 +1,36 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { specimenTagChoices } from '../data/navIcons'
+import { categoryForTag, specimenTagChoices } from '../data/navIcons'
 import { cropHeightForTags } from '../data/tagCrops'
-import { searchSpecies, SPECIES_BY_ID } from '../data/species'
+import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { useTagCropHeights } from '../hooks/useCropSettings'
 import { updateSpecimen } from '../lib/collection'
 import { db, type SpecimenRow } from '../lib/db'
 import { cropBottomFromBlob, SCREENSHOT_WIDTH } from '../lib/images'
+import {
+  applyRosterSlot,
+  canEnableLimitedTag,
+  limitedRosterWarning,
+  searchSlots,
+  slotBoxLabel,
+  slotDisplayName,
+  slotsForSelectedTags,
+  usesRosterVariantField,
+} from '../lib/roster'
 import { parseCropBottom } from '../lib/screenshotCrop'
 import { useToast } from '../lib/toast'
 import {
   clearVisualTags,
   cropTagsFromFields,
   fieldsFromSpecimen,
+  labelForTag,
   normalizeOptionalName,
   specimenSaveWarning,
   specimenTags,
   toggleTag,
   type SpecimenFields,
+  type TagId,
 } from '../lib/tags'
 import { BottomSheet } from './BottomSheet'
 import { SearchField } from './SearchField'
@@ -35,10 +47,25 @@ const emptyFields = (): SpecimenFields => ({
   hundo: false,
   nundo: false,
   extraTags: [],
+  silhouette: false,
 })
 
-function speciesBoxLabel(species: { id: number; name: string }) {
-  return `#${String(species.id).padStart(4, '0')} ${species.name}`
+function selectedSlotLabel(fields: SpecimenFields, tags: TagId[]) {
+  const species = fields.speciesId ? SPECIES_BY_ID.get(fields.speciesId) : undefined
+  if (!species) return ''
+  const variant =
+    fields.costume?.trim() && tags.includes('costume')
+      ? fields.costume.trim()
+      : fields.background?.trim() && tags.includes('background')
+        ? fields.background.trim()
+        : tags.includes('alternate-forme') && fields.form?.trim()
+          ? fields.form.trim()
+          : ''
+  return slotBoxLabel({
+    speciesId: species.id,
+    variant,
+    name: slotDisplayName(species.id, variant),
+  })
 }
 
 type SheetTab = 'tags' | 'crop'
@@ -85,16 +112,21 @@ export function TagSheet({
   const previewUrl = useImageUrl(imageId, 'original')
   const heightMap = useTagCropHeights()
   const categories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
+  const catalogs = useLiveQuery(() => db.tagCatalogs.toArray(), []) ?? []
+  const roster = useLiveQuery(() => db.tagRoster.toArray(), []) ?? []
   const tagChoices = useMemo(() => specimenTagChoices(categories), [categories])
   const tags = specimenTags(fields)
   const suggestedHeight = cropHeightForTags(cropTagsFromFields(fields), heightMap)
   const cropBottom = parseCropBottom(heightDraft, suggestedHeight)
-  const selected = fields.speciesId ? SPECIES_BY_ID.get(fields.speciesId) : undefined
-  const selectedLabel = selected ? speciesBoxLabel(selected) : ''
+  const selectedLabel = selectedSlotLabel(fields, tags)
+  const availableSlots = useMemo(
+    () => slotsForSelectedTags(tags, catalogs, roster),
+    [tags, catalogs, roster],
+  )
   const matches = useMemo(() => {
     if (!query.trim() || query === selectedLabel) return []
-    return searchSpecies(query).slice(0, 12)
-  }, [query, selectedLabel])
+    return searchSlots(availableSlots, query).slice(0, 12)
+  }, [query, selectedLabel, availableSlots])
   useEffect(() => {
     if (!open) {
       openedKey.current = null
@@ -109,7 +141,7 @@ export function TagSheet({
     const next = seed ? fieldsFromSpecimen(seed) : emptyFields()
     setFields(next)
     const species = next.speciesId ? SPECIES_BY_ID.get(next.speciesId) : undefined
-    setQuery(species ? speciesBoxLabel(species) : '')
+    setQuery(species ? selectedSlotLabel(next, specimenTags(next)) : '')
   }, [open, resetKey])
 
   useEffect(() => {
@@ -150,7 +182,20 @@ export function TagSheet({
   }, [open, resetKey, suggestedHeight, storedCrop])
 
   async function save() {
-    const warning = specimenSaveWarning(fields)
+    let warning = specimenSaveWarning(fields)
+    if (warning === 'Enter a costume name' && usesRosterVariantField('costume', catalogs)) {
+      warning = 'Pick a released costume'
+    } else if (
+      warning === 'Enter a background name' &&
+      usesRosterVariantField('background', catalogs)
+    ) {
+      warning = 'Pick a released background'
+    }
+    if (!warning) {
+      warning = limitedRosterWarning(fields, catalogs, roster, (tag) =>
+        categoryForTag(categories, tag)?.name ?? labelForTag(tag),
+      )
+    }
     if (warning) {
       onWarning(warning)
       return
@@ -211,8 +256,7 @@ export function TagSheet({
               setQuery(value)
               setFields((f) => {
                 if (!f.speciesId) return f
-                const current = SPECIES_BY_ID.get(f.speciesId)
-                if (current && value === speciesBoxLabel(current)) return f
+                if (value === selectedSlotLabel(f, specimenTags(f))) return f
                 return { ...f, speciesId: 0 }
               })
             }}
@@ -220,19 +264,22 @@ export function TagSheet({
           />
           {matches.length > 0 ? (
             <div className={styles.speciesList}>
-              {matches.map((species) => (
-                <button
-                  key={species.id}
-                  type="button"
-                  data-on={fields.speciesId === species.id ? 'true' : 'false'}
-                  onClick={() => {
-                    setFields((f) => ({ ...f, speciesId: species.id }))
-                    setQuery(speciesBoxLabel(species))
-                  }}
-                >
-                  {speciesBoxLabel(species)}
-                </button>
-              ))}
+              {matches.map((slot) => {
+                const label = slotBoxLabel(slot)
+                return (
+                  <button
+                    key={`${slot.speciesId}:${slot.variant}`}
+                    type="button"
+                    data-on={query === label ? 'true' : 'false'}
+                    onClick={() => {
+                      setFields((f) => applyRosterSlot(f, slot, specimenTags(f), catalogs))
+                      setQuery(label)
+                    }}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
             </div>
           ) : null}
           <div className="field">
@@ -246,14 +293,25 @@ export function TagSheet({
                   icon={choice.icon}
                   label={choice.label}
                   labelColor={choice.labelColor}
-                  onClick={() =>
-                    setFields((f) => (choice.tag == null ? clearVisualTags(f) : toggleTag(f, choice.tag)))
-                  }
+                  onClick={() => {
+                    if (choice.tag == null) {
+                      setFields((f) => clearVisualTags(f))
+                      return
+                    }
+                    const on = tags.includes(choice.tag)
+                    if (!on && !canEnableLimitedTag(fields, choice.tag, catalogs, roster)) {
+                      const name =
+                        categoryForTag(categories, choice.tag)?.name ?? labelForTag(choice.tag)
+                      onWarning(`Not in the ${name} Pokédex`)
+                      return
+                    }
+                    setFields((f) => toggleTag(f, choice.tag as TagId))
+                  }}
                 />
               ))}
             </div>
           </div>
-          {fields.costume !== null ? (
+          {fields.costume !== null && !usesRosterVariantField('costume', catalogs) ? (
             <label className="field">
               <span>Costume name</span>
               <input
@@ -263,7 +321,7 @@ export function TagSheet({
               />
             </label>
           ) : null}
-          {fields.background !== null ? (
+          {fields.background !== null && !usesRosterVariantField('background', catalogs) ? (
             <label className="field">
               <span>Background</span>
               <input
@@ -273,6 +331,17 @@ export function TagSheet({
               />
             </label>
           ) : null}
+          <label className={styles.checkRow}>
+            <span className={styles.checkCopy}>
+              <span aria-hidden="true">⬛</span>
+              Silhouette
+            </span>
+            <input
+              type="checkbox"
+              checked={Boolean(fields.silhouette)}
+              onChange={(e) => setFields((f) => ({ ...f, silhouette: e.target.checked }))}
+            />
+          </label>
         </>
       ) : (
         <>

@@ -2,25 +2,28 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { BottomSheet } from '../components/BottomSheet'
 import { ColorPicker } from '../components/ColorPicker'
+import { RosterSheet } from '../components/RosterSheet'
 import { TrackChip } from '../components/TrackChip'
 import { RestoreCloudButton, RestoreGalleryButton } from '../components/RestoreGalleryButton'
-import { colorForCategory, iconForCategory, lookForTag, requiredTagChoices, TAB_ICONS, toneForCategory } from '../data/navIcons'
+import { colorForCategory, iconForCategory, lookForTag, categoryForTag, requiredTagChoices, TAB_ICONS, toneForCategory } from '../data/navIcons'
 import { insertCategoryIdAt, moveCategoryId, sameCategoryOrder } from '../lib/categoryOrder'
 import { categoryChromeStyle, DEFAULT_LABEL_COLOR, FALLBACK_EMOJI, pickEmojiInput } from '../lib/categoryStyle'
 import { clampSwipe, SWIPE_LOCK, SWIPE_OPEN_RATIO, SWIPE_WIDTH } from '../lib/swipeReveal'
-import { addCategory, deleteCategory, reorderCategories, updateCategory } from '../lib/collection'
+import { addCategory, deleteCategory, reorderCategories, saveTagCatalog, updateCategory } from '../lib/collection'
 import { getSession, signOut, userEmail } from '../lib/auth'
 import { db, ensureSeedCategories, type CategoryRow } from '../lib/db'
 import { backupAllMetadata } from '../lib/sync'
 import { backupProgressLabel, type BackupProgress } from '../lib/syncBackup'
+import { catalogForTag, type SlotMode } from '../lib/roster'
 import { toastAfterWrite, useToast } from '../lib/toast'
-import { categorySaveWarning, toggleRequiredTags, type TagId } from '../lib/tags'
+import { categorySaveWarning, labelForTag, toggleRequiredTags, type TagId } from '../lib/tags'
 import { setPreviewAnimations, usePreviewAnimations } from '../lib/previewPrefs'
 import styles from './Settings.module.css'
 
 export function SettingsPage() {
   const { showToast } = useToast()
   const categories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
+  const catalogs = useLiveQuery(() => db.tagCatalogs.toArray(), []) ?? []
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<CategoryRow | null>(null)
   const [name, setName] = useState('')
@@ -38,6 +41,8 @@ export function SettingsPage() {
   const [backupProgress, setBackupProgress] = useState<BackupProgress | null>(null)
   const previewAnimations = usePreviewAnimations()
   const [tagsOpen, setTagsOpen] = useState(false)
+  const [rosterTag, setRosterTag] = useState<TagId | null>(null)
+  const [catalogBusy, setCatalogBusy] = useState(false)
 
   useEffect(() => {
     void ensureSeedCategories()
@@ -55,6 +60,7 @@ export function SettingsPage() {
     setEmoji(FALLBACK_EMOJI)
     setLabelColor(DEFAULT_LABEL_COLOR)
     setLookLocked(false)
+    setRosterTag(null)
   }
 
   function openNew() {
@@ -105,6 +111,19 @@ export function SettingsPage() {
     } finally {
       busyRef.current = false
       setBusy(false)
+    }
+  }
+
+  async function setCatalog(tag: TagId, patch: { limitPokedex: boolean; slotMode: SlotMode }) {
+    if (catalogBusy) return
+    setCatalogBusy(true)
+    try {
+      const cloudError = await saveTagCatalog(tag, patch)
+      toastAfterWrite(showToast, 'Pokédex settings saved', cloudError)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not save Pokédex settings')
+    } finally {
+      setCatalogBusy(false)
     }
   }
 
@@ -308,11 +327,105 @@ export function SettingsPage() {
               ))}
             </div>
           </div>
+          <div className="field">
+            <span>Pokédex</span>
+            <p className="page-sub">
+              Limit a tag to Released slots. Variant slots are for costumes, backgrounds, and
+              formes.
+            </p>
+            {picked.length === 0 ? (
+              <p className="page-sub">
+                {editing?.seed
+                  ? 'This track uses the full Pokédex.'
+                  : 'Save this tag first to limit its Pokédex.'}
+              </p>
+            ) : (
+              <div className={styles.dexEditors}>
+                {picked.map((tag) => {
+                  const catalog = catalogForTag(catalogs, tag)
+                  const look = lookForTag(tag, categories)
+                  const label = categoryForTag(categories, tag)?.name ?? labelForTag(tag)
+                  return (
+                    <div key={tag} className={styles.dexEditor}>
+                      <p className={styles.dexTag}>
+                        <span aria-hidden="true">{look.emoji}</span>
+                        {label}
+                      </p>
+                      <button
+                        type="button"
+                        className={styles.prefToggle}
+                        role="switch"
+                        aria-checked={catalog.limitPokedex}
+                        data-tone="settings"
+                        disabled={catalogBusy}
+                        onClick={() =>
+                          void setCatalog(tag, {
+                            limitPokedex: !catalog.limitPokedex,
+                            slotMode: catalog.slotMode,
+                          })
+                        }
+                      >
+                        <span className={styles.prefLabel}>
+                          <span aria-hidden="true">📖</span>
+                          Limit Pokédex
+                        </span>
+                        <span className={styles.switch} data-on={catalog.limitPokedex ? 'true' : undefined} />
+                      </button>
+                      {catalog.limitPokedex ? (
+                        <>
+                          <div className="field">
+                            <span>Slots</span>
+                            <div className={styles.segment}>
+                              <button
+                                type="button"
+                                data-on={catalog.slotMode === 'species' ? 'true' : 'false'}
+                                disabled={catalogBusy}
+                                onClick={() =>
+                                  void setCatalog(tag, { limitPokedex: true, slotMode: 'species' })
+                                }
+                              >
+                                Species
+                              </button>
+                              <button
+                                type="button"
+                                data-on={catalog.slotMode === 'variant' ? 'true' : 'false'}
+                                disabled={catalogBusy}
+                                onClick={() =>
+                                  void setCatalog(tag, { limitPokedex: true, slotMode: 'variant' })
+                                }
+                              >
+                                Variant
+                              </button>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn"
+                            onClick={() => setRosterTag(tag)}
+                          >
+                            <span aria-hidden="true">📖</span>
+                            Pokédex roster
+                          </button>
+                        </>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
           <button type="submit" className={`btn btn-primary ${styles.sheetSave}`} disabled={busy}>
             {busy ? 'Saving…' : 'Save tag'}
           </button>
         </form>
       </BottomSheet>
+      <RosterSheet
+        open={Boolean(rosterTag)}
+        tag={rosterTag}
+        slotMode={rosterTag ? catalogForTag(catalogs, rosterTag).slotMode : 'species'}
+        title={`${rosterTag ? (categoryForTag(categories, rosterTag)?.name ?? labelForTag(rosterTag)) : 'Tag'} Pokédex`}
+        onClose={() => setRosterTag(null)}
+      />
     </section>
   )
 }

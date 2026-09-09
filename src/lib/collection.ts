@@ -3,17 +3,35 @@ import { colorForCategory, iconForCategory } from '../data/navIcons'
 import { categoryOrderPatch } from './categoryOrder'
 import { firstGrapheme, normalizeHexColor } from './categoryStyle'
 import { coverMutationsAfterEdit, coverPurity, pickCoverAfterDelete, shouldAutoReplaceCover } from './covers'
-import { db, ensureSeedCategories, type CategoryRow, type InboxRow, type SpecimenRow } from './db'
+import { db, ensureSeedCategories, type CategoryRow, type InboxRow, type SpecimenRow, type TagCatalogRow } from './db'
 import { newId } from './id'
 import { cropBottomFromBlob, makeImageVariants } from './images'
 import { hashBlob } from './hash'
 import { cloudBackupErrorMessage, pickSpecimenToKeepForHash, sameSpecimenMetadata } from './specimenHash'
 import { rebaseSpecimenId } from './specimenMerge'
-import { pushCategory, pushCategories, pushCover, pushCoversForCategory, pushMetadataAfterSave, deleteCloudCategory, deleteCloudSpecimen } from './sync'
+import {
+  pushCategory,
+  pushCategories,
+  pushCover,
+  pushCoversForCategory,
+  pushMetadataAfterSave,
+  pushTagCatalog,
+  pushTagRosterEntry,
+  deleteCloudCategory,
+  deleteCloudSpecimen,
+  deleteCloudTagRosterEntry,
+} from './sync'
 import { removeSpecimenPhoto } from './specimenStorage'
 import {
+  defaultSlotMode,
+  normalizeVariant,
+  slotVariantForTrack,
+  specimenFillsSlot,
+  type SlotMode,
+} from './roster'
+import {
   extraTagList,
-  hasAllRequired,
+  isSilhouette,
   resolveRequiredTags,
   specimenTags,
   visualKey,
@@ -88,6 +106,7 @@ export async function saveSpecimenFromInbox(
     hundo: fields.hundo,
     nundo: fields.nundo,
     extraTags,
+    silhouette: isSilhouette(fields),
     imageId: inbox.imageId,
     fileHash,
     createdAt: Date.now(),
@@ -98,12 +117,13 @@ export async function saveSpecimenFromInbox(
   const duplicate = existing.some((row) => visualKey(row) === visualKey(specimen))
   const incomingTags = specimenTags(specimen)
   const categories = await db.categories.toArray()
+  const catalogs = await db.tagCatalogs.toArray()
 
   await db.transaction('rw', db.specimens, db.inbox, db.covers, async () => {
     await db.specimens.add(specimen)
     await db.inbox.delete(inboxId)
     for (const category of categories) {
-      await maybeSetCover(category, specimen, incomingTags)
+      await maybeSetCover(category, specimen, incomingTags, catalogs)
     }
   })
 
@@ -126,11 +146,13 @@ async function saveExistingScreenshot(
     hundo: fields.hundo,
     nundo: fields.nundo,
     extraTags: extraTagList(fields),
+    silhouette: isSilhouette(fields),
     cloudBackupPending: true,
   }
   const unchanged = sameSpecimenMetadata(existing, updated)
   const incomingTags = specimenTags(updated)
   const categories = await db.categories.toArray()
+  const catalogs = await db.tagCatalogs.toArray()
 
   await db.transaction('rw', db.specimens, db.inbox, db.covers, db.images, async () => {
     if (!unchanged) await db.specimens.put(updated)
@@ -141,7 +163,7 @@ async function saveExistingScreenshot(
     if (imageStillUsed === 0) await db.images.delete(inbox.imageId)
     if (!unchanged) {
       for (const category of categories) {
-        await maybeSetCover(category, updated, incomingTags)
+        await maybeSetCover(category, updated, incomingTags, catalogs)
       }
     }
   })
@@ -173,6 +195,7 @@ export async function updateSpecimen(
     hundo: fields.hundo,
     nundo: fields.nundo,
     extraTags,
+    silhouette: isSilhouette(fields),
     cloudBackupPending: true,
   }
   const metaUnchanged = sameSpecimenMetadata(existing, updated)
@@ -192,22 +215,31 @@ export async function updateSpecimen(
 
   const others = await db.specimens.toArray()
   const duplicate = others.some((row) => row.id !== id && visualKey(row) === visualKey(updated))
+  const catalogs = await db.tagCatalogs.toArray()
 
   await db.transaction('rw', db.specimens, db.covers, db.categories, async () => {
     await db.specimens.put(updated)
     const specimens = await db.specimens.toArray()
     const categories = await db.categories.toArray()
     const covers = await db.covers.toArray()
-    const mutations = coverMutationsAfterEdit(existing, updated, categories, covers, specimens)
+    const mutations = coverMutationsAfterEdit(
+      existing,
+      updated,
+      categories,
+      covers,
+      specimens,
+      catalogs,
+    )
     for (const mutation of mutations) {
       if (mutation.op === 'put') {
         await db.covers.put({
           categoryId: mutation.categoryId,
           speciesId: mutation.speciesId,
+          variant: mutation.variant,
           specimenId: mutation.specimenId,
         })
       } else {
-        await db.covers.delete([mutation.categoryId, mutation.speciesId])
+        await db.covers.delete([mutation.categoryId, mutation.speciesId, mutation.variant])
       }
     }
   })
@@ -248,17 +280,27 @@ async function maybeSetCover(
   category: CategoryRow,
   specimen: SpecimenRow,
   incomingTags: TagId[],
+  catalogs: TagCatalogRow[],
 ) {
-  const current = await db.covers.get([category.id, specimen.speciesId])
+  const variant = slotVariantForTrack(specimen, category.requiredTags, catalogs)
+  const current = await db.covers.get([category.id, specimen.speciesId, variant])
   let currentTags: TagId[] | null = null
+  let currentSilhouette = false
   if (current) {
     const coverSpecimen = await db.specimens.get(current.specimenId)
     currentTags = coverSpecimen ? specimenTags(coverSpecimen) : null
+    currentSilhouette = isSilhouette(coverSpecimen)
   }
-  if (shouldAutoReplaceCover(category.requiredTags, currentTags, incomingTags)) {
+  if (
+    shouldAutoReplaceCover(category.requiredTags, currentTags, incomingTags, {
+      currentSilhouette,
+      incomingSilhouette: isSilhouette(specimen),
+    })
+  ) {
     await db.covers.put({
       categoryId: category.id,
       speciesId: specimen.speciesId,
+      variant,
       specimenId: specimen.id,
     })
   }
@@ -268,21 +310,25 @@ export async function setAsCover(categoryId: string, specimenId: string) {
   const specimen = await db.specimens.get(specimenId)
   const category = await db.categories.get(categoryId)
   if (!specimen || !category) throw new Error('Missing specimen or category')
-  if (coverPurity(specimenTags(specimen), category.requiredTags) == null) {
+  if (coverPurity(specimenTags(specimen), category.requiredTags, isSilhouette(specimen)) == null) {
     throw new Error('This specimen is not in this category')
   }
+  const catalogs = await db.tagCatalogs.toArray()
+  const variant = slotVariantForTrack(specimen, category.requiredTags, catalogs)
   await db.covers.put({
     categoryId,
     speciesId: specimen.speciesId,
+    variant,
     specimenId,
   })
-  return pushCover(categoryId, specimen.speciesId, specimenId)
+  return pushCover(categoryId, specimen.speciesId, specimenId, variant)
 }
 
 export async function deleteSpecimen(id: string) {
   const specimen = await db.specimens.get(id)
   if (!specimen) throw new Error('Specimen is gone')
   const { speciesId, imageId } = specimen
+  const catalogs = await db.tagCatalogs.toArray()
 
   await db.transaction('rw', db.specimens, db.covers, db.images, db.inbox, db.categories, async () => {
     const affectedCovers = await db.covers.where('specimenId').equals(id).toArray()
@@ -293,23 +339,37 @@ export async function deleteSpecimen(id: string) {
     if (imageStillUsed === 0) await db.images.delete(imageId)
 
     const remaining = await db.specimens.where('speciesId').equals(speciesId).toArray()
-    const remainingForPick = remaining.map((row) => ({
-      id: row.id,
-      tags: specimenTags(row),
-      createdAt: row.createdAt,
-    }))
     const categories = await db.categories.toArray()
     for (const cover of affectedCovers) {
       const category = categories.find((row) => row.id === cover.categoryId)
+      const variant = cover.variant ?? ''
+      const remainingForPick = remaining
+        .filter(
+          (row) =>
+            category &&
+            specimenFillsSlot(
+              row,
+              category.requiredTags,
+              { speciesId: cover.speciesId, variant, name: '' },
+              catalogs,
+            ),
+        )
+        .map((row) => ({
+          id: row.id,
+          tags: specimenTags(row),
+          createdAt: row.createdAt,
+          silhouette: isSilhouette(row),
+        }))
       const nextId = category ? pickCoverAfterDelete(category.requiredTags, remainingForPick) : null
       if (nextId) {
         await db.covers.put({
           categoryId: cover.categoryId,
           speciesId: cover.speciesId,
+          variant,
           specimenId: nextId,
         })
       } else {
-        await db.covers.delete([cover.categoryId, cover.speciesId])
+        await db.covers.delete([cover.categoryId, cover.speciesId, variant])
       }
     }
   })
@@ -391,16 +451,26 @@ export async function updateCategory(
 }
 
 export async function refreshCoversForCategory(category: CategoryRow) {
+  const catalogs = await db.tagCatalogs.toArray()
   const covers = await db.covers.where('categoryId').equals(category.id).toArray()
   for (const cover of covers) {
     const spec = await db.specimens.get(cover.specimenId)
-    if (!spec || !hasAllRequired(specimenTags(spec), category.requiredTags)) {
-      await db.covers.delete([cover.categoryId, cover.speciesId])
+    const variant = cover.variant ?? ''
+    if (
+      !spec ||
+      !specimenFillsSlot(
+        spec,
+        category.requiredTags,
+        { speciesId: cover.speciesId, variant, name: '' },
+        catalogs,
+      )
+    ) {
+      await db.covers.delete([cover.categoryId, cover.speciesId, variant])
     }
   }
   const specimens = await db.specimens.toArray()
   for (const specimen of specimens) {
-    await maybeSetCover(category, specimen, specimenTags(specimen))
+    await maybeSetCover(category, specimen, specimenTags(specimen), catalogs)
   }
 }
 
@@ -426,6 +496,43 @@ export async function reorderCategories(orderedIds: string[]) {
     )
   })
   return pushCategories()
+}
+
+export async function saveTagCatalog(
+  tag: TagId,
+  patch: { limitPokedex: boolean; slotMode: SlotMode },
+) {
+  const current = (await db.tagCatalogs.get(tag)) ?? {
+    tag,
+    limitPokedex: false,
+    slotMode: defaultSlotMode(tag),
+  }
+  const row: TagCatalogRow = {
+    ...current,
+    tag,
+    limitPokedex: patch.limitPokedex,
+    slotMode: patch.slotMode,
+    cloudBackupPending: true,
+  }
+  await db.tagCatalogs.put(row)
+  return pushTagCatalog(row)
+}
+
+export async function addRosterEntry(tag: TagId, speciesId: number, variant: string) {
+  const row = {
+    tag,
+    speciesId,
+    variant: normalizeVariant(variant),
+    cloudBackupPending: true,
+  }
+  await db.tagRoster.put(row)
+  return pushTagRosterEntry(row)
+}
+
+export async function removeRosterEntry(tag: TagId, speciesId: number, variant: string) {
+  const normalized = normalizeVariant(variant)
+  await db.tagRoster.delete([tag, speciesId, normalized])
+  return deleteCloudTagRosterEntry(tag, speciesId, normalized)
 }
 
 export const SHARE_DB_NAME = 'ndod-pogo-dex-share'

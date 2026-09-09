@@ -2,43 +2,79 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { BottomSheet } from '../components/BottomSheet'
 import { CardPreview } from '../components/CardPreview'
 import { DexCard } from '../components/DexCard'
 import { DexProgress } from '../components/DexProgress'
 import { SearchField } from '../components/SearchField'
 import { SearchableSelect } from '../components/SearchableSelect'
 import { SpecimenTagSheet } from '../components/TagSheet'
-import { colorForCategory, iconForCategory, TAB_LOGOS, toneForCategory } from '../data/navIcons'
-import { SPECIES, SPECIES_BY_ID, searchSpecies } from '../data/species'
+import { TagChip } from '../components/TagChip'
+import { GENERATION_IDS, groupByGeneration, type Generation } from '../data/generations'
+import { colorForCategory, dexFilterTagChoices, iconForCategory, toneForCategory } from '../data/navIcons'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { useFrameHeight } from '../hooks/useCropSettings'
-import { coverPurity, type CoverPurity } from '../lib/covers'
+import { coverPurity, findCover, type CoverPurity } from '../lib/covers'
 import { deleteSpecimen, setAsCover } from '../lib/collection'
 import { categoryChromeStyle } from '../lib/categoryStyle'
-import { countFilledSpecies, dexGridLayout } from '../lib/dexGrid'
-import { db, ensureSeedCategories, type CategoryRow, type CoverRow, type SpecimenRow } from '../lib/db'
+import {
+  buildDexVirtualRows,
+  dexGenHeaderHeight,
+  dexGridLayout,
+  keepDexSlot,
+  pickDexCover,
+  specimenMatchesDexFilters,
+} from '../lib/dexGrid'
+import {
+  db,
+  ensureSeedCategories,
+  type CategoryRow,
+  type CoverRow,
+  type SpecimenRow,
+  type TagCatalogRow,
+  type TagRosterRow,
+} from '../lib/db'
 import { listNeighbor } from '../lib/previewSwipe'
+import {
+  countFilledSlots,
+  searchSlots,
+  slotsForTrack,
+  specimenFillsSlot,
+  slotVariantForTrack,
+  trackIsLimited,
+} from '../lib/roster'
 import { toastAfterWrite, useToast } from '../lib/toast'
-import { hasAllRequired, specimenTags } from '../lib/tags'
+import { hasAllRequired, isSilhouette, specimenTags, toggleRequiredTags, type TagId } from '../lib/tags'
 import styles from './Dex.module.css'
 
 type Slot = {
   speciesId: number
+  variant: string
   name: string
   filled: boolean
   purity: CoverPurity | null
   cover?: SpecimenRow
 }
 
+const EMPTY_CATEGORIES: CategoryRow[] = []
+const EMPTY_SPECIMENS: SpecimenRow[] = []
+const EMPTY_COVERS: CoverRow[] = []
+const EMPTY_CATALOGS: TagCatalogRow[] = []
+const EMPTY_ROSTER: TagRosterRow[] = []
+
 export function DexPage() {
   const { categoryId } = useParams()
   const navigate = useNavigate()
   const { showToast } = useToast()
   const [query, setQuery] = useState('')
+  const [silhouetteOnly, setSilhouetteOnly] = useState(false)
+  const [filterTags, setFilterTags] = useState<TagId[]>([])
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [preview, setPreview] = useState<SpecimenRow | null>(null)
   const [editingTags, setEditingTags] = useState(false)
   const [host, setHost] = useState<HTMLDivElement | null>(null)
   const [width, setWidth] = useState(0)
+  const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(() => new Set())
 
   useEffect(() => {
     void ensureSeedCategories()
@@ -57,11 +93,27 @@ export function DexPage() {
   }, [host])
 
   const categories =
-    useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
-  const specimens = useLiveQuery(() => db.specimens.toArray(), []) ?? []
-  const covers = useLiveQuery(() => db.covers.toArray(), []) ?? []
+    useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? EMPTY_CATEGORIES
+  const specimens = useLiveQuery(() => db.specimens.toArray(), []) ?? EMPTY_SPECIMENS
+  const covers = useLiveQuery(() => db.covers.toArray(), []) ?? EMPTY_COVERS
+  const catalogs = useLiveQuery(() => db.tagCatalogs.toArray(), []) ?? EMPTY_CATALOGS
+  const roster = useLiveQuery(() => db.tagRoster.toArray(), []) ?? EMPTY_ROSTER
 
   const category = categories.find((c) => c.id === categoryId)
+  const requiredTags = category?.requiredTags ?? []
+  const tagFilters = useMemo(
+    () => dexFilterTagChoices(categories, requiredTags),
+    [categories, requiredTags],
+  )
+  const requiredKey = requiredTags.join('\0')
+
+  useEffect(() => {
+    const required = new Set(requiredKey ? requiredKey.split('\0') : [])
+    setFilterTags((tags) => {
+      const next = tags.filter((tag) => !required.has(tag))
+      return next.length === tags.length ? tags : next
+    })
+  }, [requiredKey])
   const trackOptions = useMemo(
     () =>
       categories.map((cat) => ({
@@ -75,25 +127,41 @@ export function DexPage() {
   )
 
   const allSlots = useMemo(
-    () => buildSlots(category, specimens, covers, ''),
-    [category, specimens, covers],
+    () => buildSlots(category, specimens, covers, catalogs, roster, '', silhouetteOnly, filterTags),
+    [category, specimens, covers, catalogs, roster, silhouetteOnly, filterTags],
   )
   const slots = useMemo(
-    () => (query.trim() ? buildSlots(category, specimens, covers, query) : allSlots),
-    [allSlots, category, specimens, covers, query],
+    () =>
+      query.trim()
+        ? buildSlots(category, specimens, covers, catalogs, roster, query, silhouetteOnly, filterTags)
+        : allSlots,
+    [allSlots, category, specimens, covers, catalogs, roster, query, silhouetteOnly, filterTags],
   )
+  const groups = useMemo(() => groupByGeneration(slots), [slots])
 
-  const filledCount = useMemo(
-    () => countFilledSpecies(specimens, category?.requiredTags ?? []),
-    [specimens, category],
+  const { filled: filledCount, total: catalogSize } = useMemo(
+    () => countFilledSlots(specimens, category?.requiredTags ?? [], catalogs, roster),
+    [specimens, category, catalogs, roster],
   )
-  const catalogSize = SPECIES.length
+  const filtering = silhouetteOnly || filterTags.length > 0
+  const filterCount = (silhouetteOnly ? 1 : 0) + filterTags.length
+  const limitedEmpty =
+    Boolean(category) &&
+    trackIsLimited(category?.requiredTags ?? [], catalogs) &&
+    catalogSize === 0
   const frameHeight = useFrameHeight()
   const { columns, rowHeight } = dexGridLayout(width, frameHeight)
-  const rowCount = Math.ceil(slots.length / columns)
+  const rows = useMemo(
+    () => buildDexVirtualRows(groups, columns, collapsed),
+    [groups, columns, collapsed],
+  )
+  const visibleSlots = useMemo(
+    () => groups.flatMap((group) => (collapsed.has(group.generation.id) ? [] : group.items)),
+    [groups, collapsed],
+  )
   const previewQueue = useMemo(
-    () => slots.flatMap((slot) => (slot.cover ? [slot.cover] : [])),
-    [slots],
+    () => visibleSlots.flatMap((slot) => (slot.cover ? [slot.cover] : [])),
+    [visibleSlots],
   )
   const previewIndex = preview ? previewQueue.findIndex((row) => row.id === preview.id) : -1
   const previewNext = listNeighbor(previewQueue, previewIndex, 1)
@@ -101,11 +169,18 @@ export function DexPage() {
   const previewUrl = usePreviewImage(preview?.imageId)
   const nextUrl = usePreviewImage(previewNext?.imageId)
   const prevUrl = usePreviewImage(previewPrev?.imageId)
+  const visibleIds = useMemo(() => groups.map((group) => group.generation.id), [groups])
+  const allExpanded = visibleIds.length > 0 && visibleIds.every((id) => !collapsed.has(id))
 
   const virtualizer = useVirtualizer({
-    count: rowCount,
+    count: rows.length,
     getScrollElement: () => host,
-    estimateSize: () => rowHeight,
+    estimateSize: (index) => {
+      const row = rows[index]
+      if (!row || row.kind === 'header') return dexGenHeaderHeight(row?.lead ?? true)
+      return rowHeight
+    },
+    getItemKey: (index) => rows[index]?.key ?? index,
     overscan: 8,
   })
 
@@ -118,22 +193,7 @@ export function DexPage() {
   }
 
   return (
-    <section>
-      <p className={`page-sub ${styles.back}`}>
-        <Link to="/dex" data-tone="dex">
-          <span aria-hidden="true">
-            <img
-              className={styles.backLogo}
-              src={`${import.meta.env.BASE_URL}${TAB_LOGOS.dex}`}
-              alt=""
-              width={20}
-              height={20}
-              draggable={false}
-            />
-          </span>
-          Pokédex
-        </Link>
-      </p>
+    <section className={styles.page}>
       <h1
         className={`page-title ${styles.title}`}
         data-tone={category ? toneForCategory(category) : 'dex'}
@@ -164,35 +224,104 @@ export function DexPage() {
           options={trackOptions}
           ariaLabel="Track"
           searchPlaceholder="Search tracks"
+          iconOnly
           onChange={(id) => {
             if (id !== category?.id) navigate(`/dex/${id}`)
           }}
         />
+        <button
+          type="button"
+          className={`btn ${styles.iconBtn}`}
+          data-tone="settings"
+          data-on={filtering ? 'true' : 'false'}
+          aria-label={filterCount > 0 ? `Filters, ${filterCount} active` : 'Filters'}
+          aria-haspopup="dialog"
+          aria-expanded={filtersOpen}
+          onClick={() => setFiltersOpen(true)}
+        >
+          <span aria-hidden="true">🏷️</span>
+          {filterCount > 0 ? <span className={styles.badge}>{filterCount}</span> : null}
+        </button>
         <SearchField
           className={styles.speciesSearch}
           value={query}
           onChange={setQuery}
-          placeholder="Filter species"
+          placeholder="Species"
         />
+        <button
+          type="button"
+          className={`btn ${styles.iconBtn}`}
+          disabled={visibleIds.length === 0}
+          aria-label={allExpanded ? 'Collapse All' : 'Expand All'}
+          onClick={() => {
+            if (allExpanded) setCollapsed(new Set(GENERATION_IDS))
+            else setCollapsed(new Set())
+          }}
+        >
+          <span aria-hidden="true">{allExpanded ? '▾' : '▸'}</span>
+        </button>
       </div>
+      {limitedEmpty ? (
+        <p className="empty-state">
+          No released species yet. Add them in{' '}
+          <Link to="/settings" data-tone="settings">
+            <span aria-hidden="true">⚙️</span> Settings
+          </Link>
+          .
+        </p>
+      ) : filtering && slots.length === 0 ? (
+        <p className="empty-state">
+          {query.trim()
+            ? 'No matching species.'
+            : filterTags.length > 0
+              ? 'No matching tags.'
+              : 'No silhouettes on this track.'}
+        </p>
+      ) : (
       <div ref={setHost} className={styles.gridHost}>
         <div style={{ height: virtualizer.getTotalSize(), position: 'relative' }}>
-          {virtualizer.getVirtualItems().map((row) => {
-            const start = row.index * columns
-            const slice = slots.slice(start, start + columns)
+          {virtualizer.getVirtualItems().map((item) => {
+            const row = rows[item.index]
+            if (!row) return null
+            if (row.kind === 'header') {
+              return (
+                <div
+                  key={row.key}
+                  className={styles.headerRow}
+                  data-lead={row.lead ? 'true' : 'false'}
+                  style={{
+                    height: `${item.size}px`,
+                    transform: `translateY(${item.start}px)`,
+                  }}
+                >
+                  <GenerationHeader
+                    generation={row.generation}
+                    expanded={!collapsed.has(row.generation.id)}
+                    onToggle={() =>
+                      setCollapsed((current) => {
+                        const next = new Set(current)
+                        if (next.has(row.generation.id)) next.delete(row.generation.id)
+                        else next.add(row.generation.id)
+                        return next
+                      })
+                    }
+                  />
+                </div>
+              )
+            }
             return (
               <div
                 key={row.key}
                 className={styles.row}
                 style={{
-                  height: `${row.size}px`,
-                  transform: `translateY(${row.start}px)`,
+                  height: `${item.size}px`,
+                  transform: `translateY(${item.start}px)`,
                   gridTemplateColumns: `repeat(${columns}, 1fr)`,
                 }}
               >
-                {slice.map((slot) => (
+                {row.slots.map((slot) => (
                   <DexSlotCard
-                    key={slot.speciesId}
+                    key={`${slot.speciesId}:${slot.variant}`}
                     slot={slot}
                     onOpen={() => {
                       if (slot.cover) setPreview(slot.cover)
@@ -204,6 +333,7 @@ export function DexPage() {
           })}
         </div>
       </div>
+      )}
       {preview && category ? (
         <CardPreview
           specimen={preview}
@@ -251,8 +381,19 @@ export function DexPage() {
           setEditingTags(false)
           if (
             !category ||
-            specimen.speciesId !== preview?.speciesId ||
-            !hasAllRequired(specimenTags(specimen), category.requiredTags)
+            !preview ||
+            (silhouetteOnly && !isSilhouette(specimen)) ||
+            !hasAllRequired(specimenTags(specimen), filterTags) ||
+            !specimenFillsSlot(
+              specimen,
+              category.requiredTags,
+              {
+                speciesId: preview.speciesId,
+                variant: slotVariantForTrack(preview, category.requiredTags, catalogs),
+                name: '',
+              },
+              catalogs,
+            )
           ) {
             setPreview(null)
             return
@@ -260,7 +401,74 @@ export function DexPage() {
           setPreview(specimen)
         }}
       />
+      <BottomSheet open={filtersOpen} title="Filters" onClose={() => setFiltersOpen(false)}>
+        <p className="page-sub">Show species that have every selected tag on one screenshot.</p>
+        <div className="chip-row">
+          <button
+            type="button"
+            className={styles.filterChip}
+            data-tone="nundo"
+            data-on={silhouetteOnly ? 'true' : 'false'}
+            aria-pressed={silhouetteOnly}
+            onClick={() => setSilhouetteOnly((on) => !on)}
+          >
+            <span aria-hidden="true">⬛</span>
+            Silhouette
+          </button>
+          {tagFilters.map((choice) => (
+            <TagChip
+              key={choice.tag}
+              tag={choice.tag as TagId}
+              selected={filterTags.includes(choice.tag as TagId)}
+              icon={choice.icon}
+              label={choice.label}
+              labelColor={choice.labelColor}
+              onClick={() => setFilterTags((tags) => toggleRequiredTags(tags, [choice.tag as TagId]))}
+            />
+          ))}
+        </div>
+        {filtering ? (
+          <button
+            type="button"
+            className={`btn ${styles.sheetClear}`}
+            onClick={() => {
+              setSilhouetteOnly(false)
+              setFilterTags([])
+            }}
+          >
+            <span aria-hidden="true">✖️</span>
+            Clear filters
+          </button>
+        ) : null}
+      </BottomSheet>
     </section>
+  )
+}
+
+function GenerationHeader({
+  generation,
+  expanded,
+  onToggle,
+}: {
+  generation: Generation
+  expanded: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button
+      type="button"
+      className={styles.genHeader}
+      style={categoryChromeStyle(generation.color)}
+      aria-expanded={expanded}
+      onClick={onToggle}
+    >
+      <span className={styles.genNumber}>{generation.id}</span>
+      <span className={styles.genName}>{generation.name}</span>
+      <span className={styles.genRule} aria-hidden="true" />
+      <span className={styles.genChevron} aria-hidden="true">
+        {expanded ? '▾' : '▸'}
+      </span>
+    </button>
   )
 }
 
@@ -286,38 +494,43 @@ function buildSlots(
   category: CategoryRow | undefined,
   specimens: SpecimenRow[],
   covers: CoverRow[],
+  catalogs: TagCatalogRow[],
+  roster: TagRosterRow[],
   query: string,
+  silhouetteOnly = false,
+  filterTags: readonly TagId[] = [],
 ): Slot[] {
   const required = category?.requiredTags ?? []
-  const bySpecies = new Map<number, SpecimenRow[]>()
-  for (const specimen of specimens) {
-    const list = bySpecies.get(specimen.speciesId) ?? []
-    list.push(specimen)
-    bySpecies.set(specimen.speciesId, list)
-  }
-  const coverMap = new Map<string, CoverRow>()
-  for (const cover of covers) {
-    if (category && cover.categoryId === category.id) {
-      coverMap.set(`${cover.categoryId}:${cover.speciesId}`, cover)
-    }
-  }
+  const defs = query.trim()
+    ? searchSlots(slotsForTrack(required, catalogs, roster), query)
+    : slotsForTrack(required, catalogs, roster)
+  const categoryCovers = category ? covers.filter((row) => row.categoryId === category.id) : []
+  const filtering = silhouetteOnly || filterTags.length > 0
 
-  const list = query.trim() ? searchSpecies(query) : SPECIES
-  return list.map((species) => {
-    const group = bySpecies.get(species.id) ?? []
-    const inCategory = group.some((s) => hasAllRequired(specimenTags(s), required))
-    const coverRow = category ? coverMap.get(`${category.id}:${species.id}`) : undefined
-    const cover =
-      (coverRow && group.find((s) => s.id === coverRow.specimenId)) ||
-      group.find((s) => hasAllRequired(specimenTags(s), required))
+  const slots: Slot[] = []
+  for (const def of defs) {
+    const group = specimens.filter((row) =>
+      specimenFillsSlot(row, required, def, catalogs),
+    )
+    const matching = group.filter((row) =>
+      specimenMatchesDexFilters(row, filterTags, silhouetteOnly),
+    )
+    if (!keepDexSlot(matching.length > 0, filtering)) continue
+    const coverRow = category
+      ? findCover(categoryCovers, category.id, def.speciesId, def.variant)
+      : undefined
+    const cover = pickDexCover(filtering ? matching : group, coverRow?.specimenId, silhouetteOnly)
+    const inCategory = group.length > 0
     const purity =
-      inCategory && cover ? coverPurity(specimenTags(cover), required) : null
-    return {
-      speciesId: species.id,
-      name: SPECIES_BY_ID.get(species.id)?.name ?? species.name,
+      cover ? coverPurity(specimenTags(cover), required, isSilhouette(cover)) : null
+    slots.push({
+      speciesId: def.speciesId,
+      variant: def.variant,
+      name: def.name,
       filled: inCategory,
       purity,
-      cover: inCategory ? cover : undefined,
-    }
-  })
+      cover: cover,
+    })
+  }
+  return slots
 }

@@ -1,13 +1,29 @@
-import { hasAllRequired, isExactMatch, specimenTags, type SpecimenFields, type TagId } from './tags'
+import {
+  SPECIES_SLOT_VARIANT,
+  specimenFillsSlot,
+  slotVariantForTrack,
+  type TagCatalog,
+} from './roster'
+import { hasAllRequired, isExactMatch, isSilhouette, specimenTags, type SpecimenFields, type TagId } from './tags'
 
 export type CoverPurity = 'green' | 'gray'
+
+export type CoverSilhouetteOpts = {
+  currentSilhouette?: boolean
+  incomingSilhouette?: boolean
+}
+
+function isGreenCover(tags: TagId[], required: TagId[], silhouette = false): boolean {
+  return !silhouette && isExactMatch(tags, required)
+}
 
 export function coverPurity(
   specimenTags: TagId[],
   required: TagId[],
+  silhouette = false,
 ): CoverPurity | null {
   if (!hasAllRequired(specimenTags, required)) return null
-  return isExactMatch(specimenTags, required) ? 'green' : 'gray'
+  return isGreenCover(specimenTags, required, silhouette) ? 'green' : 'gray'
 }
 
 export function speciesInCategory(
@@ -21,24 +37,25 @@ export function shouldAutoReplaceCover(
   required: TagId[],
   currentCoverTags: TagId[] | null,
   incomingTags: TagId[],
+  opts?: CoverSilhouetteOpts,
 ): boolean {
   if (!hasAllRequired(incomingTags, required)) return false
   if (!currentCoverTags) return true
-  const incomingExact = isExactMatch(incomingTags, required)
-  const currentExact = isExactMatch(currentCoverTags, required)
+  const incomingExact = isGreenCover(incomingTags, required, opts?.incomingSilhouette)
+  const currentExact = isGreenCover(currentCoverTags, required, opts?.currentSilhouette)
   return incomingExact && !currentExact
 }
 
 /** Prefer a remaining green cover, else the newest in-category photo. */
 export function pickCoverAfterDelete(
   required: TagId[],
-  remaining: { id: string; tags: TagId[]; createdAt: number }[],
+  remaining: { id: string; tags: TagId[]; createdAt: number; silhouette?: boolean }[],
 ): string | null {
   const candidates = remaining.filter((row) => hasAllRequired(row.tags, required))
   if (candidates.length === 0) return null
   const sorted = [...candidates].sort((a, b) => {
-    const aExact = isExactMatch(a.tags, required) ? 1 : 0
-    const bExact = isExactMatch(b.tags, required) ? 1 : 0
+    const aExact = isGreenCover(a.tags, required, a.silhouette) ? 1 : 0
+    const bExact = isGreenCover(b.tags, required, b.silhouette) ? 1 : 0
     if (aExact !== bExact) return bExact - aExact
     return b.createdAt - a.createdAt
   })
@@ -48,12 +65,21 @@ export function pickCoverAfterDelete(
 export type CoverRef = {
   categoryId: string
   speciesId: number
+  variant?: string
   specimenId: string
 }
 
 export type CoverMutation =
-  | { op: 'put'; categoryId: string; speciesId: number; specimenId: string }
-  | { op: 'delete'; categoryId: string; speciesId: number }
+  | { op: 'put'; categoryId: string; speciesId: number; variant: string; specimenId: string }
+  | { op: 'delete'; categoryId: string; speciesId: number; variant: string }
+
+function coverSlotKey(categoryId: string, speciesId: number, variant = SPECIES_SLOT_VARIANT) {
+  return `${categoryId}:${speciesId}:${variant}`
+}
+
+function coverVariantOf(row: CoverRef) {
+  return row.variant ?? SPECIES_SLOT_VARIANT
+}
 
 type CoverSpecimen = SpecimenFields & { id: string; createdAt: number }
 
@@ -67,54 +93,99 @@ export function coverMutationsAfterEdit(
   categories: { id: string; requiredTags: TagId[] }[],
   covers: CoverRef[],
   specimens: CoverSpecimen[],
+  catalogs: readonly TagCatalog[] = [],
 ): CoverMutation[] {
   const nextTags = specimenTags(updated)
-  const byKey = new Map(covers.map((row) => [`${row.categoryId}:${row.speciesId}`, { ...row }]))
+  const byKey = new Map(
+    covers.map((row) => [coverSlotKey(row.categoryId, row.speciesId, coverVariantOf(row)), { ...row }]),
+  )
   const mutations: CoverMutation[] = []
 
-  function applyPut(categoryId: string, speciesId: number, specimenId: string) {
-    const key = `${categoryId}:${speciesId}`
+  function applyPut(categoryId: string, speciesId: number, variant: string, specimenId: string) {
+    const key = coverSlotKey(categoryId, speciesId, variant)
     const current = byKey.get(key)
     if (current?.specimenId === specimenId) return
-    byKey.set(key, { categoryId, speciesId, specimenId })
-    mutations.push({ op: 'put', categoryId, speciesId, specimenId })
+    byKey.set(key, { categoryId, speciesId, variant, specimenId })
+    mutations.push({ op: 'put', categoryId, speciesId, variant, specimenId })
   }
 
-  function applyDelete(categoryId: string, speciesId: number) {
-    const key = `${categoryId}:${speciesId}`
+  function applyDelete(categoryId: string, speciesId: number, variant: string) {
+    const key = coverSlotKey(categoryId, speciesId, variant)
     if (!byKey.has(key)) return
     byKey.delete(key)
-    mutations.push({ op: 'delete', categoryId, speciesId })
+    mutations.push({ op: 'delete', categoryId, speciesId, variant })
   }
 
   for (const cover of covers) {
     if (cover.specimenId !== previous.id) continue
     const category = categories.find((row) => row.id === cover.categoryId)
+    const variant = coverVariantOf(cover)
     const stillHere =
       cover.speciesId === updated.speciesId &&
       Boolean(category) &&
-      hasAllRequired(nextTags, category?.requiredTags ?? [])
+      hasAllRequired(nextTags, category?.requiredTags ?? []) &&
+      slotVariantForTrack(updated, category?.requiredTags ?? [], catalogs) === variant
     if (stillHere) continue
-    const remaining = specimens
-      .filter((row) => row.speciesId === cover.speciesId)
-      .map((row) => ({ id: row.id, tags: specimenTags(row), createdAt: row.createdAt }))
+    const remaining = category
+      ? specimens
+          .filter((row) =>
+            specimenFillsSlot(
+              row,
+              category.requiredTags,
+              { speciesId: cover.speciesId, variant, name: '' },
+              catalogs,
+            ),
+          )
+          .map((row) => ({
+            id: row.id,
+            tags: specimenTags(row),
+            createdAt: row.createdAt,
+            silhouette: isSilhouette(row),
+          }))
+      : []
     const nextId = category ? pickCoverAfterDelete(category.requiredTags, remaining) : null
-    if (nextId) applyPut(cover.categoryId, cover.speciesId, nextId)
-    else applyDelete(cover.categoryId, cover.speciesId)
+    if (nextId) applyPut(cover.categoryId, cover.speciesId, variant, nextId)
+    else applyDelete(cover.categoryId, cover.speciesId, variant)
   }
 
   for (const category of categories) {
     if (!hasAllRequired(nextTags, category.requiredTags)) continue
-    const current = byKey.get(`${category.id}:${updated.speciesId}`)
+    const variant = slotVariantForTrack(updated, category.requiredTags, catalogs)
+    const current = byKey.get(coverSlotKey(category.id, updated.speciesId, variant))
     let currentTags: TagId[] | null = null
+    let currentSilhouette = false
     if (current) {
       const coverSpecimen = specimens.find((row) => row.id === current.specimenId)
       currentTags = coverSpecimen ? specimenTags(coverSpecimen) : null
+      currentSilhouette = isSilhouette(coverSpecimen)
     }
-    if (shouldAutoReplaceCover(category.requiredTags, currentTags, nextTags)) {
-      applyPut(category.id, updated.speciesId, updated.id)
+    if (
+      shouldAutoReplaceCover(category.requiredTags, currentTags, nextTags, {
+        currentSilhouette,
+        incomingSilhouette: isSilhouette(updated),
+      })
+    ) {
+      applyPut(category.id, updated.speciesId, variant, updated.id)
     }
   }
 
   return mutations
+}
+
+export function findCover(
+  covers: readonly CoverRef[],
+  categoryId: string,
+  speciesId: number,
+  variant = SPECIES_SLOT_VARIANT,
+): CoverRef | undefined {
+  const wanted = variant
+  const exact = covers.find(
+    (row) =>
+      row.categoryId === categoryId &&
+      row.speciesId === speciesId &&
+      coverVariantOf(row) === wanted,
+  )
+  if (exact) return exact
+  if (wanted !== SPECIES_SLOT_VARIANT) return undefined
+  return covers.find((row) => row.categoryId === categoryId && row.speciesId === speciesId)
 }

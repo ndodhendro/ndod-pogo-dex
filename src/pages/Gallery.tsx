@@ -13,7 +13,7 @@ import { categoryChromeStyle } from '../lib/categoryStyle'
 import { db, type SpecimenRow } from '../lib/db'
 import { listNeighbor } from '../lib/previewSwipe'
 import { toastAfterWrite, useToast } from '../lib/toast'
-import { hasAllRequired, specimenTags } from '../lib/tags'
+import { hasAllRequired, isSilhouette, specimenTags } from '../lib/tags'
 import styles from './Gallery.module.css'
 
 export function GalleryPage() {
@@ -29,13 +29,14 @@ export function GalleryPage() {
       () => db.specimens.where('speciesId').equals(Number(speciesId)).reverse().sortBy('createdAt'),
       [speciesId],
     ) ?? []
-  const cover = useLiveQuery(
-    () =>
-      categoryId && speciesId
-        ? db.covers.get([categoryId, Number(speciesId)])
-        : undefined,
-    [categoryId, speciesId],
-  )
+  const coverRows =
+    useLiveQuery(
+      () =>
+        categoryId && speciesId
+          ? db.covers.where('[categoryId+speciesId]').equals([categoryId, Number(speciesId)]).toArray()
+          : [],
+      [categoryId, speciesId],
+    ) ?? []
   const [preview, setPreview] = useState<SpecimenRow | null>(null)
   const [editingTags, setEditingTags] = useState(false)
   const previewIndex = preview ? specimens.findIndex((row) => row.id === preview.id) : -1
@@ -78,10 +79,10 @@ export function GalleryPage() {
             <GalleryCard
               key={specimen.id}
               specimen={specimen}
-              isCover={cover?.specimenId === specimen.id}
+              isCover={coverRows.some((row) => row.specimenId === specimen.id)}
               purity={
-                cover?.specimenId === specimen.id && category
-                  ? coverPurity(specimenTags(specimen), category.requiredTags)
+                coverRows.some((row) => row.specimenId === specimen.id) && category
+                  ? coverPurity(specimenTags(specimen), category.requiredTags, isSilhouette(specimen))
                   : null
               }
               onOpen={() => setPreview(specimen)}

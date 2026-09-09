@@ -80,3 +80,31 @@
   object-fit: contain;
   object-position: top;
 }
+
+.checkRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--tap-min);
+  margin: var(--space-2) 0 var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-weight: 600;
+  letter-spacing: var(--letter-ui);
+  cursor: pointer;
+}
+
+.checkCopy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.checkRow input {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
+}

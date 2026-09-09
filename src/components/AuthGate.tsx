@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { isAuthConfigured, signInWithGoogle, subscribeToSession, getSession } from '../lib/auth'
 import { hydrateCategoriesFromCloud, subscribeCategoryChanges } from '../lib/categorySync'
-import { backupAllMetadata } from '../lib/sync'
+import { backupAllMetadata, hydrateCatalogsFromCloud } from '../lib/sync'
 import { useToast } from '../lib/toast'
 import styles from './AuthGate.module.css'
 
@@ -57,6 +57,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
       const hydrateMessage = await hydrateCategoriesFromCloud()
       if (cancelled) return
       if (hydrateMessage) showToast(hydrateMessage, 'warning')
+      const catalogMessage = await hydrateCatalogsFromCloud()
+      if (cancelled) return
+      if (catalogMessage) showToast(catalogMessage, 'warning')
       unsubscribe = subscribeCategoryChanges(session.user.id)
       const backupMessage = await backupAllMetadata()
       if (cancelled) return

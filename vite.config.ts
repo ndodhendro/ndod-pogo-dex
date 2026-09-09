@@ -16,7 +16,7 @@ function pagesBase(path = viteBasePath) {
 function lanIPv4() {
   return Object.values(os.networkInterfaces())
     .flat()
-    .find((net) => net && (net.family === 'IPv4' || net.family === 4) && !net.internal)?.address
+    .find((net) => net && !net.internal && ['IPv4', '4'].includes(String(net.family)))?.address
 }
 
 function lanHostnamesPlugin(): Plugin {

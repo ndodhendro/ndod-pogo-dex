@@ -249,6 +249,17 @@ export function specimenTagChoices(categories: TagCategoryLook[]): SpecimenTagCh
   return choices
 }
 
+/** Atomic tags for the dex grid filter. Track-required tags are already implied. */
+export function dexFilterTagChoices(
+  categories: TagCategoryLook[],
+  requiredTags: readonly TagId[] = [],
+): SpecimenTagChoice[] {
+  const skip = new Set(requiredTags)
+  return specimenTagChoices(categories).filter(
+    (choice) => choice.tag != null && !skip.has(choice.tag),
+  )
+}
+
 export function toneForForm(form: string | null): UiTone {
   if (!form) return 'default'
   const key = form.toLowerCase()

@@ -183,6 +183,48 @@
   background: var(--color-surface);
 }
 
+.dexEditors {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.dexEditor {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.dexTag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--tone, var(--color-settings-text));
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-ui);
+}
+
+.segment {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.segment button {
+  min-height: var(--tap-min);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-weight: 600;
+  letter-spacing: var(--letter-ui);
+}
+
+.segment button[data-on='true'] {
+  background: var(--color-accent-soft);
+  border-color: transparent;
+  color: var(--color-living-text);
+}
+
 .prefToggle {
   display: flex;
   width: 100%;

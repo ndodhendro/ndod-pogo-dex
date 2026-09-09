@@ -20,6 +20,7 @@ type Props = {
   className?: string
   searchPlaceholder?: string
   ariaLabel?: string
+  iconOnly?: boolean
 }
 
 export function SearchableSelect({
@@ -29,6 +30,7 @@ export function SearchableSelect({
   className,
   searchPlaceholder = 'Search',
   ariaLabel,
+  iconOnly = false,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
@@ -65,19 +67,24 @@ export function SearchableSelect({
         className={styles.trigger}
         data-tone={selected.tone}
         data-open={open ? 'true' : 'false'}
+        data-icon-only={iconOnly ? 'true' : undefined}
         style={selected.labelColor ? categoryChromeStyle(selected.labelColor) : undefined}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={ariaLabel ? `${ariaLabel}: ${selected.label}` : undefined}
+        aria-label={ariaLabel ? `${ariaLabel}: ${selected.label}` : selected.label}
         onClick={() => setOpen((next) => !next)}
       >
         <span className={styles.icon} aria-hidden="true">
           {selected.icon}
         </span>
-        <span className={styles.label}>{selected.label}</span>
-        <span className={styles.chevron} aria-hidden="true">
-          ▾
-        </span>
+        {iconOnly ? null : (
+          <>
+            <span className={styles.label}>{selected.label}</span>
+            <span className={styles.chevron} aria-hidden="true">
+              ▾
+            </span>
+          </>
+        )}
       </button>
       {open ? (
         <div className={styles.menu}>

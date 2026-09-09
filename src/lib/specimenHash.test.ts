@@ -56,6 +56,10 @@ describe('sameSpecimenMetadata', () => {
   it('notices a tag change on the same screenshot', () => {
     expect(sameSpecimenMetadata(base, { ...base, shiny: false })).toBe(false)
   })
+
+  it('notices a silhouette flag change', () => {
+    expect(sameSpecimenMetadata(base, { ...base, silhouette: true })).toBe(false)
+  })
 })
 
 describe('pickSpecimenToKeepForHash', () => {

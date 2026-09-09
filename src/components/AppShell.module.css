@@ -17,6 +17,8 @@
   align-items: center;
   justify-content: center;
   gap: 0.15rem;
+  margin: var(--space-1) var(--space-2);
+  border-radius: var(--radius-md);
   font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: var(--letter-ui);
@@ -35,7 +37,7 @@
   width: 1.5rem;
   height: 1.5rem;
   object-fit: contain;
-  opacity: 0.82;
+  opacity: 0.55;
   pointer-events: none;
 }
 
@@ -52,6 +54,8 @@
 
 .active {
   color: var(--tone, var(--color-accent));
+  background: var(--tone-soft, var(--color-accent-soft));
+  box-shadow: inset 0 2px 0 var(--tone-fill, var(--color-accent));
   font-weight: var(--font-weight-bold);
 }
 

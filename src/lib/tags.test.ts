@@ -102,7 +102,12 @@ describe('toggleTag', () => {
       hundo: false,
       nundo: false,
       extraTags: [],
+      silhouette: false,
     })
+  })
+
+  it('keeps the silhouette flag when visual tags are cleared', () => {
+    expect(clearVisualTags({ ...toggleTag(base(), 'shiny'), silhouette: true }).silhouette).toBe(true)
   })
 })
 
@@ -136,5 +141,10 @@ describe('fieldsFromSpecimen', () => {
     extraTags.push('xxl')
     expect(fields.shiny).toBe(true)
     expect(fields.extraTags).toEqual(['lucky'])
+    expect(fields.silhouette).toBe(false)
+  })
+
+  it('copies the silhouette flag', () => {
+    expect(fieldsFromSpecimen({ ...base(), silhouette: true }).silhouette).toBe(true)
   })
 })

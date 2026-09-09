@@ -1,6 +1,7 @@
-import { SCREENSHOT_WIDTH } from './images'
+import type { Generation } from '../data/generations'
 import { MAX_TAG_CROP_HEIGHT } from '../data/tagCrops'
-import { hasAllRequired, specimenTags, type SpecimenFields, type TagId } from './tags'
+import { SCREENSHOT_WIDTH } from './images'
+import { hasAllRequired, isSilhouette, specimenTags, type SpecimenFields, type TagId } from './tags'
 
 /** Matches Dex grid: min card 112px, 8px gaps (`--space-2`), crop frame + label. */
 export const DEX_COL_GAP = 8
@@ -9,6 +10,43 @@ export const DEX_MIN_COLUMNS = 3
 export const DEX_MAX_COLUMNS = 6
 export const DEX_LABEL_STACK = 36
 export const DEX_ROW_GAP = 8
+export const DEX_GEN_HEADER_HEIGHT = 44
+export const DEX_GEN_SECTION_GAP = 16
+
+export type DexVirtualRow<T> =
+  | { kind: 'header'; key: string; generation: Generation; lead: boolean }
+  | { kind: 'cards'; key: string; generationId: number; slots: T[] }
+
+export function dexGenHeaderHeight(lead: boolean) {
+  return lead ? DEX_GEN_HEADER_HEIGHT : DEX_GEN_HEADER_HEIGHT + DEX_GEN_SECTION_GAP
+}
+
+export function buildDexVirtualRows<T extends { speciesId: number }>(
+  groups: readonly { generation: Generation; items: readonly T[] }[],
+  columns: number,
+  collapsed: ReadonlySet<number>,
+): DexVirtualRow<T>[] {
+  const cols = Math.max(1, columns)
+  const rows: DexVirtualRow<T>[] = []
+  for (const group of groups) {
+    rows.push({
+      kind: 'header',
+      key: `h-${group.generation.id}`,
+      generation: group.generation,
+      lead: rows.length === 0,
+    })
+    if (collapsed.has(group.generation.id)) continue
+    for (let i = 0; i < group.items.length; i += cols) {
+      rows.push({
+        kind: 'cards',
+        key: `c-${group.generation.id}-${i}`,
+        generationId: group.generation.id,
+        slots: group.items.slice(i, i + cols),
+      })
+    }
+  }
+  return rows
+}
 
 export function dexCardAspect(frameHeight = MAX_TAG_CROP_HEIGHT) {
   return frameHeight / SCREENSHOT_WIDTH
@@ -45,8 +83,35 @@ export function countFilledSpecies(
   const filled = new Set<number>()
   const tags = [...required]
   for (const specimen of specimens) {
-    if (filled.has(specimen.speciesId)) continue
+    if (isSilhouette(specimen) || filled.has(specimen.speciesId)) continue
     if (hasAllRequired(specimenTags(specimen), tags)) filled.add(specimen.speciesId)
   }
   return filled.size
+}
+
+export function pickDexCover<T extends { id: string; silhouette?: boolean }>(
+  group: readonly T[],
+  coverId: string | undefined,
+  silhouetteOnly = false,
+): T | undefined {
+  if (silhouetteOnly) {
+    const silhouettes = group.filter(isSilhouette)
+    if (silhouettes.length === 0) return undefined
+    return silhouettes.find((row) => row.id === coverId) ?? silhouettes[0]
+  }
+  if (group.length === 0) return undefined
+  return group.find((row) => row.id === coverId) ?? group[0]
+}
+
+export function keepDexSlot(hasMatch: boolean, filtering: boolean): boolean {
+  return !filtering || hasMatch
+}
+
+export function specimenMatchesDexFilters(
+  specimen: SpecimenFields,
+  filterTags: readonly TagId[] = [],
+  silhouetteOnly = false,
+): boolean {
+  if (silhouetteOnly && !isSilhouette(specimen)) return false
+  return hasAllRequired(specimenTags(specimen), [...filterTags])
 }
