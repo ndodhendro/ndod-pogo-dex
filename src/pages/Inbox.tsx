@@ -129,6 +129,7 @@ export function InboxPage() {
       <BottomSheet
         open={Boolean(pendingDiscard)}
         title="Discard screenshot"
+        showClose={false}
         onClose={() => {
           if (discardBusy) return
           setPendingDiscard(null)

@@ -4,7 +4,7 @@ import {
   LEGACY_SEED_CLOUD_IDS,
   toCloudCategoryId,
 } from '../data/seedCategories'
-import { mapCloudCategory } from './categorySyncPlan'
+import { categoryUpsertRow, includeSortOrderOnUpsert, mapCloudCategory } from './categorySyncPlan'
 import { db, type CategoryRow, type SpecimenRow, type TagCatalogRow, type TagRosterRow } from './db'
 import { hashBlob } from './hash'
 import { normalizeVariant, type SlotMode } from './roster'
@@ -32,6 +32,7 @@ export type CloudSpecimen = {
   shadowStatus: ShadowStatus
   costume: string | null
   background: string | null
+  gender?: string | null
   hundo: boolean
   nundo: boolean
   extraTags?: TagId[]
@@ -95,7 +96,26 @@ export async function ensureFileHash(specimen: SpecimenRow): Promise<string | nu
   return fileHash
 }
 
-export async function pushCategories(): Promise<string | undefined> {
+async function existingCloudCategoryIds(userId: string): Promise<Set<string> | string> {
+  const supabase = getSupabase()
+  if (!supabase) return new Set()
+  const ids = new Set<string>()
+  const page = 1000
+  for (let from = 0; ; from += page) {
+    const { data, error } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('user_id', userId)
+      .range(from, from + page - 1)
+    if (error) return error.message
+    const batch = data ?? []
+    for (const row of batch) ids.add(row.id as string)
+    if (batch.length < page) break
+  }
+  return ids
+}
+
+export async function pushCategories(opts?: { syncOrder?: boolean }): Promise<string | undefined> {
   const supabase = getSupabase()
   const userId = await signedInUserId()
   if (!supabase || !userId) return
@@ -103,18 +123,25 @@ export async function pushCategories(): Promise<string | undefined> {
   const ownedLegacy = await ownedLegacySeedIds(userId)
   if (typeof ownedLegacy === 'string') return ownedLegacy
 
+  const syncOrder = opts?.syncOrder === true
+  let existingIds = new Set<string>()
+  if (!syncOrder) {
+    const existing = await existingCloudCategoryIds(userId)
+    if (typeof existing === 'string') return existing
+    existingIds = existing
+  }
+
   const categories = await db.categories.toArray()
   const { error } = await supabase.from('categories').upsert(
-    categories.map((row) => ({
-      id: toCloudCategoryId(row.id, userId, ownedLegacy),
-      user_id: userId,
-      name: row.name,
-      required_tags: row.requiredTags,
-      sort_order: row.sortOrder,
-      seed: row.seed,
-      emoji: row.emoji ?? null,
-      label_color: row.labelColor ?? null,
-    })),
+    categories.map((row) => {
+      const cloudId = toCloudCategoryId(row.id, userId, ownedLegacy)
+      return categoryUpsertRow(
+        row,
+        userId,
+        ownedLegacy,
+        includeSortOrderOnUpsert(syncOrder, existingIds.has(cloudId)),
+      )
+    }),
   )
   if (error) return error.message
   await markCategoriesBackedUp(categories.map((row) => row.id))
@@ -135,6 +162,7 @@ function specimenCloudRow(
     shadow_status: specimen.shadowStatus,
     costume: specimen.costume,
     background: specimen.background,
+    gender: specimen.gender ?? null,
     hundo: specimen.hundo,
     nundo: specimen.nundo,
     extra_tags: extraTagList(specimen),
@@ -295,22 +323,27 @@ export async function pushCoversForCategory(categoryId: string): Promise<string 
   if (error) return error.message
 }
 
-export async function pushCategory(row: CategoryRow) {
+export async function pushCategory(row: CategoryRow, opts?: { syncOrder?: boolean }) {
   const supabase = getSupabase()
   const userId = await signedInUserId()
   if (!supabase || !userId) return
   const ownedLegacy = await ownedLegacySeedIds(userId)
   if (typeof ownedLegacy === 'string') return ownedLegacy
-  const { error } = await supabase.from('categories').upsert({
-    id: toCloudCategoryId(row.id, userId, ownedLegacy),
-    user_id: userId,
-    name: row.name,
-    required_tags: row.requiredTags,
-    sort_order: row.sortOrder,
-    seed: row.seed,
-    emoji: row.emoji ?? null,
-    label_color: row.labelColor ?? null,
-  })
+  const syncOrder = opts?.syncOrder === true
+  let alreadyInCloud = false
+  if (!syncOrder) {
+    const existing = await existingCloudCategoryIds(userId)
+    if (typeof existing === 'string') return existing
+    alreadyInCloud = existing.has(toCloudCategoryId(row.id, userId, ownedLegacy))
+  }
+  const { error } = await supabase.from('categories').upsert(
+    categoryUpsertRow(
+      row,
+      userId,
+      ownedLegacy,
+      includeSortOrderOnUpsert(syncOrder, alreadyInCloud),
+    ),
+  )
   if (error) return error.message
   await markCategoriesBackedUp([row.id])
 }
@@ -599,6 +632,7 @@ export async function pullCloudCollection(): Promise<{
     shadow_status: ShadowStatus
     costume: string | null
     background: string | null
+    gender?: string | null
     hundo: boolean
     nundo: boolean
     extra_tags?: string[] | null
@@ -653,6 +687,7 @@ export async function pullCloudCollection(): Promise<{
         shadowStatus: row.shadow_status,
         costume: row.costume,
         background: row.background,
+        gender: row.gender ?? null,
         hundo: row.hundo,
         nundo: row.nundo,
         extraTags: extraTagList({ extraTags: row.extra_tags ?? [] }),

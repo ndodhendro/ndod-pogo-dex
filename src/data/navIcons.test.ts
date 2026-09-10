@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { colorForCategory, iconForCategory, iconForForm, lookForTag, requiredTagChoices, specimenTagChoices, dexFilterTagChoices, suggestedLook, toneForCategory, toneForForm } from './navIcons'
+import { colorForCategory, iconForCategory, iconForForm, lookForTag, requiredTagChoices, specimenTagChoices, dexFilterTagChoices, dexLockedFilterTags, suggestedLook, toneForCategory, toneForForm } from './navIcons'
 
 describe('nav icons', () => {
   it('maps seed category names', () => {
@@ -60,6 +60,15 @@ describe('nav icons', () => {
     expect(lookForTag('hundo', categories)).toEqual({ emoji: '💯', labelColor: '#fcd34d' })
   })
 
+  it('uses the empty-tag seed track for the Basic catalog', () => {
+    expect(
+      lookForTag('basic', [
+        { seed: true, name: 'Basic', requiredTags: [], emoji: '🌿', labelColor: '#6ee7b7' },
+        { seed: true, name: 'Shadow', requiredTags: ['shadow'] as const },
+      ]),
+    ).toEqual({ emoji: '🌿', labelColor: '#6ee7b7' })
+  })
+
   it('lists only existing categories as required-tag choices', () => {
     const choices = requiredTagChoices([
       { id: 'seed:living', seed: true, name: 'Basic', requiredTags: [] },
@@ -97,14 +106,14 @@ describe('nav icons', () => {
       { seed: true, name: 'Hundo', requiredTags: ['hundo'], emoji: '💯' },
     ])
     expect(choices.map((row) => row.tag)).toEqual([
-      null,
+      'basic',
+      'shadow',
+      'hundo',
       'alolan',
       'galarian',
       'hisuian',
       'paldean',
       'mega',
-      'shadow',
-      'hundo',
       'dynamax',
       'gigantamax',
       'lucky',
@@ -115,19 +124,48 @@ describe('nav icons', () => {
       'gender',
       'max-cp',
     ])
-    expect(choices[0]).toMatchObject({ tag: null, label: 'Basic', icon: '🌿' })
+    expect(choices[0]).toMatchObject({ tag: 'basic', label: 'Basic', icon: '🌿' })
     expect(choices.find((row) => row.tag === 'shadow')).toMatchObject({ label: 'Shadow', icon: '🌑' })
     expect(choices.find((row) => row.tag === 'alolan')).toMatchObject({ label: 'Alolan', icon: '🌺' })
   })
 
-  it('drops Basic and tags already required by the current track', () => {
+  it('lists specimen tags in category sort_order', () => {
+    const choices = specimenTagChoices([
+      { seed: true, name: 'Hundo', requiredTags: ['hundo'], sortOrder: 2, emoji: '💯' },
+      { seed: true, name: 'Alolan', requiredTags: ['alolan'], sortOrder: 1, emoji: '🌺' },
+      { seed: true, name: 'Basic', requiredTags: [], sortOrder: 0 },
+      { seed: true, name: 'Shadow', requiredTags: ['shadow'], sortOrder: 3, emoji: '🌑' },
+    ])
+    expect(choices.map((row) => row.tag).slice(0, 4)).toEqual(['basic', 'alolan', 'hundo', 'shadow'])
+  })
+
+  it('keeps the current track tags in the dex filter', () => {
     const categories = [
       { seed: true, name: 'Basic', requiredTags: [] },
       { seed: true, name: 'Shadow', requiredTags: ['shadow'], emoji: '🌑' },
       { seed: true, name: 'Shiny', requiredTags: ['shiny'], emoji: '✨' },
+      { seed: true, name: 'Hundo', requiredTags: ['hundo'], emoji: '💯' },
     ]
-    expect(dexFilterTagChoices(categories, ['shadow']).map((row) => row.tag)).not.toContain(null)
-    expect(dexFilterTagChoices(categories, ['shadow']).map((row) => row.tag)).not.toContain('shadow')
-    expect(dexFilterTagChoices(categories, ['shadow']).map((row) => row.tag)).toContain('shiny')
+    expect(dexLockedFilterTags([])).toEqual(['basic'])
+    expect(dexLockedFilterTags(['shadow'])).toEqual(['shadow'])
+    expect(dexLockedFilterTags(['shadow', 'hundo'])).toEqual(['shadow', 'hundo'])
+    expect(dexFilterTagChoices(categories, ['shadow']).map((row) => row.tag).slice(0, 4)).toEqual([
+      'basic',
+      'shadow',
+      'shiny',
+      'hundo',
+    ])
+    expect(dexFilterTagChoices(categories, []).map((row) => row.tag).slice(0, 4)).toEqual([
+      'basic',
+      'shadow',
+      'shiny',
+      'hundo',
+    ])
+    expect(dexFilterTagChoices(categories, ['shadow', 'hundo']).map((row) => row.tag).slice(0, 4)).toEqual([
+      'basic',
+      'shadow',
+      'shiny',
+      'hundo',
+    ])
   })
 })

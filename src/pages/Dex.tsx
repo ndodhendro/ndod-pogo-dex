@@ -11,7 +11,14 @@ import { SearchableSelect } from '../components/SearchableSelect'
 import { SpecimenTagSheet } from '../components/TagSheet'
 import { TagChip } from '../components/TagChip'
 import { GENERATION_IDS, groupByGeneration, type Generation } from '../data/generations'
-import { colorForCategory, dexFilterTagChoices, iconForCategory, toneForCategory } from '../data/navIcons'
+import {
+  colorForCategory,
+  dexFilterTagChoices,
+  dexLockedFilterTags,
+  iconForCategory,
+  SEEN_ICON,
+  toneForCategory,
+} from '../data/navIcons'
 import { useDexCollapse } from '../hooks/useDexCollapse'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { useTrackFrameHeight } from '../hooks/useCropSettings'
@@ -104,19 +111,23 @@ export function DexPage() {
 
   const category = categories.find((c) => c.id === categoryId)
   const requiredTags = category?.requiredTags ?? []
+  const requiredKey = requiredTags.join('\0')
+  const lockedFilterTags = useMemo(
+    () => dexLockedFilterTags(requiredKey ? requiredKey.split('\0') : []),
+    [requiredKey],
+  )
+  const lockedFilterSet = useMemo(() => new Set(lockedFilterTags), [lockedFilterTags])
   const tagFilters = useMemo(
     () => dexFilterTagChoices(categories, requiredTags),
     [categories, requiredTags],
   )
-  const requiredKey = requiredTags.join('\0')
 
   useEffect(() => {
-    const required = new Set(requiredKey ? requiredKey.split('\0') : [])
     setFilterTags((tags) => {
-      const next = tags.filter((tag) => !required.has(tag))
+      const next = tags.filter((tag) => !lockedFilterSet.has(tag))
       return next.length === tags.length ? tags : next
     })
-  }, [requiredKey])
+  }, [lockedFilterSet])
   const trackOptions = useMemo(
     () =>
       categories.map((cat) => ({
@@ -142,12 +153,14 @@ export function DexPage() {
   )
   const groups = useMemo(() => groupByGeneration(slots), [slots])
 
-  const { filled: filledCount, total: catalogSize } = useMemo(
+  const { seen, caught, pure, total: catalogSize } = useMemo(
     () => countFilledSlots(specimens, category?.requiredTags ?? [], catalogs, roster),
     [specimens, category, catalogs, roster],
   )
   const filtering = silhouetteOnly || filterTags.length > 0 || Boolean(query.trim())
-  const filterCount = (silhouetteOnly ? 1 : 0) + filterTags.length + (query.trim() ? 1 : 0)
+  const selectedTagCount =
+    filterTags.length === 0 ? 0 : filterTags.length + lockedFilterTags.length
+  const filterCount = (silhouetteOnly ? 1 : 0) + selectedTagCount + (query.trim() ? 1 : 0)
   const limitedEmpty =
     Boolean(category) &&
     trackIsLimited(category?.requiredTags ?? [], catalogs) &&
@@ -253,7 +266,9 @@ export function DexPage() {
       </div>
       <DexProgress
         compact
-        filled={filledCount}
+        seen={seen}
+        caught={caught}
+        pure={pure}
         total={catalogSize}
         ariaLabel={`${category?.name ?? 'Pokédex'} completion`}
         tone={category ? toneForCategory(category) : 'dex'}
@@ -273,7 +288,7 @@ export function DexPage() {
             ? 'No matching species.'
             : filterTags.length > 0
               ? 'No matching tags.'
-              : 'No silhouettes on this track.'}
+              : 'None seen on this track.'}
         </p>
       ) : (
       <div ref={setHost} className={styles.gridHost}>
@@ -430,20 +445,25 @@ export function DexPage() {
             aria-pressed={silhouetteOnly}
             onClick={() => setSilhouetteOnly((on) => !on)}
           >
-            <span aria-hidden="true">⬛</span>
-            Silhouette
+            <span aria-hidden="true">{SEEN_ICON}</span>
+            Seen
           </button>
-          {tagFilters.map((choice) => (
-            <TagChip
-              key={choice.tag}
-              tag={choice.tag as TagId}
-              selected={filterTags.includes(choice.tag as TagId)}
-              icon={choice.icon}
-              label={choice.label}
-              labelColor={choice.labelColor}
-              onClick={() => setFilterTags((tags) => toggleRequiredTags(tags, [choice.tag as TagId]))}
-            />
-          ))}
+          {tagFilters.map((choice) => {
+            const tag = choice.tag as TagId
+            const locked = lockedFilterSet.has(tag)
+            return (
+              <TagChip
+                key={tag}
+                tag={tag}
+                selected={locked || filterTags.includes(tag)}
+                locked={locked}
+                icon={choice.icon}
+                label={choice.label}
+                labelColor={choice.labelColor}
+                onClick={() => setFilterTags((tags) => toggleRequiredTags(tags, [tag]))}
+              />
+            )
+          })}
         </div>
       </BottomSheet>
     </section>
@@ -528,7 +548,15 @@ function buildSlots(
     const cover = pickDexCover(filtering ? matching : group, coverRow?.specimenId, silhouetteOnly)
     const inCategory = group.length > 0
     const purity =
-      cover ? coverPurity(specimenTags(cover), required, isSilhouette(cover)) : null
+      cover
+        ? coverPurity(
+            specimenTags(cover),
+            required,
+            isSilhouette(cover),
+            cover.speciesId,
+            cover.gender,
+          )
+        : null
     slots.push({
       speciesId: def.speciesId,
       variant: def.variant,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { coverMutationsAfterEdit, coverPurity, pickCoverAfterDelete, speciesInCategory, shouldAutoReplaceCover } from './covers'
-import { hasAllRequired, isExactMatch, specimenTags, visualKey, type SpecimenFields } from './tags'
+import { hasAllRequired, isExactMatch, specimenTags, visualKey, type SpecimenFields, type TagId } from './tags'
 
 const shadowGray = specimenTags({
   speciesId: 1,
@@ -82,6 +82,9 @@ describe('tags', () => {
     expect(visualKey(base)).not.toBe(visualKey({ ...base, costume: 'Party' }))
     expect(visualKey({ ...base, costume: null, background: 'Tokyo' })).not.toBe(
       visualKey({ ...base, costume: null, background: 'Paris' }),
+    )
+    expect(visualKey({ ...base, extraTags: ['gender'], gender: 'Male' })).not.toBe(
+      visualKey({ ...base, extraTags: ['gender'], gender: 'Female' }),
     )
   })
 
@@ -201,6 +204,60 @@ describe('covers', () => {
       shouldAutoReplaceCover(['shadow'], shadowPure, shadowPure, { incomingSilhouette: true }),
     ).toBe(false)
   })
+
+  it('treats extra gender as green on any non-Gender category', () => {
+    expect(coverPurity(['gender'], [])).toBe('green')
+    expect(coverPurity(['basic'], [])).toBe('green')
+    expect(coverPurity(['basic', 'gender'], [])).toBe('green')
+    expect(coverPurity(['shadow', 'gender'], ['shadow'])).toBe('green')
+    expect(coverPurity(['shadow', 'hundo', 'gender'], ['shadow', 'hundo'])).toBe('green')
+    expect(coverPurity(['hisuian', 'gender'], ['hisuian'], false, 215)).toBe('green')
+    expect(coverPurity(['hisuian', 'gender'], ['hisuian'], false, 58)).toBe('green')
+    expect(coverPurity(['shadow', 'shiny', 'gender'], ['shadow'])).toBe('gray')
+  })
+
+  it('keeps Gender green only for gender or gender+basic, except Hisuian Sneasel', () => {
+    expect(coverPurity(['gender'], ['gender'], false, 3, 'Male')).toBe('green')
+    expect(coverPurity(['gender', 'basic'], ['gender'], false, 3, 'Female')).toBe('green')
+    expect(coverPurity(['gender', 'hisuian'], ['gender'], false, 3, 'Male')).toBe('gray')
+    expect(coverPurity(['gender', 'shiny'], ['gender'])).toBe('gray')
+    expect(coverPurity(['gender'], ['gender'], false, 215, 'Male')).toBe('green')
+    expect(coverPurity(['gender', 'basic'], ['gender'], false, 215, 'Female')).toBe('green')
+    expect(coverPurity(['gender', 'hisuian'], ['gender'], false, 215, 'Male')).toBe('gray')
+    expect(coverPurity(['gender'], ['gender'], false, 215, 'Hisuian Male')).toBe('gray')
+    expect(coverPurity(['gender', 'basic'], ['gender'], false, 215, 'Hisuian Female')).toBe('gray')
+    expect(coverPurity(['gender', 'hisuian'], ['gender'], false, 215, 'Hisuian Male')).toBe('green')
+    expect(coverPurity(['gender', 'hisuian', 'shiny'], ['gender'], false, 215, 'Hisuian Male')).toBe(
+      'gray',
+    )
+    expect(
+      coverPurity(['gender', 'hisuian'], ['gender'], true, 215, 'Hisuian Male'),
+    ).toBe('gray')
+    expect(
+      shouldAutoReplaceCover(['gender'], ['gender'], ['gender', 'hisuian'], {
+        speciesId: 215,
+        currentGender: 'Hisuian Male',
+        incomingGender: 'Hisuian Male',
+      }),
+    ).toBe(true)
+    expect(
+      shouldAutoReplaceCover(['gender'], ['gender'], ['gender', 'hisuian'], {
+        speciesId: 215,
+        currentGender: 'Male',
+        incomingGender: 'Male',
+      }),
+    ).toBe(false)
+    expect(
+      pickCoverAfterDelete(
+        ['gender'],
+        [
+          { id: 'only', tags: ['gender'], createdAt: 3, gender: 'Hisuian Male' },
+          { id: 'pair', tags: ['gender', 'hisuian'], createdAt: 1, gender: 'Hisuian Male' },
+        ],
+        215,
+      ),
+    ).toBe('pair')
+  })
 })
 
 type CoverSpecimen = SpecimenFields & { id: string; createdAt: number }
@@ -309,5 +366,41 @@ describe('coverMutationsAfterEdit', () => {
         [sil, incoming],
       ),
     ).toEqual([{ op: 'put', categoryId: 'shadow', speciesId: 1, variant: '', specimenId: 'incoming' }])
+  })
+
+  it('auto-replaces a gray Hisuian Sneasel Gender cover with gender+hisuian', () => {
+    const genderCat = { id: 'gender', requiredTags: ['gender'] as TagId[] }
+    const catalogs = [{ tag: 'gender' as TagId, limitPokedex: true, slotMode: 'variant' as const }]
+    const gray = spec({
+      id: 'gray',
+      speciesId: 215,
+      extraTags: ['gender'],
+      gender: 'Hisuian Male',
+    })
+    const incoming = spec({
+      id: 'incoming',
+      speciesId: 215,
+      extraTags: ['gender', 'hisuian'],
+      gender: 'Hisuian Male',
+      createdAt: 2,
+    })
+    expect(
+      coverMutationsAfterEdit(
+        incoming,
+        incoming,
+        [genderCat],
+        [{ categoryId: 'gender', speciesId: 215, variant: 'Hisuian Male', specimenId: 'gray' }],
+        [gray, incoming],
+        catalogs,
+      ),
+    ).toEqual([
+      {
+        op: 'put',
+        categoryId: 'gender',
+        speciesId: 215,
+        variant: 'Hisuian Male',
+        specimenId: 'incoming',
+      },
+    ])
   })
 })

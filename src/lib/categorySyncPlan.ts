@@ -1,4 +1,4 @@
-import { fromCloudCategoryId, seedCategoryById } from '../data/seedCategories'
+import { fromCloudCategoryId, seedCategoryById, toCloudCategoryId } from '../data/seedCategories'
 import type { CategoryRow } from './db'
 import type { TagId } from './tags'
 
@@ -31,6 +31,41 @@ export function mapCloudCategory(row: CloudCategoryRaw, userId: string): Categor
   }
 }
 
+export type CategoryUpsertRow = {
+  id: string
+  user_id: string
+  name: string
+  required_tags: TagId[]
+  seed: boolean
+  emoji: string | null
+  label_color: string | null
+  sort_order?: number
+}
+
+/** Cloud owns sort_order. Send it only on reorder, or when inserting a row that is not in cloud yet. */
+export function includeSortOrderOnUpsert(syncOrder: boolean, alreadyInCloud: boolean) {
+  return syncOrder || !alreadyInCloud
+}
+
+export function categoryUpsertRow(
+  row: CategoryRow,
+  userId: string,
+  ownedLegacy: ReadonlySet<string>,
+  includeSortOrder: boolean,
+): CategoryUpsertRow {
+  const payload: CategoryUpsertRow = {
+    id: toCloudCategoryId(row.id, userId, ownedLegacy),
+    user_id: userId,
+    name: row.name,
+    required_tags: row.requiredTags,
+    seed: row.seed,
+    emoji: row.emoji ?? null,
+    label_color: row.labelColor ?? null,
+  }
+  if (includeSortOrder) payload.sort_order = row.sortOrder
+  return payload
+}
+
 export function mergeCategoryPull(local: CategoryRow[], cloud: CategoryRow[]): {
   next: CategoryRow[]
   removeIds: string[]
@@ -41,8 +76,9 @@ export function mergeCategoryPull(local: CategoryRow[], cloud: CategoryRow[]): {
 
   for (const row of cloud) {
     const existing = localById.get(row.id)
-    if (existing && !existing.seed && categoryNeedsCloudBackup(existing)) next.push(existing)
-    else next.push(row)
+    if (existing && !existing.seed && categoryNeedsCloudBackup(existing)) {
+      next.push({ ...existing, sortOrder: row.sortOrder })
+    } else next.push(row)
     used.add(row.id)
   }
 

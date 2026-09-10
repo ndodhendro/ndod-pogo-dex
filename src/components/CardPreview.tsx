@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { categoryForTag, lookForTag } from '../data/navIcons'
+import { categoryForTag, lookForTag, SEEN_ICON } from '../data/navIcons'
 import { SPECIES_BY_ID } from '../data/species'
 import { db, type SpecimenRow } from '../lib/db'
 import {
@@ -15,6 +15,7 @@ import {
 import { coverPurity } from '../lib/covers'
 import { isSilhouette, specimenTags, labelForTag, type TagId } from '../lib/tags'
 import { usePreviewAnimations } from '../lib/previewPrefs'
+import { BottomSheet } from './BottomSheet'
 import { TagChip } from './TagChip'
 import styles from './CardPreview.module.css'
 
@@ -147,6 +148,7 @@ export function CardPreview({
         }
         return
       }
+      if (confirmDelete) return
       if (e.key === 'Escape' || e.key === 'ArrowUp') {
         e.preventDefault()
         beginClose('close-up')
@@ -166,7 +168,7 @@ export function CardPreview({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [locked, lightbox, beginClose, onNext, onPrev])
+  }, [locked, lightbox, confirmDelete, beginClose, onNext, onPrev])
 
   useEffect(() => {
     const el = photoRef.current
@@ -295,13 +297,20 @@ export function CardPreview({
     showFx &&
     (typeof window === 'undefined' || !window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   const showAura = showFx && !carousel
-  const purity = coverPurity(tags, requiredTags, isSilhouette(specimen))
+  const purity = coverPurity(
+    tags,
+    requiredTags,
+    isSilhouette(specimen),
+    specimen.speciesId,
+    specimen.gender,
+  )
 
   return (
+    <>
     <div
       className={styles.backdrop}
       data-closing={closing ? 'true' : undefined}
-      onClick={locked ? undefined : () => beginClose('close-down')}
+      onClick={locked || confirmDelete ? undefined : () => beginClose('close-down')}
       role="presentation"
     >
       <div
@@ -384,58 +393,31 @@ export function CardPreview({
               )
             })}
             {isSilhouette(specimen) ? (
-              <TagChip tag="silhouette" selected icon="⬛" label="Silhouette" />
+              <TagChip tag="silhouette" selected icon={SEEN_ICON} label="Seen" />
             ) : null}
           </div>
         </div>
-        {confirmDelete ? (
-          <>
-            <p className="page-sub">
-              Remove this specimen from the collection? The screenshot will be gone.
-            </p>
-            <div className={styles.actions}>
-              <button
-                type="button"
-                className="btn"
-                disabled={deleting}
-                onClick={() => setConfirmDelete(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger"
-                disabled={deleting}
-                onClick={() => void confirmRemove()}
-              >
-                <span aria-hidden="true">🗑️</span>
-                {deleting ? 'Deleting…' : 'Delete'}
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className={styles.actions}>
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={!canSetCover}
-              onClick={onSetCover}
-            >
-              Set as cover
-            </button>
-            <button type="button" className="btn" onClick={onOpenGallery}>
-              Species gallery
-            </button>
-            <button type="button" className="btn" onClick={onEditTags}>
-              <span aria-hidden="true">🏷️</span>
-              Edit tags
-            </button>
-            <button type="button" className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
-              <span aria-hidden="true">🗑️</span>
-              Delete
-            </button>
-          </div>
-        )}
+        <div className={styles.actions}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!canSetCover}
+            onClick={onSetCover}
+          >
+            Set as cover
+          </button>
+          <button type="button" className="btn" onClick={onOpenGallery}>
+            Species gallery
+          </button>
+          <button type="button" className="btn" onClick={onEditTags}>
+            <span aria-hidden="true">🏷️</span>
+            Edit tags
+          </button>
+          <button type="button" className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
+            <span aria-hidden="true">🗑️</span>
+            Delete
+          </button>
+        </div>
       </div>
       {lightbox && imageUrl ? (
         <div
@@ -460,6 +442,39 @@ export function CardPreview({
         </div>
       ) : null}
     </div>
+    <BottomSheet
+      open={confirmDelete}
+      nested
+      showClose={false}
+      title="Delete specimen"
+      onClose={() => {
+        if (deleting) return
+        setConfirmDelete(false)
+      }}
+    >
+      <p className={`page-sub ${styles.confirmCopy}`}>
+        Delete this specimen from the collection? The screenshot will be gone.
+      </p>
+      <div className="row-actions">
+        <button
+          type="button"
+          className="btn"
+          disabled={deleting}
+          onClick={() => setConfirmDelete(false)}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn btn-danger"
+          disabled={deleting}
+          onClick={() => void confirmRemove()}
+        >
+          {deleting ? 'Deleting…' : 'Delete'}
+        </button>
+      </div>
+    </BottomSheet>
+    </>
   )
 }
 
@@ -615,7 +630,15 @@ function PreviewPhoto({
 }) {
   const tags = slide ? specimenTags(slide.specimen) : []
   const name = slide ? SPECIES_BY_ID.get(slide.specimen.speciesId)?.name : undefined
-  const purity = slide ? coverPurity(tags, requiredTags, isSilhouette(slide.specimen)) : null
+  const purity = slide
+    ? coverPurity(
+        tags,
+        requiredTags,
+        isSilhouette(slide.specimen),
+        slide.specimen.speciesId,
+        slide.specimen.gender,
+      )
+    : null
   return (
     <div className={styles.slide}>
       <div

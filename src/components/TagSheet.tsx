@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { categoryForTag, specimenTagChoices } from '../data/navIcons'
+import { categoryForTag, SEEN_ICON, specimenTagChoices } from '../data/navIcons'
 import { cropHeightForTags } from '../data/tagCrops'
 import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
@@ -10,18 +10,19 @@ import { db, type SpecimenRow } from '../lib/db'
 import { cropBottomFromBlob, SCREENSHOT_WIDTH } from '../lib/images'
 import {
   applyRosterSlot,
-  canEnableLimitedTag,
   limitedRosterWarning,
+  normalizeVariant,
   searchSlots,
   slotBoxLabel,
   slotDisplayName,
   slotsForSelectedTags,
-  usesRosterVariantField,
+  slotVariantForTrack,
+  variantFieldComesFromSlot,
+  type TagCatalog,
 } from '../lib/roster'
 import { parseCropBottom } from '../lib/screenshotCrop'
 import { useToast } from '../lib/toast'
 import {
-  clearVisualTags,
   cropTagsFromFields,
   fieldsFromSpecimen,
   labelForTag,
@@ -44,23 +45,36 @@ const emptyFields = (): SpecimenFields => ({
   shadowStatus: 'none',
   costume: null,
   background: null,
+  gender: null,
   hundo: false,
   nundo: false,
-  extraTags: [],
+  extraTags: ['basic'],
   silhouette: false,
 })
 
-function selectedSlotLabel(fields: SpecimenFields, tags: TagId[]) {
+function rosterVariantNames(
+  roster: readonly { tag: string; speciesId: number; variant: string }[],
+  tag: TagId,
+  speciesId: number,
+) {
+  const names = new Set<string>()
+  for (const row of roster) {
+    if (row.tag !== tag) continue
+    if (speciesId && row.speciesId !== speciesId) continue
+    const name = normalizeVariant(row.variant)
+    if (name) names.add(name)
+  }
+  return [...names].sort((a, b) => a.localeCompare(b))
+}
+
+function selectedSlotLabel(
+  fields: SpecimenFields,
+  tags: TagId[],
+  catalogs: readonly TagCatalog[],
+) {
   const species = fields.speciesId ? SPECIES_BY_ID.get(fields.speciesId) : undefined
   if (!species) return ''
-  const variant =
-    fields.costume?.trim() && tags.includes('costume')
-      ? fields.costume.trim()
-      : fields.background?.trim() && tags.includes('background')
-        ? fields.background.trim()
-        : tags.includes('alternate-forme') && fields.form?.trim()
-          ? fields.form.trim()
-          : ''
+  const variant = slotVariantForTrack(fields, tags, catalogs)
   return slotBoxLabel({
     speciesId: species.id,
     variant,
@@ -118,10 +132,25 @@ export function TagSheet({
   const tags = specimenTags(fields)
   const suggestedHeight = cropHeightForTags(cropTagsFromFields(fields), heightMap)
   const cropBottom = parseCropBottom(heightDraft, suggestedHeight)
-  const selectedLabel = selectedSlotLabel(fields, tags)
+  const selectedLabel = selectedSlotLabel(fields, tags, catalogs)
   const availableSlots = useMemo(
     () => slotsForSelectedTags(tags, catalogs, roster),
     [tags, catalogs, roster],
+  )
+  const costumeFromSlot = variantFieldComesFromSlot('costume', tags, catalogs, availableSlots)
+  const backgroundFromSlot = variantFieldComesFromSlot(
+    'background',
+    tags,
+    catalogs,
+    availableSlots,
+  )
+  const costumeNames = useMemo(
+    () => rosterVariantNames(roster, 'costume', fields.speciesId),
+    [roster, fields.speciesId],
+  )
+  const backgroundNames = useMemo(
+    () => rosterVariantNames(roster, 'background', fields.speciesId),
+    [roster, fields.speciesId],
   )
   const matches = useMemo(() => {
     if (!query.trim() || query === selectedLabel) return []
@@ -141,7 +170,7 @@ export function TagSheet({
     const next = seed ? fieldsFromSpecimen(seed) : emptyFields()
     setFields(next)
     const species = next.speciesId ? SPECIES_BY_ID.get(next.speciesId) : undefined
-    setQuery(species ? selectedSlotLabel(next, specimenTags(next)) : '')
+    setQuery(species ? selectedSlotLabel(next, specimenTags(next), []) : '')
   }, [open, resetKey])
 
   useEffect(() => {
@@ -183,13 +212,18 @@ export function TagSheet({
 
   async function save() {
     let warning = specimenSaveWarning(fields)
-    if (warning === 'Enter a costume name' && usesRosterVariantField('costume', catalogs)) {
+    if (
+      warning === 'Enter a costume name' &&
+      variantFieldComesFromSlot('costume', tags, catalogs, availableSlots)
+    ) {
       warning = 'Pick a released costume'
     } else if (
       warning === 'Enter a background name' &&
-      usesRosterVariantField('background', catalogs)
+      variantFieldComesFromSlot('background', tags, catalogs, availableSlots)
     ) {
       warning = 'Pick a released background'
+    } else if (warning === 'Pick a gender variant') {
+      warning = 'Pick a released gender variant'
     }
     if (!warning) {
       warning = limitedRosterWarning(fields, catalogs, roster, (tag) =>
@@ -207,6 +241,7 @@ export function TagSheet({
           ...fields,
           costume: normalizeOptionalName(fields.costume),
           background: normalizeOptionalName(fields.background),
+          gender: fields.gender != null ? normalizeOptionalName(fields.gender) : null,
         },
         cropBottom,
       )
@@ -218,7 +253,7 @@ export function TagSheet({
   }
 
   return (
-    <BottomSheet open={open} title={title} nested={nested} onClose={onClose}>
+    <BottomSheet open={open} title={title} nested={nested} showClose={false} onClose={onClose}>
       <div className={styles.tabs} role="tablist" aria-label={title} data-tone={tone}>
         <button
           type="button"
@@ -256,7 +291,7 @@ export function TagSheet({
               setQuery(value)
               setFields((f) => {
                 if (!f.speciesId) return f
-                if (value === selectedSlotLabel(f, specimenTags(f))) return f
+                if (value === selectedSlotLabel(f, specimenTags(f), catalogs)) return f
                 return { ...f, speciesId: 0 }
               })
             }}
@@ -289,52 +324,75 @@ export function TagSheet({
                 <TagChip
                   key={choice.tag ?? 'empty-look'}
                   tag={choice.tag ?? 'living'}
-                  selected={choice.tag == null ? tags.length === 0 : tags.includes(choice.tag)}
+                  selected={choice.tag != null && tags.includes(choice.tag)}
                   icon={choice.icon}
                   label={choice.label}
                   labelColor={choice.labelColor}
                   onClick={() => {
-                    if (choice.tag == null) {
-                      setFields((f) => clearVisualTags(f))
-                      return
-                    }
-                    const on = tags.includes(choice.tag)
-                    if (!on && !canEnableLimitedTag(fields, choice.tag, catalogs, roster)) {
-                      const name =
-                        categoryForTag(categories, choice.tag)?.name ?? labelForTag(choice.tag)
-                      onWarning(`Not in the ${name} Pokédex`)
-                      return
-                    }
-                    setFields((f) => toggleTag(f, choice.tag as TagId))
+                    if (choice.tag == null) return
+                    setFields({ ...toggleTag(fields, choice.tag), speciesId: 0 })
+                    setQuery('')
                   }}
                 />
               ))}
             </div>
           </div>
-          {fields.costume !== null && !usesRosterVariantField('costume', catalogs) ? (
+          {fields.costume !== null && !costumeFromSlot ? (
             <label className="field">
               <span>Costume name</span>
               <input
                 value={fields.costume}
-                onChange={(e) => setFields((f) => ({ ...f, costume: e.target.value }))}
-                placeholder="Holiday hat"
+                list="tag-costume-names"
+                onChange={(e) => {
+                  const costume = e.target.value
+                  setFields((current) => {
+                    const next = { ...current, costume }
+                    const label = selectedSlotLabel(next, specimenTags(next), catalogs)
+                    if (label) setQuery(label)
+                    return next
+                  })
+                }}
+                placeholder="Party Hat"
               />
+              {costumeNames.length > 0 ? (
+                <datalist id="tag-costume-names">
+                  {costumeNames.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+              ) : null}
             </label>
           ) : null}
-          {fields.background !== null && !usesRosterVariantField('background', catalogs) ? (
+          {fields.background !== null && !backgroundFromSlot ? (
             <label className="field">
               <span>Background</span>
               <input
                 value={fields.background}
-                onChange={(e) => setFields((f) => ({ ...f, background: e.target.value }))}
+                list="tag-background-names"
+                onChange={(e) => {
+                  const background = e.target.value
+                  setFields((current) => {
+                    const next = { ...current, background }
+                    const label = selectedSlotLabel(next, specimenTags(next), catalogs)
+                    if (label) setQuery(label)
+                    return next
+                  })
+                }}
                 placeholder="Tokyo"
               />
+              {backgroundNames.length > 0 ? (
+                <datalist id="tag-background-names">
+                  {backgroundNames.map((name) => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+              ) : null}
             </label>
           ) : null}
           <label className={styles.checkRow}>
             <span className={styles.checkCopy}>
-              <span aria-hidden="true">⬛</span>
-              Silhouette
+              <span aria-hidden="true">{SEEN_ICON}</span>
+              Seen
             </span>
             <input
               type="checkbox"

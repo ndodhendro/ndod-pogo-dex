@@ -5,7 +5,7 @@ import {
   normalizeHexColor,
 } from '../lib/categoryStyle'
 import { FORM_TAGS, formNameForTag, isBuiltInTag, type BuiltInTagId, type TagId } from '../lib/tags'
-import { EXTRA_SPECIMEN_TAGS } from './tagCrops'
+import { BASIC_CROP_TAG, EXTRA_SPECIMEN_TAGS } from './tagCrops'
 
 export type UiTone =
   | 'inbox'
@@ -24,6 +24,8 @@ export const TAB_ICONS = {
   inbox: '📥',
   settings: '⚙️',
 } as const
+
+export const SEEN_ICON = '👁️'
 
 export const TAB_LOGOS = {
   dex: 'nav/pokedex.png',
@@ -138,12 +140,29 @@ type TagCategoryLook = {
   seed: boolean
   name: string
   requiredTags: TagId[]
+  sortOrder?: number
   emoji?: string | null
   labelColor?: string | null
 }
 
+function categoriesBySortOrder<T extends TagCategoryLook>(categories: T[]): T[] {
+  return categories
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const delta =
+        (a.row.sortOrder ?? Number.MAX_SAFE_INTEGER) - (b.row.sortOrder ?? Number.MAX_SAFE_INTEGER)
+      return delta !== 0 ? delta : a.index - b.index
+    })
+    .map((item) => item.row)
+}
+
 export function categoryForTag(categories: TagCategoryLook[], tag: TagId) {
-  return categories.find((row) => row.requiredTags.length === 1 && row.requiredTags[0] === tag)
+  const exact = categories.find((row) => row.requiredTags.length === 1 && row.requiredTags[0] === tag)
+  if (exact) return exact
+  if (tag === BASIC_CROP_TAG) {
+    return categories.find((row) => row.seed && row.requiredTags.length === 0)
+  }
+  return undefined
 }
 
 export function lookForTag(tag: TagId, categories: TagCategoryLook[]): { emoji: string; labelColor: string } {
@@ -199,12 +218,24 @@ export type SpecimenTagChoice = {
 export function specimenTagChoices(categories: TagCategoryLook[]): SpecimenTagChoice[] {
   const seen = new Set<string>()
   const choices: SpecimenTagChoice[] = []
-  for (const cat of categories) {
-    if (cat.requiredTags.length !== 0) continue
-    if (seen.has('')) continue
-    seen.add('')
+  for (const cat of categoriesBySortOrder(categories)) {
+    if (cat.requiredTags.length === 0) {
+      if (seen.has(BASIC_CROP_TAG)) continue
+      seen.add(BASIC_CROP_TAG)
+      choices.push({
+        tag: BASIC_CROP_TAG,
+        label: cat.name,
+        icon: iconForCategory(cat),
+        labelColor: colorForCategory(cat),
+      })
+      continue
+    }
+    if (cat.requiredTags.length !== 1) continue
+    const tag = cat.requiredTags[0]
+    if (seen.has(tag)) continue
+    seen.add(tag)
     choices.push({
-      tag: null,
+      tag,
       label: cat.name,
       icon: iconForCategory(cat),
       labelColor: colorForCategory(cat),
@@ -222,18 +253,6 @@ export function specimenTagChoices(categories: TagCategoryLook[]): SpecimenTagCh
       labelColor: look.labelColor,
     })
   }
-  for (const cat of categories) {
-    if (cat.requiredTags.length !== 1) continue
-    const tag = cat.requiredTags[0]
-    if (seen.has(tag)) continue
-    seen.add(tag)
-    choices.push({
-      tag,
-      label: cat.name,
-      icon: iconForCategory(cat),
-      labelColor: colorForCategory(cat),
-    })
-  }
   for (const extra of EXTRA_SPECIMEN_TAGS) {
     if (seen.has(extra.tag)) continue
     seen.add(extra.tag)
@@ -249,15 +268,30 @@ export function specimenTagChoices(categories: TagCategoryLook[]): SpecimenTagCh
   return choices
 }
 
-/** Atomic tags for the dex grid filter. Track-required tags are already implied. */
+/** Tags implied by the current dex track. Shown selected and locked in the filter sheet. */
+export function dexLockedFilterTags(requiredTags: readonly TagId[] = []): TagId[] {
+  return requiredTags.length === 0 ? [BASIC_CROP_TAG] : [...requiredTags]
+}
+
+/** Atomic tags for the dex grid filter. Current-track tags stay visible and locked selected. */
 export function dexFilterTagChoices(
   categories: TagCategoryLook[],
   requiredTags: readonly TagId[] = [],
 ): SpecimenTagChoice[] {
-  const skip = new Set(requiredTags)
-  return specimenTagChoices(categories).filter(
-    (choice) => choice.tag != null && !skip.has(choice.tag),
-  )
+  const choices = specimenTagChoices(categories).filter((choice) => choice.tag != null)
+  const seen = new Set(choices.map((choice) => choice.tag))
+  for (const tag of dexLockedFilterTags(requiredTags)) {
+    if (seen.has(tag)) continue
+    const look = lookForTag(tag, categories)
+    const named = categoryForTag(categories, tag)
+    choices.push({
+      tag,
+      label: named?.name ?? tag,
+      icon: look.emoji,
+      labelColor: look.labelColor,
+    })
+  }
+  return choices
 }
 
 export function toneForForm(form: string | null): UiTone {

@@ -27,6 +27,7 @@ export function sameSpecimenMetadata(a: SpecimenFields, b: SpecimenFields): bool
     a.shadowStatus === b.shadowStatus &&
     (a.costume ?? null) === (b.costume ?? null) &&
     (a.background ?? null) === (b.background ?? null) &&
+    (a.gender ?? null) === (b.gender ?? null) &&
     a.hundo === b.hundo &&
     a.nundo === b.nundo &&
     isSilhouette(a) === isSilhouette(b) &&

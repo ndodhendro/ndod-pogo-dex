@@ -7,8 +7,13 @@ alwaysApply: true
 
 Each category shows one cover photo per species. Purity is relative to that category's required tags.
 
-**Green border:** cover specimen tags **equal** the category's required tags (no extras).
-**Gray border:** species is in the category (has all required tags) but the cover has extra tags.
+**Green border:** cover specimen tags **equal** the category's required tags (no extras), except:
+
+- Any category except Gender: required tags plus `gender` only is still green. Basic (`[]`) also treats a stored `basic` extra tag as the empty look, so `{basic}` and `{basic, gender}` are green there.
+- Gender `[gender]`: green only for `{gender}` or `{gender, basic}`.
+- Gender, Hisuian Sneasel only (variant Hisuian Male / Hisuian Female): green only for `{gender, hisuian}`. Johto Sneasel Male/Female follow the normal Gender rule.
+
+**Gray border:** species is in the category (has all required tags) but the cover is not green.
 
 Cover rules:
 

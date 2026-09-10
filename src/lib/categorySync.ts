@@ -36,9 +36,9 @@ export async function applyRemoteCategoryChange(
 ) {
   const id = fromCloudCategoryId(raw.id, userId, { name: raw.name, seed: raw.seed })
   const local = await db.categories.get(id)
-  if (!shouldApplyRemoteCategory(local)) return
 
   if (event === 'DELETE') {
+    if (!shouldApplyRemoteCategory(local)) return
     await db.transaction('rw', db.categories, db.covers, async () => {
       await db.covers.where('categoryId').equals(id).delete()
       await db.categories.delete(id)
@@ -47,6 +47,13 @@ export async function applyRemoteCategoryChange(
   }
 
   const row = mapCloudCategory(raw, userId)
+  if (!shouldApplyRemoteCategory(local)) {
+    if (local && local.sortOrder !== row.sortOrder) {
+      await db.categories.update(id, { sortOrder: row.sortOrder })
+    }
+    return
+  }
+
   await db.categories.put(row)
   await ensureCustomCategoryTags()
   const { refreshCoversForCategory } = await import('./collection')

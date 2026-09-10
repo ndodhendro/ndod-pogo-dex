@@ -7,6 +7,7 @@ import {
   toggleRequiredTags,
   toggleTag,
   allocateCategoryTag,
+  labelForTag,
   resolveRequiredTags,
   type SpecimenFields,
 } from './tags'
@@ -35,6 +36,15 @@ describe('specimenSaveWarning', () => {
   it('is empty when the specimen can be saved', () => {
     expect(specimenSaveWarning(base())).toBe('')
     expect(specimenSaveWarning({ ...base(), costume: 'Holiday hat', background: 'Tokyo' })).toBe('')
+    expect(
+      specimenSaveWarning({ ...base(), extraTags: ['gender'], gender: 'Female' }),
+    ).toBe('')
+  })
+
+  it('asks for a gender variant when the Gender tag is on', () => {
+    expect(specimenSaveWarning({ ...base(), extraTags: ['gender'], gender: '' })).toBe(
+      'Pick a gender variant',
+    )
   })
 })
 
@@ -62,10 +72,35 @@ describe('toggleTag', () => {
     expect(toggleTag(withCostume, 'costume').costume).toBe(null)
   })
 
+  it('lets Basic pair only with Gender', () => {
+    const basic = toggleTag(base(), 'basic')
+    expect(basic.extraTags).toEqual(['basic'])
+    const both = toggleTag(basic, 'gender')
+    expect(both.extraTags).toEqual(['basic', 'gender'])
+    expect(toggleTag(both, 'shiny').extraTags).toEqual(['gender'])
+    expect(toggleTag(both, 'shiny').shiny).toBe(true)
+    const fromShiny = toggleTag({ ...toggleTag(base(), 'shiny'), extraTags: ['gender'], gender: 'Male' }, 'basic')
+    expect(fromShiny.shiny).toBe(false)
+    expect(fromShiny.extraTags).toEqual(['basic', 'gender'])
+    expect(fromShiny.gender).toBe('Male')
+  })
+
+  it('toggles gender on extraTags and clears the variant when off', () => {
+    const withGender = toggleTag(base(), 'gender')
+    expect(withGender.extraTags).toEqual(['gender'])
+    expect(withGender.gender).toBe('')
+    expect(toggleTag(withGender, 'gender')).toMatchObject({ extraTags: [], gender: null })
+  })
+
   it('toggles a custom category tag on extraTags', () => {
     const withLucky = toggleTag(base(), 'lucky')
     expect(withLucky.extraTags).toEqual(['lucky'])
     expect(toggleTag(withLucky, 'lucky').extraTags).toEqual([])
+  })
+
+  it('does not clear a picked species', () => {
+    expect(toggleTag(base(), 'shiny').speciesId).toBe(25)
+    expect(toggleTag(toggleTag(base(), 'costume'), 'shadow').speciesId).toBe(25)
   })
 
   it('lets any tags stack, including GO-impossible pairs', () => {
@@ -99,6 +134,7 @@ describe('toggleTag', () => {
       shadowStatus: 'none',
       costume: null,
       background: null,
+      gender: null,
       hundo: false,
       nundo: false,
       extraTags: [],
@@ -118,6 +154,10 @@ describe('resolveRequiredTags', () => {
 
   it('keeps the Basic seed empty', () => {
     expect(resolveRequiredTags([], { name: 'Basic', seed: true })).toEqual([])
+  })
+
+  it('labels the empty-look catalog as Basic', () => {
+    expect(labelForTag('basic')).toBe('Basic')
   })
 
   it('does not invent a combo tag when existing tags are picked', () => {

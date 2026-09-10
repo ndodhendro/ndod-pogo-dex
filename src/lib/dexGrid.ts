@@ -143,6 +143,30 @@ export function formatDexCompletionPercent(filled: number, total: number): strin
   return `${dexCompletionPercent(filled, total).toFixed(2)}%`
 }
 
+export const DEX_PROGRESS_KINDS = ['seen', 'caught', 'pure'] as const
+export type DexProgressKind = (typeof DEX_PROGRESS_KINDS)[number]
+
+export type DexProgressLayer = {
+  kind: DexProgressKind
+  current: number
+  percent: number
+}
+
+/** Highest fill first (back of the bar). Ties keep Seen, then Caught, then Pure. */
+export function stackDexProgressLayers(
+  counts: Record<DexProgressKind, number>,
+  total: number,
+): DexProgressLayer[] {
+  return DEX_PROGRESS_KINDS.map((kind) => ({
+    kind,
+    current: counts[kind],
+    percent: dexCompletionPercent(counts[kind], total),
+  })).sort((a, b) => {
+    if (b.percent !== a.percent) return b.percent - a.percent
+    return DEX_PROGRESS_KINDS.indexOf(a.kind) - DEX_PROGRESS_KINDS.indexOf(b.kind)
+  })
+}
+
 /** Unique species with at least one specimen that satisfies the track. */
 export function countFilledSpecies(
   specimens: readonly SpecimenFields[],

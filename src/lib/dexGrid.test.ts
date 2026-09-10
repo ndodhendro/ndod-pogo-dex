@@ -3,6 +3,7 @@ import { GENERATIONS } from '../data/generations'
 import {
   buildDexVirtualRows,
   countFilledSpecies,
+  stackDexProgressLayers,
   DEX_GEN_HEADER_HEIGHT,
   DEX_GEN_SECTION_GAP,
   dexAnimatedCardRowHeight,
@@ -58,6 +59,32 @@ describe('dexCompletionPercent', () => {
   it('is empty when the catalog is missing', () => {
     expect(dexCompletionPercent(4, 0)).toBe(0)
     expect(formatDexCompletionPercent(4, 0)).toBe('0.00%')
+  })
+})
+
+describe('stackDexProgressLayers', () => {
+  it('puts the highest fill behind the lower fills', () => {
+    expect(stackDexProgressLayers({ seen: 80, caught: 50, pure: 20 }, 100).map((layer) => layer.kind)).toEqual([
+      'seen',
+      'caught',
+      'pure',
+    ])
+  })
+
+  it('orders by value, not by kind name', () => {
+    expect(stackDexProgressLayers({ seen: 10, caught: 40, pure: 90 }, 100).map((layer) => layer.kind)).toEqual([
+      'pure',
+      'caught',
+      'seen',
+    ])
+  })
+
+  it('keeps Seen at the back when fills tie', () => {
+    expect(stackDexProgressLayers({ seen: 40, caught: 40, pure: 10 }, 100).map((layer) => layer.kind)).toEqual([
+      'seen',
+      'caught',
+      'pure',
+    ])
   })
 })
 

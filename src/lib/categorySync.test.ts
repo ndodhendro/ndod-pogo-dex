@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { perUserSeedCloudId } from '../data/seedCategories'
 import {
   categoryNeedsCloudBackup,
+  categoryUpsertRow,
+  includeSortOrderOnUpsert,
   mapCloudCategory,
   mergeCategoryPull,
   shouldApplyRemoteCategory,
@@ -120,7 +122,27 @@ describe('mergeCategoryPull', () => {
         cloudBackupPending: false,
       }),
     ]
-    expect(mergeCategoryPull([pending], cloud).next).toEqual([pending])
+    expect(mergeCategoryPull([pending], cloud).next).toEqual([{ ...pending, sortOrder: 9 }])
+  })
+
+  it('always takes sort_order from cloud even when a local custom edit is pending', () => {
+    const pending = local({
+      id: 'cat-1',
+      name: 'Lucky edit',
+      requiredTags: ['lucky'],
+      sortOrder: 2,
+      cloudBackupPending: true,
+    })
+    const cloud = [
+      local({
+        id: 'cat-1',
+        name: 'Lucky',
+        requiredTags: ['lucky'],
+        sortOrder: 9,
+        cloudBackupPending: false,
+      }),
+    ]
+    expect(mergeCategoryPull([pending], cloud).next).toEqual([{ ...pending, sortOrder: 9 }])
   })
 
   it('drops acked local rows that are gone from cloud', () => {
@@ -178,5 +200,26 @@ describe('shouldApplyRemoteCategory', () => {
     expect(shouldApplyRemoteCategory(local({ id: 'a', name: 'A', cloudBackupPending: true }))).toBe(
       false,
     )
+  })
+})
+
+describe('category upsert sort_order', () => {
+  const row = local({
+    id: 'cat-1',
+    name: 'Lucky',
+    requiredTags: ['lucky'],
+    sortOrder: 4,
+  })
+
+  it('sends sort_order on reorder and on first insert', () => {
+    expect(includeSortOrderOnUpsert(true, true)).toBe(true)
+    expect(includeSortOrderOnUpsert(true, false)).toBe(true)
+    expect(includeSortOrderOnUpsert(false, false)).toBe(true)
+    expect(includeSortOrderOnUpsert(false, true)).toBe(false)
+  })
+
+  it('omits sort_order from metadata upserts of rows already in cloud', () => {
+    expect(categoryUpsertRow(row, userId, new Set(), false)).not.toHaveProperty('sort_order')
+    expect(categoryUpsertRow(row, userId, new Set(), true)).toMatchObject({ sort_order: 4 })
   })
 })

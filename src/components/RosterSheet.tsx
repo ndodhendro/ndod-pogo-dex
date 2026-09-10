@@ -3,7 +3,15 @@ import { useMemo, useState } from 'react'
 import { SPECIES_BY_ID, searchSpecies } from '../data/species'
 import { addRosterEntry, removeRosterEntry } from '../lib/collection'
 import { db } from '../lib/db'
-import { normalizeVariant, slotBoxLabel, slotDisplayName, type SlotMode } from '../lib/roster'
+import {
+  normalizeVariant,
+  slotBoxLabel,
+  slotDisplayName,
+  slotIsStaticReleased,
+  staticReleasedCount,
+  tagUsesStaticReleasedList,
+  type SlotMode,
+} from '../lib/roster'
 import { toastAfterWrite, useToast } from '../lib/toast'
 import type { TagId } from '../lib/tags'
 import { BottomSheet } from './BottomSheet'
@@ -46,16 +54,26 @@ export function RosterSheet({
     return searchSpecies(speciesQuery).slice(0, 12)
   }, [adding, speciesQuery, selectedLabel])
 
+  const usesGoList = tag ? tagUsesStaticReleasedList(tag) : false
+  const extraRows = useMemo(() => {
+    if (!tag || !usesGoList) return rows
+    return rows.filter((row) => !slotIsStaticReleased(tag, row.speciesId, row.variant))
+  }, [rows, tag, usesGoList])
+  const releasedCount = tag && usesGoList
+    ? staticReleasedCount(tag, slotMode) + extraRows.length
+    : rows.length
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const list = [...rows].sort((a, b) => a.speciesId - b.speciesId || a.variant.localeCompare(b.variant))
+    const list = [...extraRows].sort(
+      (a, b) => a.speciesId - b.speciesId || a.variant.localeCompare(b.variant),
+    )
     if (!q) return list
     return list.filter((row) => {
       const name = slotDisplayName(row.speciesId, row.variant).toLowerCase()
       const id = String(row.speciesId)
       return name.includes(q) || id === q || id.padStart(4, '0') === q.padStart(4, '0')
     })
-  }, [rows, query])
+  }, [extraRows, query])
 
   function resetAdd() {
     setAdding(false)
@@ -113,9 +131,11 @@ export function RosterSheet({
   }
 
   return (
-    <BottomSheet open={open} title={title} nested onClose={close}>
+    <BottomSheet open={open} title={title} nested showClose={false} onClose={close}>
       <p className="page-sub">
-        {rows.length} released. Only these slots appear in Pokédex and Transfer.
+        {usesGoList
+          ? `${releasedCount} released from the Pokémon GO list. Add a species here if it debuted after that list.`
+          : `${rows.length} released. Only these slots appear in Pokédex and Transfer.`}
       </p>
       <SearchField value={query} onChange={setQuery} placeholder="Filter species" />
       {adding ? (
@@ -198,7 +218,11 @@ export function RosterSheet({
         </button>
       )}
       {visible.length === 0 ? (
-        <p className="empty-state">No released species yet.</p>
+        <p className="empty-state">
+          {usesGoList
+            ? 'No extra species yet. The Pokémon GO list is already in this Pokédex.'
+            : 'No released species yet.'}
+        </p>
       ) : (
         <ul className={styles.list}>
           {visible.map((row) => (

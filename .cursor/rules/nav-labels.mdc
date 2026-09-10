@@ -34,6 +34,7 @@ Every menu, submenu, tab, track chip, and navigation control shows **icon + text
 | Hisuian | 🏯 |
 | Paldean | 🍊 |
 | Mega | ⚡ |
+| Seen | 👁️ |
 
 ```tsx
 // ❌ BAD

@@ -6,6 +6,7 @@ import styles from './TagChip.module.css'
 type Props = {
   tag: TagId
   selected?: boolean
+  locked?: boolean
   label?: string
   icon?: string
   labelColor?: string
@@ -18,16 +19,20 @@ function chipTone(tag: TagId) {
   return 'living'
 }
 
-export function TagChip({ tag, selected, label, icon, labelColor, onClick }: Props) {
+export function TagChip({ tag, selected, locked, label, icon, labelColor, onClick }: Props) {
+  const on = Boolean(selected || locked)
   return (
     <button
       type="button"
       className={styles.chip}
       data-tag={tag}
       data-tone={chipTone(tag)}
-      data-on={selected ? 'true' : 'false'}
+      data-on={on ? 'true' : 'false'}
+      data-locked={locked ? 'true' : undefined}
+      aria-pressed={onClick || locked ? on : undefined}
+      aria-disabled={locked ? true : undefined}
       style={labelColor ? categoryChromeStyle(labelColor) : undefined}
-      onClick={onClick}
+      onClick={locked ? undefined : onClick}
     >
       <span className={styles.icon} aria-hidden="true">
         {icon ?? (isBuiltInTag(tag) ? TAG_ICONS[tag] : FALLBACK_EMOJI)}

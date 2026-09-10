@@ -82,7 +82,13 @@ export function GalleryPage() {
               isCover={coverRows.some((row) => row.specimenId === specimen.id)}
               purity={
                 coverRows.some((row) => row.specimenId === specimen.id) && category
-                  ? coverPurity(specimenTags(specimen), category.requiredTags, isSilhouette(specimen))
+                  ? coverPurity(
+                      specimenTags(specimen),
+                      category.requiredTags,
+                      isSilhouette(specimen),
+                      specimen.speciesId,
+                      specimen.gender,
+                    )
                   : null
               }
               onOpen={() => setPreview(specimen)}

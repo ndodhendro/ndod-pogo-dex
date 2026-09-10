@@ -23,6 +23,7 @@ import {
 } from './sync'
 import { removeSpecimenPhoto } from './specimenStorage'
 import {
+  defaultLimitPokedex,
   defaultSlotMode,
   normalizeVariant,
   slotVariantForTrack,
@@ -104,6 +105,7 @@ export async function saveSpecimenFromInbox(
     shadowStatus: fields.shadowStatus,
     costume: fields.costume,
     background: fields.background,
+    gender: fields.gender ?? null,
     hundo: fields.hundo,
     nundo: fields.nundo,
     extraTags,
@@ -144,6 +146,7 @@ async function saveExistingScreenshot(
     shadowStatus: fields.shadowStatus,
     costume: fields.costume,
     background: fields.background,
+    gender: fields.gender ?? null,
     hundo: fields.hundo,
     nundo: fields.nundo,
     extraTags: extraTagList(fields),
@@ -193,6 +196,7 @@ export async function updateSpecimen(
     shadowStatus: fields.shadowStatus,
     costume: fields.costume,
     background: fields.background,
+    gender: fields.gender ?? null,
     hundo: fields.hundo,
     nundo: fields.nundo,
     extraTags,
@@ -287,15 +291,20 @@ async function maybeSetCover(
   const current = await db.covers.get([category.id, specimen.speciesId, variant])
   let currentTags: TagId[] | null = null
   let currentSilhouette = false
+  let currentGender: string | null | undefined
   if (current) {
     const coverSpecimen = await db.specimens.get(current.specimenId)
     currentTags = coverSpecimen ? specimenTags(coverSpecimen) : null
     currentSilhouette = isSilhouette(coverSpecimen)
+    currentGender = coverSpecimen?.gender
   }
   if (
     shouldAutoReplaceCover(category.requiredTags, currentTags, incomingTags, {
       currentSilhouette,
       incomingSilhouette: isSilhouette(specimen),
+      speciesId: specimen.speciesId,
+      currentGender,
+      incomingGender: specimen.gender,
     })
   ) {
     await db.covers.put({
@@ -311,7 +320,7 @@ export async function setAsCover(categoryId: string, specimenId: string) {
   const specimen = await db.specimens.get(specimenId)
   const category = await db.categories.get(categoryId)
   if (!specimen || !category) throw new Error('Missing specimen or category')
-  if (coverPurity(specimenTags(specimen), category.requiredTags, isSilhouette(specimen)) == null) {
+  if (coverPurity(specimenTags(specimen), category.requiredTags, isSilhouette(specimen), specimen.speciesId, specimen.gender) == null) {
     throw new Error('This specimen is not in this category')
   }
   const catalogs = await db.tagCatalogs.toArray()
@@ -360,8 +369,11 @@ export async function deleteSpecimen(id: string) {
           tags: specimenTags(row),
           createdAt: row.createdAt,
           silhouette: isSilhouette(row),
+          gender: row.gender,
         }))
-      const nextId = category ? pickCoverAfterDelete(category.requiredTags, remainingForPick) : null
+      const nextId = category
+        ? pickCoverAfterDelete(category.requiredTags, remainingForPick, cover.speciesId)
+        : null
       if (nextId) {
         await db.covers.put({
           categoryId: cover.categoryId,
@@ -413,7 +425,7 @@ export async function addCategory(
     ...resolvedLook(trimmed, tags, look),
   }
   await db.categories.add(row)
-  return pushCategory(row)
+  return pushCategory(row, { syncOrder: true })
 }
 
 export async function updateCategory(
@@ -496,7 +508,7 @@ export async function reorderCategories(orderedIds: string[]) {
       patch.map((row) => db.categories.update(row.id, { sortOrder: row.sortOrder, cloudBackupPending: true })),
     )
   })
-  return pushCategories()
+  return pushCategories({ syncOrder: true })
 }
 
 export async function saveTagCatalog(
@@ -505,7 +517,7 @@ export async function saveTagCatalog(
 ) {
   const current = (await db.tagCatalogs.get(tag)) ?? {
     tag,
-    limitPokedex: false,
+    limitPokedex: defaultLimitPokedex(tag),
     slotMode: defaultSlotMode(tag),
   }
   const row: TagCatalogRow = {

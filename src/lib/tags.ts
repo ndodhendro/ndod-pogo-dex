@@ -40,6 +40,8 @@ export type SpecimenFields = {
   shadowStatus: ShadowStatus
   costume: string | null
   background: string | null
+  /** Male / Female / Hisuian Male, etc. Null when the Gender tag is off. */
+  gender?: string | null
   hundo: boolean
   nundo: boolean
   extraTags?: TagId[]
@@ -57,10 +59,11 @@ export const TAG_LABELS: Record<BuiltInTagId, string> = {
   nundo: 'Nundo',
 }
 
-import { EXTRA_TAG_LABELS } from '../data/tagCrops'
+import { BASIC_CROP_TAG, EXTRA_TAG_LABELS } from '../data/tagCrops'
 
 export function labelForTag(tag: TagId): string {
   if (isBuiltInTag(tag)) return TAG_LABELS[tag]
+  if (tag === 'basic') return 'Basic'
   return formNameForTag(tag) ?? EXTRA_TAG_LABELS[tag] ?? tag
 }
 
@@ -87,6 +90,7 @@ export function fieldsFromSpecimen(row: SpecimenFields): SpecimenFields {
     shadowStatus: row.shadowStatus,
     costume: row.costume,
     background: row.background,
+    gender: row.gender ?? null,
     hundo: row.hundo,
     nundo: row.nundo,
     extraTags: extraTagList(row),
@@ -126,10 +130,29 @@ export function clearVisualTags(fields: SpecimenFields): SpecimenFields {
     shadowStatus: 'none',
     costume: null,
     background: null,
+    gender: null,
     hundo: false,
     nundo: false,
     extraTags: [],
     silhouette: isSilhouette(fields),
+  }
+}
+
+function dropBasicTag(fields: SpecimenFields): SpecimenFields {
+  const extra = extraTagList(fields).filter((tag) => tag !== BASIC_CROP_TAG)
+  return extra.length === extraTagList(fields).length ? fields : { ...fields, extraTags: extra }
+}
+
+function toggleBasicTag(fields: SpecimenFields): SpecimenFields {
+  const extra = extraTagList(fields)
+  if (extra.includes(BASIC_CROP_TAG)) {
+    return { ...fields, extraTags: extra.filter((tag) => tag !== BASIC_CROP_TAG) }
+  }
+  const keepGender = extra.includes('gender')
+  return {
+    ...clearVisualTags(fields),
+    gender: keepGender ? (fields.gender ?? '') : null,
+    extraTags: keepGender ? [BASIC_CROP_TAG, 'gender'] : [BASIC_CROP_TAG],
   }
 }
 
@@ -154,6 +177,7 @@ export function visualKey(s: SpecimenFields): string {
     (s.costume ?? '').trim().toLowerCase(),
     s.shadowStatus,
     (s.background ?? '').trim().toLowerCase(),
+    (s.gender ?? '').trim().toLowerCase(),
     extraTagList(s).slice().sort().join(','),
     isSilhouette(s) ? 'sil' : '',
   ].join('|')
@@ -177,6 +201,7 @@ export function isExactMatch(tags: TagId[], required: TagId[]): boolean {
 }
 
 export function toggleTag(fields: SpecimenFields, tag: TagId): SpecimenFields {
+  if (tag === BASIC_CROP_TAG) return toggleBasicTag(fields)
   const next = { ...fields }
   if (tag === 'shiny') next.shiny = !next.shiny
   if (tag === 'hundo') next.hundo = !next.hundo
@@ -202,10 +227,14 @@ export function toggleTag(fields: SpecimenFields, tag: TagId): SpecimenFields {
   if (!isBuiltInTag(tag)) {
     const extra = extraTagList(next)
     const turningOn = !extra.includes(tag)
-    const nextExtra = turningOn ? [...extra, tag] : extra.filter((item) => item !== tag)
+    let nextExtra = turningOn ? [...extra, tag] : extra.filter((item) => item !== tag)
+    if (turningOn && tag !== 'gender') nextExtra = nextExtra.filter((item) => item !== BASIC_CROP_TAG)
     if (isFormTag(tag)) next.form = formLabelFromExtra(nextExtra)
+    if (tag === 'gender') next.gender = turningOn ? '' : null
     next.extraTags = nextExtra
+    return next
   }
+  if (specimenTags(next).includes(tag)) return dropBasicTag(next)
   return next
 }
 
@@ -259,6 +288,9 @@ export function specimenSaveWarning(fields: SpecimenFields): string {
   if (!fields.speciesId) return 'Pick a species first'
   if (fields.costume !== null && !fields.costume.trim()) return 'Enter a costume name'
   if (fields.background !== null && !fields.background.trim()) return 'Enter a background name'
+  if (extraTagList(fields).includes('gender') && !(fields.gender ?? '').trim()) {
+    return 'Pick a gender variant'
+  }
   return ''
 }
 

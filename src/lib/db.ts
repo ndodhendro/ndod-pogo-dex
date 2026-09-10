@@ -14,6 +14,7 @@ export type SpecimenRow = {
   shadowStatus: ShadowStatus
   costume: string | null
   background: string | null
+  gender?: string | null
   hundo: boolean
   nundo: boolean
   extraTags?: TagId[]

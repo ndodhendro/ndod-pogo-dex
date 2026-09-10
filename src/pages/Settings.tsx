@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { BottomSheet } from '../components/BottomSheet'
 import { ColorPicker } from '../components/ColorPicker'
 import { AppFooter } from '../components/AppFooter'
@@ -12,10 +12,20 @@ import { categoryChromeStyle, DEFAULT_LABEL_COLOR, FALLBACK_EMOJI, pickEmojiInpu
 import { clampSwipe, SWIPE_LOCK, SWIPE_OPEN_RATIO, SWIPE_WIDTH } from '../lib/swipeReveal'
 import { addCategory, deleteCategory, reorderCategories, saveTagCatalog, updateCategory } from '../lib/collection'
 import { getSession, signOut, userEmail } from '../lib/auth'
-import { db, ensureSeedCategories, type CategoryRow } from '../lib/db'
+import { db, ensureSeedCategories, type CategoryRow, type TagCatalogRow, type TagRosterRow } from '../lib/db'
 import { backupAllMetadata } from '../lib/sync'
 import { backupProgressLabel, type BackupProgress } from '../lib/syncBackup'
-import { catalogForTag, type SlotMode } from '../lib/roster'
+import {
+  BASIC_DEX_TAG,
+  catalogForTag,
+  countReleasedSlots,
+  isOwnListTag,
+  slotModeLockedToSpecies,
+  slotModeLockedToVariant,
+  tagFollowsBasicList,
+  tagUsesStaticReleasedList,
+  type SlotMode,
+} from '../lib/roster'
 import { toastAfterWrite, useToast } from '../lib/toast'
 import { categorySaveWarning, labelForTag, toggleRequiredTags, type TagId } from '../lib/tags'
 import { setPreviewAnimations, usePreviewAnimations } from '../lib/previewPrefs'
@@ -25,6 +35,7 @@ export function SettingsPage() {
   const { showToast } = useToast()
   const categories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
   const catalogs = useLiveQuery(() => db.tagCatalogs.toArray(), []) ?? []
+  const roster = useLiveQuery(() => db.tagRoster.toArray(), []) ?? []
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<CategoryRow | null>(null)
   const [name, setName] = useState('')
@@ -43,7 +54,13 @@ export function SettingsPage() {
   const previewAnimations = usePreviewAnimations()
   const [tagsOpen, setTagsOpen] = useState(false)
   const [rosterTag, setRosterTag] = useState<TagId | null>(null)
+  const [pendingSlot, setPendingSlot] = useState<{
+    tag: TagId
+    slotMode: SlotMode
+    label: string
+  } | null>(null)
   const [catalogBusy, setCatalogBusy] = useState(false)
+  const dexTags = picked.length > 0 ? picked : editing?.seed ? [BASIC_DEX_TAG] : []
 
   useEffect(() => {
     void ensureSeedCategories()
@@ -62,6 +79,7 @@ export function SettingsPage() {
     setLabelColor(DEFAULT_LABEL_COLOR)
     setLookLocked(false)
     setRosterTag(null)
+    setPendingSlot(null)
   }
 
   function openNew() {
@@ -113,6 +131,21 @@ export function SettingsPage() {
       busyRef.current = false
       setBusy(false)
     }
+  }
+
+  function askSlotMode(tag: TagId, slotMode: SlotMode) {
+    if (catalogBusy) return
+    const catalog = catalogForTag(catalogs, tag)
+    if (catalog.slotMode === slotMode) return
+    const label = categoryForTag(categories, tag)?.name ?? labelForTag(tag)
+    setPendingSlot({ tag, slotMode, label })
+  }
+
+  function confirmSlotMode() {
+    if (!pendingSlot) return
+    const next = pendingSlot
+    setPendingSlot(null)
+    void setCatalog(next.tag, { limitPokedex: true, slotMode: next.slotMode })
   }
 
   async function setCatalog(tag: TagId, patch: { limitPokedex: boolean; slotMode: SlotMode }) {
@@ -188,6 +221,8 @@ export function SettingsPage() {
               </button>
               <CategoryOrderList
                 categories={categories}
+                catalogs={catalogs}
+                roster={roster}
                 onEdit={openEdit}
                 onCloudWarning={(message) => showToast(message, 'warning')}
                 onSaved={(message) => showToast(message, 'success')}
@@ -340,49 +375,89 @@ export function SettingsPage() {
           <div className="field">
             <span>Pokédex</span>
             <p className="page-sub">
-              Limit a tag to Released slots. Variant slots are for costumes, backgrounds, and
-              formes.
+              Best buddy, XXL, XXS, Hundo, Nundo, and Max CP use the Basic species list. Alolan,
+              Galarian, Hisuian, Paldean, Mega, Gigantamax, Dynamax, Shadow, Purified, Lucky, Shiny,
+              Gender, Alternate forme, Costume, and Background use the Pokémon GO list. Other
+              tags start empty until you add released slots. Variant slots are for costumes,
+              backgrounds, formes, and gender.
             </p>
-            {picked.length === 0 ? (
-              <p className="page-sub">
-                {editing?.seed
-                  ? 'This track uses the full Pokédex.'
-                  : 'Save this tag first to limit its Pokédex.'}
-              </p>
+            {dexTags.length === 0 ? (
+              <p className="page-sub">Save this tag first to limit its Pokédex.</p>
             ) : (
               <div className={styles.dexEditors}>
-                {picked.map((tag) => {
+                {dexTags.map((tag) => {
                   const catalog = catalogForTag(catalogs, tag)
                   const look = lookForTag(tag, categories)
                   const label = categoryForTag(categories, tag)?.name ?? labelForTag(tag)
+                  const followsBasic = tagFollowsBasicList(tag)
+                  const usesGoList = tagUsesStaticReleasedList(tag)
                   return (
                     <div key={tag} className={styles.dexEditor}>
                       <p className={styles.dexTag}>
                         <span aria-hidden="true">{look.emoji}</span>
                         {label}
                       </p>
-                      <button
-                        type="button"
-                        className={styles.prefToggle}
-                        role="switch"
-                        aria-checked={catalog.limitPokedex}
-                        data-tone="settings"
-                        disabled={catalogBusy}
-                        onClick={() =>
-                          void setCatalog(tag, {
-                            limitPokedex: !catalog.limitPokedex,
-                            slotMode: catalog.slotMode,
-                          })
-                        }
-                      >
-                        <span className={styles.prefLabel}>
-                          <span aria-hidden="true">📖</span>
-                          Limit Pokédex
-                        </span>
-                        <span className={styles.switch} data-on={catalog.limitPokedex ? 'true' : undefined} />
-                      </button>
-                      {catalog.limitPokedex ? (
+                      {followsBasic ? (
+                        <p className="page-sub">Uses the Basic species list.</p>
+                      ) : usesGoList && tag !== BASIC_DEX_TAG ? (
+                        <p className="page-sub">
+                          {tag === 'paldean'
+                            ? 'Uses the Pokémon GO released list, one slot per species. Tauros Combat, Blaze, and Aqua Breed belong on Alternate forme.'
+                            : tag === 'gender'
+                              ? 'Uses the Pokémon GO gender-difference list as Variant slots: Male and Female per species (Venusaur Male, Venusaur Female). Basic stays one Venusaur slot. Hisuian Sneasel has four gender slots. Indeedee is cry-only and is not listed.'
+                              : tag === 'mega'
+                                ? 'Uses the Pokémon GO Mega Evolution list as Variant slots (Venusaur Mega, Charizard Mega X and Mega Y). Kyogre and Groudon count as Mega slots. Staraptor and Chandelure stay off until the wiki marks them released.'
+                                : tag === 'gigantamax'
+                                  ? 'Uses the Pokémon GO Gigantamax list, one slot per released species. Urshifu and other unreleased Gigantamax forms stay off the list.'
+                                  : tag === 'shiny'
+                                    ? 'Uses the Pokémon GO Shiny list, one slot per released species. Greyed wiki rows stay off until Shiny is switched on. Costumes and extra formes belong on those tracks.'
+                                    : tag === 'dynamax'
+                                      ? 'Uses the Pokémon GO Dynamax list, one slot per released species. Greyed wiki rows and Gigantamax-only species stay off the list.'
+                                      : tag === 'shadow'
+                                        ? 'Uses the Pokémon GO Shadow list, one slot per released species. Greyed wiki rows stay off the list. The Purified track uses this same species list.'
+                                        : tag === 'purified'
+                                          ? 'Uses the same Pokémon GO Shadow list, one slot per released species. A species can be purified only if it has a Shadow form.'
+                                          : tag === 'lucky'
+                                            ? 'Uses the Pokémon GO released list except Untradable species, one slot per species. Lucky Pokémon come from trades, so Mew, Celebi, and other wiki Untradable rows stay off. Meltan and Melmetal stay on.'
+                                            : tag === 'costume'
+                                              ? 'Uses the Pokémon GO Event Pokémon list as Variant slots (Bulbasaur Halloween, Pikachu Party hat). Greyed wiki rows stay off until released.'
+                                              : tag === 'background'
+                                                ? 'Uses the Pokémon GO Backgrounds list as Variant slots (Kyogre Las Vegas, Nihilego Wormhole). Location and Special backgrounds are included. Unused wiki rows stay off.'
+                                                : slotModeLockedToSpecies(tag)
+                                                  ? 'Uses the Pokémon GO released list, one slot per species. Extra formes belong on Alternate forme.'
+                                                  : 'Uses the Pokémon GO released list. The roster is for forms that debut after that list.'}
+                        </p>
+                      ) : null}
+                      {followsBasic ? null : (
                         <>
+                          {isOwnListTag(tag) ? null : (
+                            <button
+                              type="button"
+                              className={styles.prefToggle}
+                              role="switch"
+                              aria-checked={catalog.limitPokedex}
+                              data-tone="settings"
+                              disabled={catalogBusy}
+                              onClick={() =>
+                                void setCatalog(tag, {
+                                  limitPokedex: !catalog.limitPokedex,
+                                  slotMode: catalog.slotMode,
+                                })
+                              }
+                            >
+                              <span className={styles.prefLabel}>
+                                <span aria-hidden="true">📖</span>
+                                Limit Pokédex
+                              </span>
+                              <span
+                                className={styles.switch}
+                                data-on={catalog.limitPokedex ? 'true' : undefined}
+                              />
+                            </button>
+                          )}
+                          {catalog.limitPokedex ? (
+                        <>
+                          {slotModeLockedToSpecies(tag) || slotModeLockedToVariant(tag) ? null : (
                           <div className="field">
                             <span>Slots</span>
                             <div className={styles.segment}>
@@ -390,9 +465,7 @@ export function SettingsPage() {
                                 type="button"
                                 data-on={catalog.slotMode === 'species' ? 'true' : 'false'}
                                 disabled={catalogBusy}
-                                onClick={() =>
-                                  void setCatalog(tag, { limitPokedex: true, slotMode: 'species' })
-                                }
+                                onClick={() => askSlotMode(tag, 'species')}
                               >
                                 Species
                               </button>
@@ -400,14 +473,13 @@ export function SettingsPage() {
                                 type="button"
                                 data-on={catalog.slotMode === 'variant' ? 'true' : 'false'}
                                 disabled={catalogBusy}
-                                onClick={() =>
-                                  void setCatalog(tag, { limitPokedex: true, slotMode: 'variant' })
-                                }
+                                onClick={() => askSlotMode(tag, 'variant')}
                               >
                                 Variant
                               </button>
                             </div>
                           </div>
+                          )}
                           <button
                             type="button"
                             className="btn"
@@ -418,6 +490,8 @@ export function SettingsPage() {
                           </button>
                         </>
                       ) : null}
+                        </>
+                      )}
                     </div>
                   )
                 })}
@@ -428,6 +502,50 @@ export function SettingsPage() {
             {busy ? 'Saving…' : 'Save tag'}
           </button>
         </form>
+      </BottomSheet>
+      <BottomSheet
+        open={Boolean(pendingSlot)}
+        nested
+        showClose={false}
+        title={pendingSlot?.slotMode === 'variant' ? 'Use variant slots' : 'Use species slots'}
+        onClose={() => {
+          if (catalogBusy) return
+          setPendingSlot(null)
+        }}
+      >
+        <p className={`page-sub ${styles.confirmCopy}`}>
+          {pendingSlot?.slotMode === 'variant'
+            ? `${pendingSlot.label} will count one slot per costume, background, or forme name. Species-only roster entries will not appear in this Pokédex.`
+            : `${pendingSlot?.label ?? 'This tag'} will count one slot per species. Named variants on the roster will not appear in this Pokédex.`}
+        </p>
+        <div className="row-actions">
+          <button
+            type="button"
+            className="btn"
+            disabled={catalogBusy}
+            onClick={() => setPendingSlot(null)}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={catalogBusy}
+            onClick={() => confirmSlotMode()}
+          >
+            {pendingSlot?.slotMode === 'variant' ? (
+              <>
+                <span aria-hidden="true">🔄</span>
+                Use Variant
+              </>
+            ) : (
+              <>
+                <span aria-hidden="true">⚪</span>
+                Use Species
+              </>
+            )}
+          </button>
+        </div>
       </BottomSheet>
       <RosterSheet
         open={Boolean(rosterTag)}
@@ -444,12 +562,16 @@ const HOLD_MS = 1000
 
 function CategoryOrderList({
   categories,
+  catalogs,
+  roster,
   onEdit,
   onCloudWarning,
   onSaved,
   onError,
 }: {
   categories: CategoryRow[]
+  catalogs: TagCatalogRow[]
+  roster: TagRosterRow[]
   onEdit: (cat: CategoryRow) => void
   onCloudWarning: (message: string) => void
   onSaved: (message: string) => void
@@ -500,6 +622,13 @@ function CategoryOrderList({
   liveIdsRef.current = liveIds
   orderedIdsRef.current = orderedIds
   const byId = new Map(categories.map((row) => [row.id, row]))
+  const releasedById = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const cat of categories) {
+      counts.set(cat.id, countReleasedSlots(cat.requiredTags, catalogs, roster))
+    }
+    return counts
+  }, [categories, catalogs, roster])
   const displayIds = dragId && dragRef.current ? dragRef.current.originIds : orderedIds
   const rows = displayIds.flatMap((id) => {
     const row = byId.get(id)
@@ -868,7 +997,7 @@ function CategoryOrderList({
                 <button
                   type="button"
                   className={styles.catEdit}
-                  aria-label={`Edit ${cat.name}`}
+                  aria-label={`Edit ${cat.name}, ${releasedById.get(cat.id) ?? 0} released`}
                   disabled={Boolean(dragId)}
                   onClick={() => {
                     if (ignoreClickRef.current) {
@@ -895,6 +1024,9 @@ function CategoryOrderList({
                     <span aria-hidden="true">{iconForCategory(cat)} </span>
                     {cat.name}
                   </strong>
+                  <span className={styles.catCount}>
+                    {releasedById.get(cat.id) ?? 0} released
+                  </span>
                 </button>
               </div>
             </div>
@@ -904,6 +1036,7 @@ function CategoryOrderList({
       <BottomSheet
         open={Boolean(pendingDelete)}
         title="Remove tag"
+        showClose={false}
         onClose={() => {
           if (deleteBusy) return
           setPendingDelete(null)

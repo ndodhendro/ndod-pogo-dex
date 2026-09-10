@@ -1,11 +1,24 @@
 import type { ReactNode } from 'react'
-import type { UiTone } from '../data/navIcons'
+import { SEEN_ICON, type UiTone } from '../data/navIcons'
 import { categoryChromeStyle } from '../lib/categoryStyle'
-import { dexCompletionPercent, formatDexCompletionPercent } from '../lib/dexGrid'
+import {
+  DEX_PROGRESS_KINDS,
+  formatDexCompletionPercent,
+  stackDexProgressLayers,
+  type DexProgressKind,
+} from '../lib/dexGrid'
 import styles from './DexProgress.module.css'
 
+const KIND_META: Record<DexProgressKind, { icon: string; label: string }> = {
+  seen: { icon: SEEN_ICON, label: 'Seen' },
+  caught: { icon: '🎯', label: 'Caught' },
+  pure: { icon: '🟢', label: 'Pure' },
+}
+
 type Props = {
-  filled: number
+  seen: number
+  caught: number
+  pure: number
   total: number
   ariaLabel: string
   tone?: UiTone
@@ -17,7 +30,9 @@ type Props = {
 }
 
 export function DexProgress({
-  filled,
+  seen,
+  caught,
+  pure,
   total,
   ariaLabel,
   tone = 'dex',
@@ -27,8 +42,13 @@ export function DexProgress({
   announce = true,
   compact = false,
 }: Props) {
-  const percent = dexCompletionPercent(filled, total)
-  const completionLabel = formatDexCompletionPercent(filled, total)
+  const counts = { seen, caught, pure }
+  const layers = stackDexProgressLayers(counts, total)
+  const valueText = DEX_PROGRESS_KINDS.map((kind) => {
+    const meta = KIND_META[kind]
+    return `${meta.label} ${counts[kind]}/${total} (${formatDexCompletionPercent(counts[kind], total)})`
+  }).join('. ')
+  const highest = layers[0]
   return (
     <div
       className={[styles.progress, className].filter(Boolean).join(' ')}
@@ -36,14 +56,28 @@ export function DexProgress({
       data-compact={compact ? 'true' : undefined}
       style={labelColor ? categoryChromeStyle(labelColor) : undefined}
     >
-      <div className={styles.meta}>
-        {heading ? <span className={styles.heading}>{heading}</span> : null}
-        <span className={styles.stats}>
-          <span>
-            {filled} / {total}
-          </span>
-          <span className={styles.percent}>{completionLabel}</span>
-        </span>
+      {heading ? <span className={styles.heading}>{heading}</span> : null}
+      <div className={styles.kinds}>
+        {DEX_PROGRESS_KINDS.map((kind) => {
+          const meta = KIND_META[kind]
+          const current = counts[kind]
+          return (
+            <div key={kind} className={styles.kind} data-kind={kind}>
+              <span className={styles.kindIcon} aria-hidden="true">
+                {meta.icon}
+              </span>
+              <span className={styles.kindName}>{meta.label}</span>
+              <span className={styles.kindCount}>
+                <span className={styles.kindFraction}>
+                  {current}/{total}
+                </span>
+                <span className={styles.kindPct}>
+                  ({formatDexCompletionPercent(current, total)})
+                </span>
+              </span>
+            </div>
+          )
+        })}
       </div>
       <div
         className={styles.track}
@@ -52,10 +86,19 @@ export function DexProgress({
         aria-label={announce ? ariaLabel : undefined}
         aria-valuemin={announce ? 0 : undefined}
         aria-valuemax={announce ? 100 : undefined}
-        aria-valuenow={announce ? Number(percent.toFixed(2)) : undefined}
-        aria-valuetext={announce ? `${filled} of ${total}, ${completionLabel}` : undefined}
+        aria-valuenow={announce ? Number(highest.percent.toFixed(2)) : undefined}
+        aria-valuetext={announce ? valueText : undefined}
       >
-        <span className={styles.fill} style={{ width: `${percent}%` }} />
+        {layers.map((layer, index) =>
+          layer.percent > 0 ? (
+            <span
+              key={layer.kind}
+              className={styles.fill}
+              data-kind={layer.kind}
+              style={{ width: `${layer.percent}%`, zIndex: index + 1 }}
+            />
+          ) : null,
+        )}
       </div>
     </div>
   )

@@ -273,6 +273,10 @@
   font-size: var(--font-size-sm);
 }
 
+.confirmCopy {
+  margin: 0 0 var(--space-4);
+}
+
 .actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

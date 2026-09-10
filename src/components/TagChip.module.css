@@ -23,3 +23,7 @@
   color: var(--tone);
   font-weight: var(--font-weight-medium);
 }
+
+.chip[data-locked='true'] {
+  cursor: default;
+}

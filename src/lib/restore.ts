@@ -215,6 +215,7 @@ async function writeRestoredSpecimen(spec: CloudSpecimen, file: Blob, alreadyCro
       shadowStatus: spec.shadowStatus,
       costume: spec.costume,
       background: spec.background,
+      gender: spec.gender ?? null,
       hundo: spec.hundo,
       nundo: spec.nundo,
       extraTags: extraTagList(spec),

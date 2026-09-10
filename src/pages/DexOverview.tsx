@@ -46,7 +46,7 @@ export function DexOverviewPage() {
         <p className="empty-state">No tracks yet. Add a category in Settings.</p>
       ) : (
         <div className={`group ${styles.list}`}>
-          {tracks.map(({ category, filled, total }) => (
+          {tracks.map(({ category, seen, caught, pure, total }) => (
             <Link
               key={category.id}
               className={styles.row}
@@ -55,7 +55,9 @@ export function DexOverviewPage() {
             >
               <DexProgress
                 className={styles.rowProgress}
-                filled={filled}
+                seen={seen}
+                caught={caught}
+                pure={pure}
                 total={total}
                 ariaLabel={`${category.name} completion`}
                 tone={toneForCategory(category)}

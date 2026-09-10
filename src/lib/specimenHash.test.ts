@@ -60,6 +60,12 @@ describe('sameSpecimenMetadata', () => {
   it('notices a silhouette flag change', () => {
     expect(sameSpecimenMetadata(base, { ...base, silhouette: true })).toBe(false)
   })
+
+  it('notices a gender variant change', () => {
+    expect(sameSpecimenMetadata({ ...base, gender: 'Male' }, { ...base, gender: 'Female' })).toBe(
+      false,
+    )
+  })
 })
 
 describe('pickSpecimenToKeepForHash', () => {

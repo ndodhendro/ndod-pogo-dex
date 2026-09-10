@@ -1,3 +1,4 @@
+import { BASIC_CROP_TAG } from '../data/tagCrops'
 import {
   SPECIES_SLOT_VARIANT,
   specimenFillsSlot,
@@ -11,19 +12,61 @@ export type CoverPurity = 'green' | 'gray'
 export type CoverSilhouetteOpts = {
   currentSilhouette?: boolean
   incomingSilhouette?: boolean
+  speciesId?: number
+  currentGender?: string | null
+  incomingGender?: string | null
 }
 
-function isGreenCover(tags: TagId[], required: TagId[], silhouette = false): boolean {
-  return !silhouette && isExactMatch(tags, required)
+const SNEASEL_ID = 215
+
+function tagsAreExactly(tags: readonly TagId[], wanted: readonly TagId[]) {
+  if (tags.length !== wanted.length) return false
+  const set = new Set(tags)
+  return wanted.every((tag) => set.has(tag))
+}
+
+function isGenderCategory(required: readonly TagId[]) {
+  return tagsAreExactly(required, ['gender'])
+}
+
+function isHisuianSneaselGender(speciesId: number | undefined, gender: string | null | undefined) {
+  if (speciesId !== SNEASEL_ID) return false
+  const label = (gender ?? '').trim().toLowerCase()
+  return label === 'hisuian male' || label === 'hisuian female'
+}
+
+function tagsForOtherCategoryPurity(tags: readonly TagId[], required: readonly TagId[]): TagId[] {
+  let next = required.includes('gender') ? [...tags] : tags.filter((tag) => tag !== 'gender')
+  if (required.length === 0) next = next.filter((tag) => tag !== BASIC_CROP_TAG)
+  return next
+}
+
+export function isGreenCover(
+  tags: TagId[],
+  required: TagId[],
+  silhouette = false,
+  speciesId?: number,
+  gender?: string | null,
+): boolean {
+  if (silhouette) return false
+  if (isGenderCategory(required)) {
+    if (isHisuianSneaselGender(speciesId, gender)) {
+      return tagsAreExactly(tags, ['gender', 'hisuian'])
+    }
+    return tagsAreExactly(tags, ['gender']) || tagsAreExactly(tags, ['gender', BASIC_CROP_TAG])
+  }
+  return isExactMatch(tagsForOtherCategoryPurity(tags, required), required)
 }
 
 export function coverPurity(
   specimenTags: TagId[],
   required: TagId[],
   silhouette = false,
+  speciesId?: number,
+  gender?: string | null,
 ): CoverPurity | null {
   if (!hasAllRequired(specimenTags, required)) return null
-  return isGreenCover(specimenTags, required, silhouette) ? 'green' : 'gray'
+  return isGreenCover(specimenTags, required, silhouette, speciesId, gender) ? 'green' : 'gray'
 }
 
 export function speciesInCategory(
@@ -41,21 +84,41 @@ export function shouldAutoReplaceCover(
 ): boolean {
   if (!hasAllRequired(incomingTags, required)) return false
   if (!currentCoverTags) return true
-  const incomingExact = isGreenCover(incomingTags, required, opts?.incomingSilhouette)
-  const currentExact = isGreenCover(currentCoverTags, required, opts?.currentSilhouette)
+  const speciesId = opts?.speciesId
+  const incomingExact = isGreenCover(
+    incomingTags,
+    required,
+    opts?.incomingSilhouette,
+    speciesId,
+    opts?.incomingGender,
+  )
+  const currentExact = isGreenCover(
+    currentCoverTags,
+    required,
+    opts?.currentSilhouette,
+    speciesId,
+    opts?.currentGender,
+  )
   return incomingExact && !currentExact
 }
 
 /** Prefer a remaining green cover, else the newest in-category photo. */
 export function pickCoverAfterDelete(
   required: TagId[],
-  remaining: { id: string; tags: TagId[]; createdAt: number; silhouette?: boolean }[],
+  remaining: {
+    id: string
+    tags: TagId[]
+    createdAt: number
+    silhouette?: boolean
+    gender?: string | null
+  }[],
+  speciesId?: number,
 ): string | null {
   const candidates = remaining.filter((row) => hasAllRequired(row.tags, required))
   if (candidates.length === 0) return null
   const sorted = [...candidates].sort((a, b) => {
-    const aExact = isGreenCover(a.tags, required, a.silhouette) ? 1 : 0
-    const bExact = isGreenCover(b.tags, required, b.silhouette) ? 1 : 0
+    const aExact = isGreenCover(a.tags, required, a.silhouette, speciesId, a.gender) ? 1 : 0
+    const bExact = isGreenCover(b.tags, required, b.silhouette, speciesId, b.gender) ? 1 : 0
     if (aExact !== bExact) return bExact - aExact
     return b.createdAt - a.createdAt
   })
@@ -141,9 +204,12 @@ export function coverMutationsAfterEdit(
             tags: specimenTags(row),
             createdAt: row.createdAt,
             silhouette: isSilhouette(row),
+            gender: row.gender,
           }))
       : []
-    const nextId = category ? pickCoverAfterDelete(category.requiredTags, remaining) : null
+    const nextId = category
+      ? pickCoverAfterDelete(category.requiredTags, remaining, cover.speciesId)
+      : null
     if (nextId) applyPut(cover.categoryId, cover.speciesId, variant, nextId)
     else applyDelete(cover.categoryId, cover.speciesId, variant)
   }
@@ -154,15 +220,20 @@ export function coverMutationsAfterEdit(
     const current = byKey.get(coverSlotKey(category.id, updated.speciesId, variant))
     let currentTags: TagId[] | null = null
     let currentSilhouette = false
+    let currentGender: string | null | undefined
     if (current) {
       const coverSpecimen = specimens.find((row) => row.id === current.specimenId)
       currentTags = coverSpecimen ? specimenTags(coverSpecimen) : null
       currentSilhouette = isSilhouette(coverSpecimen)
+      currentGender = coverSpecimen?.gender
     }
     if (
       shouldAutoReplaceCover(category.requiredTags, currentTags, nextTags, {
         currentSilhouette,
         incomingSilhouette: isSilhouette(updated),
+        speciesId: updated.speciesId,
+        currentGender,
+        incomingGender: updated.gender,
       })
     ) {
       applyPut(category.id, updated.speciesId, variant, updated.id)
