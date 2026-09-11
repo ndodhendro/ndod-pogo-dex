@@ -1,5 +1,6 @@
 import type { Generation } from '../data/generations'
 import { MAX_TAG_CROP_HEIGHT } from '../data/tagCrops'
+import { isGreenCover } from './covers'
 import { SCREENSHOT_WIDTH } from './images'
 import { hasAllRequired, isSilhouette, specimenTags, type SpecimenFields, type TagId } from './tags'
 
@@ -181,16 +182,10 @@ export function countFilledSpecies(
   return filled.size
 }
 
-export function pickDexCover<T extends { id: string; silhouette?: boolean }>(
+export function pickDexCover<T extends { id: string }>(
   group: readonly T[],
   coverId: string | undefined,
-  silhouetteOnly = false,
 ): T | undefined {
-  if (silhouetteOnly) {
-    const silhouettes = group.filter(isSilhouette)
-    if (silhouettes.length === 0) return undefined
-    return silhouettes.find((row) => row.id === coverId) ?? silhouettes[0]
-  }
   if (group.length === 0) return undefined
   return group.find((row) => row.id === coverId) ?? group[0]
 }
@@ -199,11 +194,29 @@ export function keepDexSlot(hasMatch: boolean, filtering: boolean): boolean {
   return !filtering || hasMatch
 }
 
+export function toggleDexProgressFilter(
+  current: DexProgressKind | null,
+  next: DexProgressKind,
+): DexProgressKind | null {
+  return current === next ? null : next
+}
+
+/** Matches Seen / Caught / Pure slot counts on the current track. */
+export function specimenMatchesProgressFilter(
+  specimen: SpecimenFields,
+  required: readonly TagId[] = [],
+  kind: DexProgressKind | null = null,
+): boolean {
+  if (!kind) return true
+  if (kind === 'seen') return true
+  if (isSilhouette(specimen)) return false
+  if (kind === 'caught') return true
+  return isGreenCover(specimenTags(specimen), [...required], false, specimen.speciesId, specimen.gender)
+}
+
 export function specimenMatchesDexFilters(
   specimen: SpecimenFields,
   filterTags: readonly TagId[] = [],
-  silhouetteOnly = false,
 ): boolean {
-  if (silhouetteOnly && !isSilhouette(specimen)) return false
   return hasAllRequired(specimenTags(specimen), [...filterTags])
 }

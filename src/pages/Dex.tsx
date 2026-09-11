@@ -16,7 +16,6 @@ import {
   dexFilterTagChoices,
   dexLockedFilterTags,
   iconForCategory,
-  SEEN_ICON,
   toneForCategory,
 } from '../data/navIcons'
 import { useDexCollapse } from '../hooks/useDexCollapse'
@@ -34,6 +33,8 @@ import {
   keepDexSlot,
   pickDexCover,
   specimenMatchesDexFilters,
+  specimenMatchesProgressFilter,
+  type DexProgressKind,
 } from '../lib/dexGrid'
 import {
   db,
@@ -77,7 +78,7 @@ export function DexPage() {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const [query, setQuery] = useState('')
-  const [silhouetteOnly, setSilhouetteOnly] = useState(false)
+  const [progressFilter, setProgressFilter] = useState<DexProgressKind | null>(null)
   const [filterTags, setFilterTags] = useState<TagId[]>([])
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [preview, setPreview] = useState<SpecimenRow | null>(null)
@@ -141,15 +142,15 @@ export function DexPage() {
   )
 
   const allSlots = useMemo(
-    () => buildSlots(category, specimens, covers, catalogs, roster, '', silhouetteOnly, filterTags),
-    [category, specimens, covers, catalogs, roster, silhouetteOnly, filterTags],
+    () => buildSlots(category, specimens, covers, catalogs, roster, '', progressFilter, filterTags),
+    [category, specimens, covers, catalogs, roster, progressFilter, filterTags],
   )
   const slots = useMemo(
     () =>
       query.trim()
-        ? buildSlots(category, specimens, covers, catalogs, roster, query, silhouetteOnly, filterTags)
+        ? buildSlots(category, specimens, covers, catalogs, roster, query, progressFilter, filterTags)
         : allSlots,
-    [allSlots, category, specimens, covers, catalogs, roster, query, silhouetteOnly, filterTags],
+    [allSlots, category, specimens, covers, catalogs, roster, query, progressFilter, filterTags],
   )
   const groups = useMemo(() => groupByGeneration(slots), [slots])
 
@@ -157,10 +158,11 @@ export function DexPage() {
     () => countFilledSlots(specimens, category?.requiredTags ?? [], catalogs, roster),
     [specimens, category, catalogs, roster],
   )
-  const filtering = silhouetteOnly || filterTags.length > 0 || Boolean(query.trim())
+  const tagFiltering = filterTags.length > 0 || Boolean(query.trim())
+  const filtering = progressFilter != null || tagFiltering
   const selectedTagCount =
     filterTags.length === 0 ? 0 : filterTags.length + lockedFilterTags.length
-  const filterCount = (silhouetteOnly ? 1 : 0) + selectedTagCount + (query.trim() ? 1 : 0)
+  const filterCount = selectedTagCount + (query.trim() ? 1 : 0)
   const limitedEmpty =
     Boolean(category) &&
     trackIsLimited(category?.requiredTags ?? [], catalogs) &&
@@ -273,6 +275,8 @@ export function DexPage() {
         ariaLabel={`${category?.name ?? 'Pokédex'} completion`}
         tone={category ? toneForCategory(category) : 'dex'}
         labelColor={category ? colorForCategory(category) : undefined}
+        selectedKind={progressFilter}
+        onSelectKind={setProgressFilter}
       />
       {limitedEmpty ? (
         <p className="empty-state">
@@ -288,7 +292,11 @@ export function DexPage() {
             ? 'No matching species.'
             : filterTags.length > 0
               ? 'No matching tags.'
-              : 'None seen on this track.'}
+              : progressFilter === 'caught'
+                ? 'None caught on this track.'
+                : progressFilter === 'pure'
+                  ? 'None pure on this track.'
+                  : 'None seen on this track.'}
         </p>
       ) : (
       <div ref={setHost} className={styles.gridHost}>
@@ -395,7 +403,7 @@ export function DexPage() {
           if (
             !category ||
             !preview ||
-            (silhouetteOnly && !isSilhouette(specimen)) ||
+            !specimenMatchesProgressFilter(specimen, category.requiredTags, progressFilter) ||
             !hasAllRequired(specimenTags(specimen), filterTags) ||
             !specimenFillsSlot(
               specimen,
@@ -423,9 +431,8 @@ export function DexPage() {
           <button
             type="button"
             className="btn btn-ghost"
-            disabled={!filtering}
+            disabled={!tagFiltering}
             onClick={() => {
-              setSilhouetteOnly(false)
               setFilterTags([])
               setQuery('')
             }}
@@ -437,17 +444,6 @@ export function DexPage() {
       >
         <p className="page-sub">Show species that have every selected tag on one screenshot.</p>
         <div className="chip-row">
-          <button
-            type="button"
-            className={styles.filterChip}
-            data-tone="nundo"
-            data-on={silhouetteOnly ? 'true' : 'false'}
-            aria-pressed={silhouetteOnly}
-            onClick={() => setSilhouetteOnly((on) => !on)}
-          >
-            <span aria-hidden="true">{SEEN_ICON}</span>
-            Seen
-          </button>
           {tagFilters.map((choice) => {
             const tag = choice.tag as TagId
             const locked = lockedFilterSet.has(tag)
@@ -523,7 +519,7 @@ function buildSlots(
   catalogs: TagCatalogRow[],
   roster: TagRosterRow[],
   query: string,
-  silhouetteOnly = false,
+  progressFilter: DexProgressKind | null = null,
   filterTags: readonly TagId[] = [],
 ): Slot[] {
   const required = category?.requiredTags ?? []
@@ -531,21 +527,23 @@ function buildSlots(
     ? searchSlots(slotsForTrack(required, catalogs, roster), query)
     : slotsForTrack(required, catalogs, roster)
   const categoryCovers = category ? covers.filter((row) => row.categoryId === category.id) : []
-  const filtering = silhouetteOnly || filterTags.length > 0
+  const filtering = progressFilter != null || filterTags.length > 0
 
   const slots: Slot[] = []
   for (const def of defs) {
     const group = specimens.filter((row) =>
       specimenFillsSlot(row, required, def, catalogs),
     )
-    const matching = group.filter((row) =>
-      specimenMatchesDexFilters(row, filterTags, silhouetteOnly),
+    const matching = group.filter(
+      (row) =>
+        specimenMatchesDexFilters(row, filterTags) &&
+        specimenMatchesProgressFilter(row, required, progressFilter),
     )
     if (!keepDexSlot(matching.length > 0, filtering)) continue
     const coverRow = category
       ? findCover(categoryCovers, category.id, def.speciesId, def.variant)
       : undefined
-    const cover = pickDexCover(filtering ? matching : group, coverRow?.specimenId, silhouetteOnly)
+    const cover = pickDexCover(filtering ? matching : group, coverRow?.specimenId)
     const inCategory = group.length > 0
     const purity =
       cover

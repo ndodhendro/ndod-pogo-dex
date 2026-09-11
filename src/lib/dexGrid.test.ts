@@ -17,6 +17,8 @@ import {
   keepDexSlot,
   pickDexCover,
   specimenMatchesDexFilters,
+  specimenMatchesProgressFilter,
+  toggleDexProgressFilter,
 } from './dexGrid'
 import type { SpecimenFields } from './tags'
 
@@ -129,19 +131,13 @@ describe('countFilledSpecies', () => {
 })
 
 describe('pickDexCover', () => {
-  const catchRow = { id: 'catch', silhouette: false }
-  const silOld = { id: 'sil-old', silhouette: true }
-  const silNew = { id: 'sil-new', silhouette: true }
+  const catchRow = { id: 'catch' }
+  const silOld = { id: 'sil-old' }
 
   it('uses the stored cover, else the first specimen', () => {
     expect(pickDexCover([silOld, catchRow], 'catch')).toEqual(catchRow)
     expect(pickDexCover([silOld, catchRow], 'missing')).toEqual(silOld)
-  })
-
-  it('prefers a silhouette when that filter is on', () => {
-    expect(pickDexCover([catchRow, silOld, silNew], 'catch', true)).toEqual(silOld)
-    expect(pickDexCover([catchRow, silOld, silNew], 'sil-new', true)).toEqual(silNew)
-    expect(pickDexCover([catchRow], 'catch', true)).toBeUndefined()
+    expect(pickDexCover([], 'catch')).toBeUndefined()
   })
 })
 
@@ -161,12 +157,38 @@ describe('specimenMatchesDexFilters', () => {
     expect(specimenMatchesDexFilters(specimen({ shiny: true }), ['shiny', 'shadow'])).toBe(false)
     expect(specimenMatchesDexFilters(shinyShadow, [])).toBe(true)
   })
+})
 
-  it('can require a silhouette as well as tags', () => {
-    const shiny = specimen({ shiny: true })
-    const shinySil = specimen({ shiny: true, silhouette: true })
-    expect(specimenMatchesDexFilters(shiny, ['shiny'], true)).toBe(false)
-    expect(specimenMatchesDexFilters(shinySil, ['shiny'], true)).toBe(true)
+describe('toggleDexProgressFilter', () => {
+  it('selects one kind at a time and clears when clicked again', () => {
+    expect(toggleDexProgressFilter(null, 'caught')).toBe('caught')
+    expect(toggleDexProgressFilter('caught', 'pure')).toBe('pure')
+    expect(toggleDexProgressFilter('pure', 'pure')).toBeNull()
+  })
+})
+
+describe('specimenMatchesProgressFilter', () => {
+  const sil = specimen({ silhouette: true })
+  const extra = specimen({ shiny: true })
+  const pureRow = specimen()
+
+  it('keeps every specimen when Seen is selected', () => {
+    expect(specimenMatchesProgressFilter(sil, [], 'seen')).toBe(true)
+    expect(specimenMatchesProgressFilter(extra, [], 'seen')).toBe(true)
+    expect(specimenMatchesProgressFilter(pureRow, [], 'seen')).toBe(true)
+  })
+
+  it('hides silhouettes from Caught and Pure', () => {
+    expect(specimenMatchesProgressFilter(sil, [], 'caught')).toBe(false)
+    expect(specimenMatchesProgressFilter(sil, [], 'pure')).toBe(false)
+    expect(specimenMatchesProgressFilter(extra, [], 'caught')).toBe(true)
+    expect(specimenMatchesProgressFilter(pureRow, [], 'caught')).toBe(true)
+  })
+
+  it('keeps only exact-match catches for Pure', () => {
+    expect(specimenMatchesProgressFilter(extra, [], 'pure')).toBe(false)
+    expect(specimenMatchesProgressFilter(pureRow, [], 'pure')).toBe(true)
+    expect(specimenMatchesProgressFilter(specimen({ shiny: true }), ['shiny'], 'pure')).toBe(true)
   })
 })
 
