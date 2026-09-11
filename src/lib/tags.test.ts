@@ -8,6 +8,7 @@ import {
   toggleTag,
   allocateCategoryTag,
   labelForTag,
+  pickDuplicateLook,
   resolveRequiredTags,
   type SpecimenFields,
 } from './tags'
@@ -170,6 +171,34 @@ describe('resolveRequiredTags', () => {
   it('avoids colliding with built-in or already used tags', () => {
     expect(allocateCategoryTag('Shiny', ['shiny'])).toBe('shiny-2')
     expect(allocateCategoryTag('Lucky', ['lucky'])).toBe('lucky-2')
+  })
+})
+
+describe('pickDuplicateLook', () => {
+  const row = (id: string, createdAt: number, patch: Partial<SpecimenFields> = {}) => ({
+    ...base(),
+    id,
+    createdAt,
+    ...patch,
+  })
+
+  it('returns the oldest specimen with the same look', () => {
+    const incoming = { ...base(), shiny: true }
+    const newer = row('b', 20, { shiny: true })
+    const older = row('a', 10, { shiny: true })
+    expect(pickDuplicateLook([newer, older], incoming)?.id).toBe('a')
+  })
+
+  it('ignores IV tags when matching a look', () => {
+    const incoming = { ...base(), hundo: true }
+    const existing = row('a', 1, { nundo: true })
+    expect(pickDuplicateLook([existing], incoming)?.id).toBe('a')
+  })
+
+  it('does not match a different species or shiny state', () => {
+    const incoming = base()
+    expect(pickDuplicateLook([row('a', 1, { speciesId: 1 })], incoming)).toBeUndefined()
+    expect(pickDuplicateLook([row('b', 1, { shiny: true })], incoming)).toBeUndefined()
   })
 })
 

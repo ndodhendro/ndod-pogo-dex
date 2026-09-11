@@ -27,3 +27,16 @@
 .chip[data-locked='true'] {
   cursor: default;
 }
+
+.chip[data-size='sm'] {
+  min-height: 1.25rem;
+  padding: 0 var(--space-2);
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: var(--letter-ui);
+}
+
+.chip[data-size='sm'] .icon {
+  font-size: 0.75rem;
+}

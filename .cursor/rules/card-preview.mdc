@@ -9,7 +9,7 @@ Tapping a `DexCard` opens a modal preview. Do not navigate away from the dex gri
 
 Swipe left on the photo for the next filled cover (or the next gallery specimen). Swipe right for the previous. While the finger is down, the previous/next photo stays visible beside the current one (carousel). Do not wrap at the ends. Arrow keys match that: Right = next, Left = previous.
 
-A tap on the preview photo (not a swipe) opens the stored screenshot at its intrinsic size on a black full-screen layer: no VFX, chips, or actions. Tap or Escape returns to the preview card. If the bitmap is larger than the viewport, the user can pan/scroll it; do not shrink it to fit.
+A tap on the preview photo (not a swipe) opens the stored screenshot at original on-screen size (1 bitmap pixel = 1 device pixel) on a black full-screen layer: no VFX, chips, or actions. Tap or Escape returns to the preview card. If that display size is larger than the viewport, the user can pan/scroll it; do not shrink it to fit.
 
 The preview shows the specimen photo at original size (not the grid thumb) and **stacks VFX for every visual tag on that specimen**, not only the current dex track.
 

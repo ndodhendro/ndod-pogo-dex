@@ -5,24 +5,36 @@ import { FilePickerButton } from '../components/FilePickerButton'
 import { TagSheet } from '../components/TagSheet'
 import { AppFooter } from '../components/AppFooter'
 import { TAB_ICONS } from '../data/navIcons'
+import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
 import {
   discardInbox,
   importPendingShares,
   ingestFile,
+  replaceSpecimenFromInbox,
   saveSpecimenFromInbox,
 } from '../lib/collection'
-import { db, type InboxRow } from '../lib/db'
+import { db, type InboxRow, type SpecimenRow } from '../lib/db'
 import { isProbablyImageFile } from '../lib/images'
 import { useToast } from '../lib/toast'
+import type { SpecimenFields } from '../lib/tags'
 import styles from './Inbox.module.css'
+
+type PendingDuplicate = {
+  item: InboxRow
+  existing: SpecimenRow
+  fields: SpecimenFields
+  cropBottom: number
+}
 
 export function InboxPage() {
   const { showToast } = useToast()
   const items = useLiveQuery(() => db.inbox.orderBy('createdAt').reverse().toArray(), []) ?? []
   const [active, setActive] = useState<InboxRow | null>(null)
   const [pendingDiscard, setPendingDiscard] = useState<InboxRow | null>(null)
+  const [pendingDuplicate, setPendingDuplicate] = useState<PendingDuplicate | null>(null)
   const [discardBusy, setDiscardBusy] = useState(false)
+  const [duplicateBusy, setDuplicateBusy] = useState(false)
   const [adding, setAdding] = useState(false)
 
   useEffect(() => {
@@ -71,6 +83,48 @@ export function InboxPage() {
     }
   }
 
+  async function confirmDuplicateReplace() {
+    const pending = pendingDuplicate
+    if (!pending || duplicateBusy) return
+    setDuplicateBusy(true)
+    try {
+      const result = await replaceSpecimenFromInbox(
+        pending.item.id,
+        pending.existing.id,
+        pending.fields,
+        pending.cropBottom,
+      )
+      setPendingDuplicate(null)
+      setActive(null)
+      if (result.cloudError) showToast(result.cloudError, 'warning')
+      else showToast('Screenshot replaced', 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not replace')
+    } finally {
+      setDuplicateBusy(false)
+    }
+  }
+
+  async function confirmDuplicateDiscard() {
+    const pending = pendingDuplicate
+    if (!pending || duplicateBusy) return
+    setDuplicateBusy(true)
+    try {
+      await discardInbox(pending.item.id)
+      setPendingDuplicate(null)
+      setActive(null)
+      showToast('Screenshot discarded', 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not discard')
+    } finally {
+      setDuplicateBusy(false)
+    }
+  }
+
+  const duplicateSpecies = pendingDuplicate
+    ? SPECIES_BY_ID.get(pendingDuplicate.existing.speciesId)?.name
+    : undefined
+
   return (
     <section className={styles.page}>
       <h1 className="page-title" data-tone="inbox">
@@ -114,11 +168,19 @@ export function InboxPage() {
         onSave={async (fields, cropBottom) => {
           if (!active) return
           const result = await saveSpecimenFromInbox(active.id, fields, cropBottom)
+          if (result.duplicate && result.existing && !result.sameScreenshot) {
+            setPendingDuplicate({
+              item: active,
+              existing: result.existing,
+              fields,
+              cropBottom,
+            })
+            setActive(null)
+            return
+          }
           setActive(null)
           if (result.sameScreenshot && result.duplicate) {
             showToast('Screenshot already in the collection', 'warning')
-          } else if (result.duplicate) {
-            showToast('Same look already in the collection', 'warning')
           }
           if (result.cloudError) showToast(result.cloudError, 'warning')
           else if (!result.duplicate) showToast('Specimen saved', 'success')
@@ -126,6 +188,47 @@ export function InboxPage() {
         onWarning={(message) => showToast(message, 'warning')}
         onError={(message) => showToast(message)}
       />
+      <BottomSheet
+        open={Boolean(pendingDuplicate)}
+        title="Same look"
+        showClose={false}
+        onClose={() => {
+          if (duplicateBusy) return
+          setPendingDuplicate(null)
+        }}
+      >
+        <p className={`page-sub ${styles.confirmCopy}`}>
+          {duplicateSpecies
+            ? `${duplicateSpecies} with this look is already in your collection. Replace the current screenshot or discard the new one.`
+            : 'This look is already in your collection. Replace the current screenshot or discard the new one.'}
+        </p>
+        {pendingDuplicate ? (
+          <div className={styles.compare}>
+            <DuplicateShot imageId={pendingDuplicate.existing.imageId} label="Current" />
+            <DuplicateShot imageId={pendingDuplicate.item.imageId} label="New" tone="inbox" />
+          </div>
+        ) : null}
+        <div className={`row-actions ${styles.compareActions}`}>
+          <button
+            type="button"
+            className="btn btn-danger"
+            disabled={duplicateBusy}
+            onClick={() => void confirmDuplicateDiscard()}
+          >
+            <span aria-hidden="true">🗑️</span>
+            {duplicateBusy ? 'Working…' : 'Discard'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={duplicateBusy}
+            onClick={() => void confirmDuplicateReplace()}
+          >
+            <span aria-hidden="true">🔁</span>
+            {duplicateBusy ? 'Working…' : 'Replace'}
+          </button>
+        </div>
+      </BottomSheet>
       <BottomSheet
         open={Boolean(pendingDiscard)}
         title="Discard screenshot"
@@ -158,6 +261,28 @@ export function InboxPage() {
         </div>
       </BottomSheet>
     </section>
+  )
+}
+
+function DuplicateShot({
+  imageId,
+  label,
+  tone,
+}: {
+  imageId: string
+  label: string
+  tone?: string
+}) {
+  const url = useImageUrl(imageId, 'medium')
+  return (
+    <figure className={styles.shot}>
+      <figcaption className={styles.shotLabel} data-tone={tone}>
+        {label}
+      </figcaption>
+      <div className={styles.shotFrame}>
+        {url ? <img src={url} alt={label} /> : <span />}
+      </div>
+    </figure>
   )
 }
 

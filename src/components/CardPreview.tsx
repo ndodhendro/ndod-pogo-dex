@@ -15,6 +15,7 @@ import {
 import { coverPurity } from '../lib/covers'
 import { isSilhouette, specimenTags, labelForTag, type TagId } from '../lib/tags'
 import { usePreviewAnimations } from '../lib/previewPrefs'
+import { screenshotCssSize } from '../lib/screenshotDisplay'
 import { BottomSheet } from './BottomSheet'
 import { TagChip } from './TagChip'
 import styles from './CardPreview.module.css'
@@ -438,7 +439,7 @@ export function CardPreview({
             lightboxStart.current = null
           }}
         >
-          <img src={imageUrl} alt={species?.name ?? ''} draggable={false} />
+          <LightboxImage src={imageUrl} alt={species?.name ?? ''} />
         </div>
       ) : null}
     </div>
@@ -618,6 +619,34 @@ const SHINY_SPARKLES: ReadonlyArray<{
   { x: '24%', y: '70%', size: 16, dur: '6.8s', delay: '3.8s' },
   { x: '50%', y: '28%', size: 16, dur: '4.8s', delay: '4.2s' },
 ]
+
+function LightboxImage({ src, alt }: { src: string; alt: string }) {
+  const imgRef = useRef<HTMLImageElement>(null)
+  const [display, setDisplay] = useState<{ width: number; height: number } | null>(null)
+
+  const measure = useCallback((img: HTMLImageElement) => {
+    if (!img.naturalWidth) return
+    setDisplay(screenshotCssSize(img.naturalWidth, img.naturalHeight, window.devicePixelRatio || 1))
+  }, [])
+
+  useEffect(() => {
+    setDisplay(null)
+    const img = imgRef.current
+    if (img?.complete) measure(img)
+  }, [src, measure])
+
+  return (
+    <img
+      ref={imgRef}
+      src={src}
+      alt={alt}
+      draggable={false}
+      data-sized={display ? 'true' : undefined}
+      style={display ? { width: display.width, height: display.height } : undefined}
+      onLoad={(e) => measure(e.currentTarget)}
+    />
+  )
+}
 
 function PreviewPhoto({
   slide,

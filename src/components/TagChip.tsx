@@ -10,6 +10,7 @@ type Props = {
   label?: string
   icon?: string
   labelColor?: string
+  size?: 'md' | 'sm'
   onClick?: () => void
 }
 
@@ -19,25 +20,49 @@ function chipTone(tag: TagId) {
   return 'living'
 }
 
-export function TagChip({ tag, selected, locked, label, icon, labelColor, onClick }: Props) {
+export function TagChip({ tag, selected, locked, label, icon, labelColor, size = 'md', onClick }: Props) {
   const on = Boolean(selected || locked)
+  const tone = chipTone(tag)
+  const colorStyle = labelColor ? categoryChromeStyle(labelColor) : undefined
+  const body = (
+    <>
+      <span className={styles.icon} aria-hidden="true">
+        {icon ?? (isBuiltInTag(tag) ? TAG_ICONS[tag] : FALLBACK_EMOJI)}
+      </span>
+      {label ?? labelForTag(tag)}
+    </>
+  )
+
+  if (!onClick) {
+    return (
+      <span
+        className={styles.chip}
+        data-tag={tag}
+        data-tone={tone}
+        data-on={on ? 'true' : 'false'}
+        data-size={size}
+        style={colorStyle}
+      >
+        {body}
+      </span>
+    )
+  }
+
   return (
     <button
       type="button"
       className={styles.chip}
       data-tag={tag}
-      data-tone={chipTone(tag)}
+      data-tone={tone}
       data-on={on ? 'true' : 'false'}
       data-locked={locked ? 'true' : undefined}
-      aria-pressed={onClick || locked ? on : undefined}
+      data-size={size}
+      aria-pressed={locked ? on : on}
       aria-disabled={locked ? true : undefined}
-      style={labelColor ? categoryChromeStyle(labelColor) : undefined}
+      style={colorStyle}
       onClick={locked ? undefined : onClick}
     >
-      <span className={styles.icon} aria-hidden="true">
-        {icon ?? (isBuiltInTag(tag) ? TAG_ICONS[tag] : FALLBACK_EMOJI)}
-      </span>
-      {label ?? labelForTag(tag)}
+      {body}
     </button>
   )
 }

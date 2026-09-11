@@ -5,6 +5,11 @@
   width: 100%;
   text-align: left;
   background: transparent;
+  touch-action: pan-y;
+}
+
+.card[data-grabbed='true'] {
+  touch-action: none;
 }
 
 .frame {

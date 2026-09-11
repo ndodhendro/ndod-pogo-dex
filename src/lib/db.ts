@@ -22,6 +22,8 @@ export type SpecimenRow = {
   imageId: string
   fileHash?: string | null
   createdAt: number
+  /** Species gallery order. Missing means newest-first by createdAt. */
+  gallerySort?: number
   /** False after a confirmed cloud upsert. Missing/true means Backup collection should retry. */
   cloudBackupPending?: boolean
 }

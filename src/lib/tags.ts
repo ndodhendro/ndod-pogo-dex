@@ -183,6 +183,28 @@ export function visualKey(s: SpecimenFields): string {
   ].join('|')
 }
 
+/** Oldest specimen with the same visual look, if any. */
+export function pickDuplicateLook<T extends SpecimenFields & { id: string; createdAt: number }>(
+  existing: readonly T[],
+  incoming: SpecimenFields,
+): T | undefined {
+  const key = visualKey(incoming)
+  let chosen: T | undefined
+  for (const row of existing) {
+    if (visualKey(row) !== key) continue
+    if (!chosen) {
+      chosen = row
+      continue
+    }
+    if (row.createdAt !== chosen.createdAt) {
+      if (row.createdAt < chosen.createdAt) chosen = row
+      continue
+    }
+    if (row.id < chosen.id) chosen = row
+  }
+  return chosen
+}
+
 export function toggleRequiredTags(picked: TagId[], tags: TagId[]): TagId[] {
   if (tags.length === 0) return picked
   const selected = tags.every((tag) => picked.includes(tag))

@@ -4,6 +4,7 @@ import { categoryOrderPatch } from './categoryOrder'
 import { firstGrapheme, normalizeHexColor } from './categoryStyle'
 import { coverMutationsAfterEdit, coverPurity, pickCoverAfterDelete, shouldAutoReplaceCover } from './covers'
 import { db, ensureSeedCategories, type CategoryRow, type InboxRow, type SpecimenRow, type TagCatalogRow } from './db'
+import { galleryOrderPatch } from './galleryOrder'
 import { newId } from './id'
 import { cropBottomFromBlob, makeImageVariants } from './images'
 import { hashBlob } from './hash'
@@ -20,6 +21,7 @@ import {
   deleteCloudCategory,
   deleteCloudSpecimen,
   deleteCloudTagRosterEntry,
+  pushSpecimenGallerySort,
 } from './sync'
 import { removeSpecimenPhoto } from './specimenStorage'
 import {
@@ -33,6 +35,7 @@ import {
 import {
   extraTagList,
   isSilhouette,
+  pickDuplicateLook,
   resolveRequiredTags,
   specimenTags,
   visualKey,
@@ -69,7 +72,12 @@ export async function saveSpecimenFromInbox(
   inboxId: string,
   fields: SpecimenFields,
   cropBottom: number,
-): Promise<{ duplicate: boolean; sameScreenshot?: boolean; cloudError?: string }> {
+): Promise<{
+  duplicate: boolean
+  sameScreenshot?: boolean
+  cloudError?: string
+  existing?: SpecimenRow
+}> {
   await ensureSeedCategories()
   const inbox = await db.inbox.get(inboxId)
   if (!inbox) throw new Error('Transfer item is gone')
@@ -77,13 +85,22 @@ export async function saveSpecimenFromInbox(
   if (!image?.original) throw new Error('Transfer image is gone')
   // Hash the gallery screenshot before crop so Restore from gallery can match camera-roll files.
   const fileHash = await hashBlob(image.original)
+  const form = fields.form?.trim() ? fields.form.trim() : null
+  const extraTags = extraTagList(fields)
+  const sameFiles = await db.specimens.where('fileHash').equals(fileHash).toArray()
+  if (sameFiles.length === 0) {
+    const match = pickDuplicateLook(await db.specimens.toArray(), {
+      ...fields,
+      form,
+      extraTags,
+    })
+    if (match) return { duplicate: true, existing: match }
+  }
+
   const variants = await makeImageVariants(image.original, cropBottom)
   await db.images.update(inbox.imageId, variants)
   forgetImageUrls(inbox.imageId)
 
-  const form = fields.form?.trim() ? fields.form.trim() : null
-  const extraTags = extraTagList(fields)
-  const sameFiles = await db.specimens.where('fileHash').equals(fileHash).toArray()
   if (sameFiles.length > 0) {
     const keep = pickSpecimenToKeepForHash(sameFiles)
     for (const extra of sameFiles) {
@@ -115,9 +132,6 @@ export async function saveSpecimenFromInbox(
     createdAt: Date.now(),
     cloudBackupPending: true,
   }
-
-  const existing = await db.specimens.toArray()
-  const duplicate = existing.some((row) => visualKey(row) === visualKey(specimen))
   const incomingTags = specimenTags(specimen)
   const categories = await db.categories.toArray()
   const catalogs = await db.tagCatalogs.toArray()
@@ -130,7 +144,95 @@ export async function saveSpecimenFromInbox(
     }
   })
 
-  return finishSave(specimen, { duplicate })
+  return finishSave(specimen, { duplicate: false })
+}
+
+export async function replaceSpecimenFromInbox(
+  inboxId: string,
+  existingId: string,
+  fields: SpecimenFields,
+  cropBottom: number,
+): Promise<{ cloudError?: string; specimen: SpecimenRow }> {
+  await ensureSeedCategories()
+  const inbox = await db.inbox.get(inboxId)
+  if (!inbox) throw new Error('Transfer item is gone')
+  const existing = await db.specimens.get(existingId)
+  if (!existing) throw new Error('Specimen is gone')
+  const image = await db.images.get(inbox.imageId)
+  if (!image?.original) throw new Error('Transfer image is gone')
+
+  const fileHash = await hashBlob(image.original)
+  const variants = await makeImageVariants(image.original, cropBottom)
+  await db.images.update(inbox.imageId, variants)
+  forgetImageUrls(inbox.imageId)
+
+  const form = fields.form?.trim() ? fields.form.trim() : null
+  const extraTags = extraTagList(fields)
+  const updated: SpecimenRow = {
+    ...existing,
+    speciesId: fields.speciesId,
+    form,
+    shiny: fields.shiny,
+    shadowStatus: fields.shadowStatus,
+    costume: fields.costume,
+    background: fields.background,
+    gender: fields.gender ?? null,
+    hundo: fields.hundo,
+    nundo: fields.nundo,
+    extraTags,
+    silhouette: isSilhouette(fields),
+    imageId: inbox.imageId,
+    fileHash,
+    cloudBackupPending: true,
+  }
+  const oldImageId = existing.imageId
+  const oldHash = existing.fileHash
+  const catalogs = await db.tagCatalogs.toArray()
+
+  await db.transaction('rw', db.specimens, db.inbox, db.covers, db.images, db.categories, async () => {
+    await db.specimens.put(updated)
+    await db.inbox.delete(inboxId)
+    const imageStillUsed =
+      (await db.specimens.where('imageId').equals(oldImageId).count()) +
+      (await db.inbox.where('imageId').equals(oldImageId).count())
+    if (oldImageId !== inbox.imageId && imageStillUsed === 0) await db.images.delete(oldImageId)
+
+    const specimens = await db.specimens.toArray()
+    const categories = await db.categories.toArray()
+    const covers = await db.covers.toArray()
+    const mutations = coverMutationsAfterEdit(
+      existing,
+      updated,
+      categories,
+      covers,
+      specimens,
+      catalogs,
+    )
+    for (const mutation of mutations) {
+      if (mutation.op === 'put') {
+        await db.covers.put({
+          categoryId: mutation.categoryId,
+          speciesId: mutation.speciesId,
+          variant: mutation.variant,
+          specimenId: mutation.specimenId,
+        })
+      } else {
+        await db.covers.delete([mutation.categoryId, mutation.speciesId, mutation.variant])
+      }
+    }
+  })
+
+  if (oldImageId !== inbox.imageId) forgetImageUrls(oldImageId)
+
+  const saved = await finishSave(updated, { duplicate: false })
+  if (
+    oldHash &&
+    oldHash !== fileHash &&
+    saved.specimen.cloudBackupPending === false
+  ) {
+    await removeSpecimenPhoto(oldHash)
+  }
+  return { cloudError: saved.cloudError, specimen: saved.specimen }
 }
 
 async function saveExistingScreenshot(
@@ -509,6 +611,22 @@ export async function reorderCategories(orderedIds: string[]) {
     )
   })
   return pushCategories({ syncOrder: true })
+}
+
+export async function reorderGallerySpecimens(speciesId: number, orderedIds: string[]) {
+  const existing = await db.specimens.where('speciesId').equals(speciesId).toArray()
+  const patch = galleryOrderPatch(
+    existing.map((row) => row.id),
+    orderedIds,
+  )
+  await db.transaction('rw', db.specimens, async () => {
+    await Promise.all(
+      patch.map((row) =>
+        db.specimens.update(row.id, { gallerySort: row.gallerySort, cloudBackupPending: true }),
+      ),
+    )
+  })
+  return pushSpecimenGallerySort(patch)
 }
 
 export async function saveTagCatalog(

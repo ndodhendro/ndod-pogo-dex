@@ -40,6 +40,7 @@ export type CloudSpecimen = {
   fileHash: string
   imagePath?: string | null
   createdAt: number
+  gallerySort?: number
 }
 
 export type CloudCover = {
@@ -170,6 +171,7 @@ function specimenCloudRow(
     image_path: imagePath,
     file_hash: fileHash,
     created_at: new Date(specimen.createdAt).toISOString(),
+    gallery_sort: specimen.gallerySort ?? null,
   }
 }
 
@@ -222,6 +224,27 @@ export async function pushSpecimen(specimen: SpecimenRow): Promise<string | unde
     .from('specimens')
     .upsert(specimenCloudRow(userId, row, fileHash, retryPath))
   if (retryError) return cloudBackupErrorMessage(retryError.message)
+}
+
+export async function pushSpecimenGallerySort(
+  rows: Array<{ id: string; gallerySort: number }>,
+): Promise<string | undefined> {
+  const supabase = getSupabase()
+  const userId = await signedInUserId()
+  if (!supabase || !userId || rows.length === 0) return
+
+  const backedUp: string[] = []
+  for (const row of rows) {
+    const { data, error } = await supabase
+      .from('specimens')
+      .update({ gallery_sort: row.gallerySort })
+      .eq('user_id', userId)
+      .eq('id', row.id)
+      .select('id')
+    if (error) return error.message
+    if (data && data.length > 0) backedUp.push(row.id)
+  }
+  await markSpecimensBackedUp(backedUp)
 }
 
 export async function pushCoversForSpecies(speciesId: number): Promise<string | undefined> {
@@ -640,6 +663,7 @@ export async function pullCloudCollection(): Promise<{
     file_hash: string | null
     image_path?: string | null
     created_at: string
+    gallery_sort?: number | null
   }
   type RawCategory = {
     id: string
@@ -695,6 +719,7 @@ export async function pullCloudCollection(): Promise<{
         fileHash: row.file_hash as string,
         imagePath: row.image_path ?? null,
         createdAt: new Date(row.created_at).getTime(),
+        gallerySort: typeof row.gallery_sort === 'number' ? row.gallery_sort : undefined,
       })),
     covers: rawCovers.map((row) => ({
       categoryId: fromCloudCategoryId(row.category_id, userId),

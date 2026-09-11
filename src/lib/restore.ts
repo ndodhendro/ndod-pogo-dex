@@ -223,6 +223,7 @@ async function writeRestoredSpecimen(spec: CloudSpecimen, file: Blob, alreadyCro
       imageId,
       fileHash: spec.fileHash,
       createdAt: spec.createdAt,
+      gallerySort: spec.gallerySort,
       cloudBackupPending: false,
     })
   })

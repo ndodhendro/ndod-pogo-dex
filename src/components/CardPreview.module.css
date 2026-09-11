@@ -317,6 +317,10 @@
   max-height: none;
 }
 
+.lightbox img:not([data-sized='true']) {
+  visibility: hidden;
+}
+
 @media (min-width: 720px) {
   .backdrop {
     align-items: center;
