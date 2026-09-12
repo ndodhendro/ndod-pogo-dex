@@ -191,7 +191,10 @@ export async function replaceSpecimenFromInbox(
   const oldHash = existing.fileHash
   const catalogs = await db.tagCatalogs.toArray()
 
-  await db.transaction('rw', db.specimens, db.inbox, db.covers, db.images, db.categories, db.transferLogs, async () => {
+  await db.transaction(
+    'rw',
+    [db.specimens, db.inbox, db.covers, db.images, db.categories, db.transferLogs],
+    async () => {
     await db.specimens.put(updated)
     await db.inbox.delete(inboxId)
     const imageStillUsed =
@@ -447,7 +450,10 @@ export async function deleteSpecimen(id: string) {
   const { speciesId, imageId } = specimen
   const catalogs = await db.tagCatalogs.toArray()
 
-  await db.transaction('rw', db.specimens, db.covers, db.images, db.inbox, db.categories, db.transferLogs, async () => {
+  await db.transaction(
+    'rw',
+    [db.specimens, db.covers, db.images, db.inbox, db.categories, db.transferLogs],
+    async () => {
     const affectedCovers = await db.covers.where('specimenId').equals(id).toArray()
     await upsertTransferLog(specimen, 'delete')
     await db.specimens.delete(id)
