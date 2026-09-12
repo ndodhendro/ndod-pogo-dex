@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { extraTagList } from './tags'
-import { sortTransferLogs, specimenFromTransferLog, transferLogHasSnapshot } from './transferLogs'
+import {
+  idsToPrune,
+  sortTransferLogs,
+  specimenFromTransferLog,
+  transferLogHasSnapshot,
+} from './transferLogs'
 
 describe('sortTransferLogs', () => {
   it('puts the latest updatedAt first', () => {
@@ -20,6 +25,22 @@ describe('sortTransferLogs', () => {
         { id: 'b', createdAt: 4, updatedAt: 5 },
       ]).map((row) => row.id),
     ).toEqual(['b', 'a'])
+  })
+})
+
+describe('idsToPrune', () => {
+  it('keeps the newest logs up to the limit', () => {
+    const rows = [
+      { id: 'keep-new', createdAt: 3, updatedAt: 9 },
+      { id: 'keep-mid', createdAt: 2, updatedAt: 8 },
+      { id: 'drop-old', createdAt: 1, updatedAt: 1 },
+      { id: 'drop-older', createdAt: 0, updatedAt: 0 },
+    ]
+    expect(idsToPrune(rows, 2)).toEqual(['drop-old', 'drop-older'])
+  })
+
+  it('returns nothing when the table is within the limit', () => {
+    expect(idsToPrune([{ id: 'only', createdAt: 1, updatedAt: 1 }], 2)).toEqual([])
   })
 })
 

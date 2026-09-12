@@ -13,6 +13,7 @@
 
 .toast {
   pointer-events: auto;
+  width: 100%;
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
   background: var(--color-surface-raised);
@@ -21,6 +22,17 @@
   font-size: var(--font-size-sm);
   font-weight: 500;
   letter-spacing: 0.02em;
+  touch-action: none;
+  user-select: none;
+  transition: transform 0.24s ease-in;
+}
+
+.toast[data-phase='dragging'] {
+  transition: none;
+}
+
+.toast[data-phase='leave'] {
+  pointer-events: none;
 }
 
 .toast[data-tone='error'] {
@@ -33,4 +45,10 @@
 
 .toast[data-tone='success'] {
   border-color: var(--color-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    transition: none;
+  }
 }

@@ -4,6 +4,8 @@ import { extraTagList, fieldsFromSpecimen, isSilhouette, type SpecimenFields } f
 
 export type TransferLogAction = 'save' | 'edit' | 'delete'
 
+export const TRANSFER_LOG_LIMIT = 30
+
 export const TRANSFER_LOG_ACTIONS: Record<TransferLogAction, { icon: string; label: string }> = {
   save: { icon: '📥', label: 'Saved' },
   edit: { icon: '🏷️', label: 'Edited' },
@@ -14,6 +16,22 @@ export function sortTransferLogs<T extends { createdAt: number; updatedAt: numbe
   rows: readonly T[],
 ): T[] {
   return [...rows].sort((a, b) => b.updatedAt - a.updatedAt || b.createdAt - a.createdAt)
+}
+
+export function idsToPrune(
+  rows: readonly { id: string; createdAt: number; updatedAt: number }[],
+  limit = TRANSFER_LOG_LIMIT,
+): string[] {
+  if (rows.length <= limit) return []
+  return sortTransferLogs(rows)
+    .slice(limit)
+    .map((row) => row.id)
+}
+
+export async function pruneTransferLogs(limit = TRANSFER_LOG_LIMIT) {
+  const ids = idsToPrune(await db.transferLogs.toArray(), limit)
+  if (ids.length === 0) return
+  await db.transferLogs.bulkDelete(ids)
 }
 
 export function transferLogHasSnapshot(
@@ -98,12 +116,13 @@ export async function upsertTransferLog(
   const existing = await db.transferLogs.where('specimenId').equals(specimen.id).first()
   if (existing) {
     await db.transferLogs.update(existing.id, { ...snapshot, updatedAt: now })
-    return
+  } else {
+    await db.transferLogs.add({
+      id: newId(),
+      ...snapshot,
+      createdAt: now,
+      updatedAt: now,
+    })
   }
-  await db.transferLogs.add({
-    id: newId(),
-    ...snapshot,
-    createdAt: now,
-    updatedAt: now,
-  })
+  await pruneTransferLogs()
 }

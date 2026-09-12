@@ -396,7 +396,7 @@ export function SettingsPage() {
             ? `${pendingSlot.label} will count one slot per costume, background, or forme name. Species-only roster entries will not appear in this Pokédex.`
             : `${pendingSlot?.label ?? 'This tag'} will count one slot per species. Named variants on the roster will not appear in this Pokédex.`}
         </p>
-        <div className="row-actions">
+        <div className="confirm-actions">
           <button
             type="button"
             className="btn"
@@ -436,7 +436,7 @@ export function SettingsPage() {
   )
 }
 
-const HOLD_MS = 1000
+const HOLD_MS = 750
 
 function CategoryOrderList({
   categories,
@@ -924,7 +924,7 @@ function CategoryOrderList({
           Remove {pendingDelete?.name}? Specimens stay in your collection. Only this dex track goes
           away.
         </p>
-        <div className="row-actions">
+        <div className="confirm-actions">
           <button
             type="button"
             className="btn"

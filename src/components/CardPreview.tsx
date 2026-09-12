@@ -456,7 +456,7 @@ export function CardPreview({
       <p className={`page-sub ${styles.confirmCopy}`}>
         Delete this specimen from the collection? The screenshot will be gone.
       </p>
-      <div className="row-actions">
+      <div className="confirm-actions">
         <button
           type="button"
           className="btn"

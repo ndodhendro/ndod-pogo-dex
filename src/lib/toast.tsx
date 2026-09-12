@@ -32,14 +32,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setToasts((list) => list.filter((t) => t.id !== id))
   }, [])
 
-  const showToast = useCallback(
-    (text: string, tone: ToastTone = 'error') => {
-      const id = `toast-${Date.now()}-${++toastSeq}`
-      setToasts((list) => [...list, { id, text, tone }])
-      window.setTimeout(() => dismissToast(id), 3000)
-    },
-    [dismissToast],
-  )
+  const showToast = useCallback((text: string, tone: ToastTone = 'error') => {
+    const id = `toast-${Date.now()}-${++toastSeq}`
+    setToasts((list) => [...list, { id, text, tone }])
+  }, [])
 
   const value = useMemo(
     () => ({ toasts, showToast, dismissToast }),

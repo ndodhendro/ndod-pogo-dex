@@ -29,7 +29,14 @@ import {
 } from '../lib/dexGrid'
 import { isProbablyImageFile } from '../lib/images'
 import { useToast } from '../lib/toast'
-import { sortTransferLogs, specimenFromTransferLog, transferLogHasSnapshot, TRANSFER_LOG_ACTIONS } from '../lib/transferLogs'
+import {
+  pruneTransferLogs,
+  sortTransferLogs,
+  specimenFromTransferLog,
+  transferLogHasSnapshot,
+  TRANSFER_LOG_ACTIONS,
+  TRANSFER_LOG_LIMIT,
+} from '../lib/transferLogs'
 import { labelForTag, specimenTags, type SpecimenFields, type TagId } from '../lib/tags'
 import styles from './Inbox.module.css'
 
@@ -38,6 +45,8 @@ const PROGRESS_META: Record<DexProgressKind, { icon: string; label: string }> = 
   caught: { icon: '🎯', label: 'Caught' },
   pure: { icon: '🟢', label: 'Pure' },
 }
+
+type TransferView = 'untagged' | 'logs'
 
 type PendingDuplicate = {
   item: InboxRow
@@ -55,7 +64,9 @@ export function InboxPage() {
     useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
   const logs = useMemo(() => {
     const byId = new Map(specimens.map((row) => [row.id, row]))
-    return sortTransferLogs(logRows).flatMap((log) => {
+    return sortTransferLogs(logRows)
+      .slice(0, TRANSFER_LOG_LIMIT)
+      .flatMap((log) => {
       const live = byId.get(log.specimenId)
       if (!transferLogHasSnapshot(log) && !live) return []
       return [{ log, specimen: specimenFromTransferLog(log, live), live }]
@@ -67,13 +78,18 @@ export function InboxPage() {
   const [discardBusy, setDiscardBusy] = useState(false)
   const [duplicateBusy, setDuplicateBusy] = useState(false)
   const [adding, setAdding] = useState(false)
-  const [logsOpen, setLogsOpen] = useState(false)
+  const [view, setView] = useState<TransferView>('untagged')
+  const showingLogs = view === 'logs'
 
   useEffect(() => {
     importPendingShares().catch(() => {
       showToast('Could not import a shared screenshot')
     })
   }, [showToast])
+
+  useEffect(() => {
+    void pruneTransferLogs()
+  }, [])
 
   async function onFiles(list: File[]) {
     if (list.length === 0) return
@@ -161,9 +177,9 @@ export function InboxPage() {
     <section className={styles.page}>
       <h1 className="page-title" data-tone="inbox">
         <span className="page-title-icon" aria-hidden="true">
-          {TAB_ICONS.inbox}
+          {showingLogs ? '📋' : TAB_ICONS.inbox}
         </span>
-        Transfer
+        {showingLogs ? 'Logs' : 'Untagged Screenshots'}
       </h1>
       <div className={`row-actions ${styles.toolbar}`}>
         <FilePickerButton
@@ -177,30 +193,26 @@ export function InboxPage() {
           type="button"
           className={`btn ${styles.toolBtn}`}
           data-tone="inbox"
-          data-on={logsOpen ? 'true' : 'false'}
-          aria-expanded={logsOpen}
-          onClick={() => setLogsOpen((open) => !open)}
+          data-on={showingLogs ? 'false' : 'true'}
+          aria-pressed={!showingLogs}
+          onClick={() => setView('untagged')}
+        >
+          <span aria-hidden="true">{TAB_ICONS.inbox}</span>
+          Untagged Screenshots
+        </button>
+        <button
+          type="button"
+          className={`btn ${styles.toolBtn}`}
+          data-tone="inbox"
+          data-on={showingLogs ? 'true' : 'false'}
+          aria-pressed={showingLogs}
+          onClick={() => setView('logs')}
         >
           <span aria-hidden="true">📋</span>
           Logs
-          {logs.length > 0 ? <span className={styles.badge}>{logs.length}</span> : null}
         </button>
       </div>
-      {items.length === 0 ? (
-        <p className="empty-state">Nothing waiting. Catch something, screenshot it, transfer it here.</p>
-      ) : (
-        <div className={styles.list}>
-          {items.map((item) => (
-            <InboxItem
-              key={item.id}
-              item={item}
-              onTag={() => setActive(item)}
-              onDiscard={() => setPendingDiscard(item)}
-            />
-          ))}
-        </div>
-      )}
-      {logsOpen ? (
+      {showingLogs ? (
         <section className={styles.logs} aria-label="Logs">
           {logs.length === 0 ? (
             <p className="empty-state">No logs yet.</p>
@@ -218,7 +230,20 @@ export function InboxPage() {
             </div>
           )}
         </section>
-      ) : null}
+      ) : items.length === 0 ? (
+        <p className="empty-state">Nothing waiting. Catch something, screenshot it, transfer it here.</p>
+      ) : (
+        <div className={styles.list}>
+          {items.map((item) => (
+            <InboxItem
+              key={item.id}
+              item={item}
+              onTag={() => setActive(item)}
+              onDiscard={() => setPendingDiscard(item)}
+            />
+          ))}
+        </div>
+      )}
       <AppFooter />
       <TagSheet
         open={Boolean(active)}
@@ -271,7 +296,7 @@ export function InboxPage() {
             <DuplicateShot imageId={pendingDuplicate.item.imageId} label="New" tone="inbox" />
           </div>
         ) : null}
-        <div className={`row-actions ${styles.compareActions}`}>
+        <div className="confirm-actions">
           <button
             type="button"
             className="btn btn-danger"
@@ -304,7 +329,7 @@ export function InboxPage() {
         <p className={`page-sub ${styles.confirmCopy}`}>
           Discard this screenshot? It will leave Transfer and will not be saved to your collection.
         </p>
-        <div className="row-actions">
+        <div className="confirm-actions">
           <button
             type="button"
             className="btn"

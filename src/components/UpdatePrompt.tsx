@@ -10,7 +10,7 @@ export function UpdatePrompt() {
       <div className={styles.card}>
         <h2 id="update-title">Update available</h2>
         <p>A new version of Ndod Pogo Dex is ready. Reload to use it.</p>
-        <div className={styles.actions}>
+        <div className="confirm-actions">
           <button type="button" className="btn" onClick={dismiss}>
             Later
           </button>
