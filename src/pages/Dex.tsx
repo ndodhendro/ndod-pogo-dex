@@ -26,10 +26,12 @@ import { deleteSpecimen, setAsCover } from '../lib/collection'
 import { categoryChromeStyle } from '../lib/categoryStyle'
 import {
   buildDexVirtualRows,
+  countBySpeciesId,
   dexAnimatedCardRowHeight,
   dexGenHeaderHeight,
   dexGridLayout,
   dexOpenAmount,
+  dexSpeciesExtraCount,
   keepDexSlot,
   pickDexCover,
   specimenMatchesDexFilters,
@@ -63,6 +65,7 @@ type Slot = {
   speciesId: number
   variant: string
   name: string
+  extraCount: number
   filled: boolean
   purity: CoverPurity | null
   cover?: SpecimenRow
@@ -526,6 +529,7 @@ function DexSlotCard({ slot, onOpen }: { slot: Slot; onOpen: () => void }) {
     <DexCard
       name={slot.name}
       number={slot.speciesId}
+      extraCount={slot.extraCount}
       thumbUrl={slot.filled ? url : null}
       purity={slot.purity}
       filled={slot.filled}
@@ -550,9 +554,10 @@ function buildSlots(
   filterTags: readonly TagId[] = [],
 ): Slot[] {
   const required = category?.requiredTags ?? []
-  const defs = query.trim()
-    ? searchSlots(slotsForTrack(required, catalogs, roster), query)
-    : slotsForTrack(required, catalogs, roster)
+  const catalog = slotsForTrack(required, catalogs, roster)
+  const defs = query.trim() ? searchSlots(catalog, query) : catalog
+  const variantCounts = countBySpeciesId(catalog)
+  const galleryCounts = countBySpeciesId(specimens)
   const categoryCovers = category ? covers.filter((row) => row.categoryId === category.id) : []
   const filtering = progressFilter != null || filterTags.length > 0
 
@@ -586,6 +591,10 @@ function buildSlots(
       speciesId: def.speciesId,
       variant: def.variant,
       name: def.name,
+      extraCount: dexSpeciesExtraCount(
+        variantCounts.get(def.speciesId) ?? 0,
+        galleryCounts.get(def.speciesId) ?? 0,
+      ),
       filled: inCategory,
       purity,
       cover: cover,

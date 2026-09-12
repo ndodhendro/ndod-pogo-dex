@@ -238,3 +238,21 @@ export function specimenMatchesDexFilters(
 ): boolean {
   return hasAllRequired(specimenTags(specimen), [...filterTags])
 }
+
+export function countBySpeciesId(rows: readonly { speciesId: number }[]): Map<number, number> {
+  const counts = new Map<number, number>()
+  for (const row of rows) {
+    counts.set(row.speciesId, (counts.get(row.speciesId) ?? 0) + 1)
+  }
+  return counts
+}
+
+/** Variant-track slot count when a species has several looks; otherwise gallery size. */
+export function dexSpeciesExtraCount(variantSlotCount: number, galleryCount: number): number {
+  return variantSlotCount > 1 ? variantSlotCount : galleryCount
+}
+
+export function formatDexSpeciesId(speciesId: number, extraCount = 0): string {
+  const id = `#${String(speciesId).padStart(4, '0')}`
+  return extraCount > 0 ? `${id} (${extraCount})` : id
+}

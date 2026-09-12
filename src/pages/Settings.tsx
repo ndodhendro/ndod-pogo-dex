@@ -436,7 +436,7 @@ export function SettingsPage() {
   )
 }
 
-const HOLD_MS = 750
+const HOLD_MS = 500
 
 function CategoryOrderList({
   categories,

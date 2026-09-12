@@ -1,10 +1,12 @@
 import type { CoverPurity } from '../lib/covers'
+import { formatDexSpeciesId } from '../lib/dexGrid'
 import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import styles from './DexCard.module.css'
 
 type Props = {
   name: string
   number: number
+  extraCount?: number
   thumbUrl?: string | null
   purity?: CoverPurity | null
   filled?: boolean
@@ -21,6 +23,7 @@ type Props = {
 export function DexCard({
   name,
   number,
+  extraCount = 0,
   thumbUrl,
   purity,
   filled,
@@ -56,7 +59,7 @@ export function DexCard({
         ) : null}
       </div>
       <div className={styles.caption}>
-        <span className={styles.num}>#{String(number).padStart(4, '0')}</span>
+        <span className={styles.num}>{formatDexSpeciesId(number, extraCount)}</span>
         <span className={styles.label}>{name}</span>
       </div>
     </button>

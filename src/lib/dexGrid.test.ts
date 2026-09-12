@@ -20,6 +20,9 @@ import {
   specimenMatchesProgressFilter,
   specimenProgressFlags,
   toggleDexProgressFilter,
+  countBySpeciesId,
+  dexSpeciesExtraCount,
+  formatDexSpeciesId,
 } from './dexGrid'
 import type { SpecimenFields } from './tags'
 
@@ -307,5 +310,35 @@ describe('dex section slide', () => {
     expect(interpolateOpenAmount(1, 0, 0)).toBe(1)
     expect(interpolateOpenAmount(1, 0, 1)).toBe(0)
     expect(interpolateOpenAmount(0, 1, 0.5)).toBeGreaterThan(0.5)
+  })
+})
+
+describe('formatDexSpeciesId', () => {
+  it('pads the Pokédex number and appends a count when present', () => {
+    expect(formatDexSpeciesId(1)).toBe('#0001')
+    expect(formatDexSpeciesId(1, 0)).toBe('#0001')
+    expect(formatDexSpeciesId(1, 5)).toBe('#0001 (5)')
+  })
+})
+
+describe('dexSpeciesExtraCount', () => {
+  it('uses variant slot count when a species has several looks on the track', () => {
+    expect(dexSpeciesExtraCount(5, 12)).toBe(5)
+  })
+
+  it('uses gallery size on a species-mode track', () => {
+    expect(dexSpeciesExtraCount(1, 5)).toBe(5)
+    expect(dexSpeciesExtraCount(1, 0)).toBe(0)
+  })
+})
+
+describe('countBySpeciesId', () => {
+  it('counts rows per species', () => {
+    expect(
+      [...countBySpeciesId([{ speciesId: 1 }, { speciesId: 1 }, { speciesId: 25 }]).entries()],
+    ).toEqual([
+      [1, 2],
+      [25, 1],
+    ])
   })
 })

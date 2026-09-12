@@ -46,7 +46,7 @@ import { specimenMatchesDexFilters } from '../lib/dexGrid'
 import styles from './Gallery.module.css'
 
 const EMPTY_CATEGORIES: CategoryRow[] = []
-const HOLD_MS = 750
+const HOLD_MS = 500
 const HOLD_LOCK = 10
 
 export function GalleryPage() {
