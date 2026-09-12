@@ -5,6 +5,7 @@ import { ColorPicker } from '../components/ColorPicker'
 import { AppFooter } from '../components/AppFooter'
 import { RosterSheet } from '../components/RosterSheet'
 import { TrackChip } from '../components/TrackChip'
+import { PgsDataSyncButton } from '../components/PgsDataSyncButton'
 import { RestoreCloudButton, RestoreGalleryButton } from '../components/RestoreGalleryButton'
 import { colorForCategory, iconForCategory, lookForTag, categoryForTag, requiredTagChoices, TAB_ICONS, toneForCategory } from '../data/navIcons'
 import { insertCategoryIdAt, moveCategoryId, sameCategoryOrder } from '../lib/categoryOrder'
@@ -285,6 +286,14 @@ export function SettingsPage() {
           <RestoreCloudButton />
           <RestoreGalleryButton />
         </div>
+      </div>
+      <div className="group">
+        <h2>Nearby feeds</h2>
+        <p className="page-sub">
+          Import a PGSData.dat file. Feeds follow this app: pure covers are dropped, missing
+          species that are not yet pure are added back, then the file downloads.
+        </p>
+        <PgsDataSyncButton />
       </div>
       <AppFooter />
       <BottomSheet
