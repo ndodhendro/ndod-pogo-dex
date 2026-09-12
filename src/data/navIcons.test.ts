@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { colorForCategory, iconForCategory, iconForForm, lookForTag, requiredTagChoices, specimenTagChoices, dexFilterTagChoices, dexLockedFilterTags, suggestedLook, toneForCategory, toneForForm } from './navIcons'
+import { colorForCategory, iconForCategory, iconForForm, lookForTag, requiredTagChoices, specimenTagChoices, sortSpecimenTags, dexFilterTagChoices, dexLockedFilterTags, suggestedLook, toneForCategory, toneForForm } from './navIcons'
 
 describe('nav icons', () => {
   it('maps seed category names', () => {
@@ -137,6 +137,20 @@ describe('nav icons', () => {
       { seed: true, name: 'Shadow', requiredTags: ['shadow'], sortOrder: 3, emoji: '🌑' },
     ])
     expect(choices.map((row) => row.tag).slice(0, 4)).toEqual(['basic', 'alolan', 'hundo', 'shadow'])
+  })
+
+  it('sorts specimen tags by category sort_order', () => {
+    const categories = [
+      { seed: true, name: 'Hundo', requiredTags: ['hundo'] as const, sortOrder: 2 },
+      { seed: true, name: 'Shadow', requiredTags: ['shadow'] as const, sortOrder: 0 },
+      { seed: true, name: 'Shiny', requiredTags: ['shiny'] as const, sortOrder: 1 },
+    ]
+    expect(sortSpecimenTags(['hundo', 'mega', 'shiny', 'shadow'], categories)).toEqual([
+      'shadow',
+      'shiny',
+      'hundo',
+      'mega',
+    ])
   })
 
   it('keeps the current track tags in the dex filter', () => {

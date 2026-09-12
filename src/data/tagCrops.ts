@@ -1,4 +1,6 @@
 export const BASIC_CROP_TAG = 'basic'
+/** Seen (silhouette) screenshots always crop here, regardless of other tags. */
+export const SEEN_CROP_HEIGHT = 710
 
 /** Crop bottom (Paint Y, exclusive) per tag. Basic is the empty-look chip. */
 export const SEED_TAG_CROPS: { tag: string; height: number }[] = [
@@ -67,4 +69,13 @@ export function cropHeightForTags(
     }
   }
   return max
+}
+
+export function cropHeightForSpecimen(
+  tags: readonly string[],
+  heights: Record<string, number>,
+  silhouette = false,
+): number {
+  if (silhouette) return SEEN_CROP_HEIGHT
+  return cropHeightForTags(tags, heights)
 }

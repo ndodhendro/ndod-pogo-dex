@@ -80,6 +80,27 @@ export type TagCropRow = {
   height: number
 }
 
+export type TransferLogRow = {
+  id: string
+  specimenId: string
+  action?: 'save' | 'edit' | 'delete'
+  speciesId?: number
+  form?: string | null
+  shiny?: boolean
+  shadowStatus?: ShadowStatus
+  costume?: string | null
+  background?: string | null
+  gender?: string | null
+  hundo?: boolean
+  nundo?: boolean
+  extraTags?: TagId[]
+  silhouette?: boolean
+  imageId?: string | null
+  thumb?: Blob
+  createdAt: number
+  updatedAt: number
+}
+
 class PogoDexDB extends Dexie {
   specimens!: Table<SpecimenRow, string>
   images!: Table<ImageRow, string>
@@ -89,6 +110,7 @@ class PogoDexDB extends Dexie {
   tagCrops!: Table<TagCropRow, string>
   tagCatalogs!: Table<TagCatalogRow, string>
   tagRoster!: Table<TagRosterRow, [string, number, string]>
+  transferLogs!: Table<TransferLogRow, string>
 
   constructor() {
     super('ndod-pogo-dex')
@@ -151,6 +173,9 @@ class PogoDexDB extends Dexie {
     })
     this.version(10).stores({
       coverCopy: null,
+    })
+    this.version(11).stores({
+      transferLogs: 'id, specimenId, updatedAt, createdAt',
     })
   }
 }

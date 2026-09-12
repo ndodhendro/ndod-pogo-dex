@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { categoryForTag, SEEN_ICON, specimenTagChoices } from '../data/navIcons'
-import { cropHeightForTags } from '../data/tagCrops'
+import { cropHeightForSpecimen } from '../data/tagCrops'
 import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { useTagCropHeights } from '../hooks/useCropSettings'
@@ -130,7 +130,11 @@ export function TagSheet({
   const roster = useLiveQuery(() => db.tagRoster.toArray(), []) ?? []
   const tagChoices = useMemo(() => specimenTagChoices(categories), [categories])
   const tags = specimenTags(fields)
-  const suggestedHeight = cropHeightForTags(cropTagsFromFields(fields), heightMap)
+  const suggestedHeight = cropHeightForSpecimen(
+    cropTagsFromFields(fields),
+    heightMap,
+    Boolean(fields.silhouette),
+  )
   const cropBottom = parseCropBottom(heightDraft, suggestedHeight)
   const selectedLabel = selectedSlotLabel(fields, tags, catalogs)
   const availableSlots = useMemo(
@@ -285,38 +289,6 @@ export function TagSheet({
               <img src={previewUrl} alt="" />
             </div>
           ) : null}
-          <SearchField
-            value={query}
-            onChange={(value) => {
-              setQuery(value)
-              setFields((f) => {
-                if (!f.speciesId) return f
-                if (value === selectedSlotLabel(f, specimenTags(f), catalogs)) return f
-                return { ...f, speciesId: 0 }
-              })
-            }}
-            placeholder="Species name or number"
-          />
-          {matches.length > 0 ? (
-            <div className={styles.speciesList}>
-              {matches.map((slot) => {
-                const label = slotBoxLabel(slot)
-                return (
-                  <button
-                    key={`${slot.speciesId}:${slot.variant}`}
-                    type="button"
-                    data-on={query === label ? 'true' : 'false'}
-                    onClick={() => {
-                      setFields((f) => applyRosterSlot(f, slot, specimenTags(f), catalogs))
-                      setQuery(label)
-                    }}
-                  >
-                    {label}
-                  </button>
-                )
-              })}
-            </div>
-          ) : null}
           <div className="field">
             <span>Tags</span>
             <div className="chip-row">
@@ -389,6 +361,38 @@ export function TagSheet({
               ) : null}
             </label>
           ) : null}
+          <SearchField
+            value={query}
+            onChange={(value) => {
+              setQuery(value)
+              setFields((f) => {
+                if (!f.speciesId) return f
+                if (value === selectedSlotLabel(f, specimenTags(f), catalogs)) return f
+                return { ...f, speciesId: 0 }
+              })
+            }}
+            placeholder="Species name or number"
+          />
+          {matches.length > 0 ? (
+            <div className={styles.speciesList}>
+              {matches.map((slot) => {
+                const label = slotBoxLabel(slot)
+                return (
+                  <button
+                    key={`${slot.speciesId}:${slot.variant}`}
+                    type="button"
+                    data-on={query === label ? 'true' : 'false'}
+                    onClick={() => {
+                      setFields((f) => applyRosterSlot(f, slot, specimenTags(f), catalogs))
+                      setQuery(label)
+                    }}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
           <label className={styles.checkRow}>
             <span className={styles.checkCopy}>
               <span aria-hidden="true">{SEEN_ICON}</span>
@@ -424,7 +428,9 @@ export function TagSheet({
             />
           </label>
           <p className="page-sub">
-            Follows the tallest selected tag. Changing this number crops this screenshot only.
+            {fields.silhouette
+              ? 'Seen always uses 710px. Changing this number crops this screenshot only.'
+              : 'Follows the tallest selected tag. Changing this number crops this screenshot only.'}
           </p>
         </>
       )}

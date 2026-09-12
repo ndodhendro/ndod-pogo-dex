@@ -12,6 +12,7 @@ import {
   iconForCategory,
   lookForTag,
   SEEN_ICON,
+  sortSpecimenTags,
   specimenTagChoices,
   toneForCategory,
 } from '../data/navIcons'
@@ -490,6 +491,13 @@ export function GalleryPage() {
   )
 }
 
+function galleryTagLabel(tag: TagId, specimen: SpecimenRow, categories: CategoryRow[]) {
+  const named = categoryForTag(categories, tag)?.name
+  if (tag === 'costume') return specimen.costume || named || labelForTag(tag)
+  if (tag === 'background') return specimen.background || named || labelForTag(tag)
+  return named || labelForTag(tag)
+}
+
 function GalleryCard({
   specimen,
   categories,
@@ -515,7 +523,22 @@ function GalleryCard({
 }) {
   const url = useImageUrl(specimen.imageId, 'thumb')
   const species = SPECIES_BY_ID.get(specimen.speciesId)
-  const tags = specimenTags(specimen)
+  const [expandedTag, setExpandedTag] = useState<string | null>(null)
+  const tags = sortSpecimenTags(specimenTags(specimen), categories)
+  const items = [
+    ...tags.map((tag) => {
+      const look = lookForTag(tag, categories)
+      return {
+        tag,
+        icon: look.emoji,
+        label: galleryTagLabel(tag, specimen, categories),
+        labelColor: look.labelColor,
+      }
+    }),
+    ...(isSilhouette(specimen)
+      ? [{ tag: 'silhouette', icon: SEEN_ICON, label: 'Seen', labelColor: undefined as string | undefined }]
+      : []),
+  ]
   return (
     <div
       className={styles.cell}
@@ -543,36 +566,24 @@ function GalleryCard({
         onPointerCancel={onPointerUp}
         onContextMenu={(event) => event.preventDefault()}
       />
-      {tags.length > 0 ? (
+      {items.length > 0 ? (
         <div className={styles.tags}>
-          {tags.map((tag) => {
-            const look = lookForTag(tag, categories)
-            const named = categoryForTag(categories, tag)?.name
-            const extra =
-              tag === 'costume'
-                ? specimen.costume || named || labelForTag(tag)
-                : tag === 'background'
-                  ? specimen.background || named || labelForTag(tag)
-                  : named || labelForTag(tag)
-            return (
-              <TagChip
-                key={tag}
-                tag={tag}
-                selected
-                size="sm"
-                icon={look.emoji}
-                label={extra}
-                labelColor={look.labelColor}
-              />
-            )
-          })}
-          {isSilhouette(specimen) ? (
-            <TagChip tag="silhouette" selected size="sm" icon={SEEN_ICON} label="Seen" />
-          ) : null}
-        </div>
-      ) : isSilhouette(specimen) ? (
-        <div className={styles.tags}>
-          <TagChip tag="silhouette" selected size="sm" icon={SEEN_ICON} label="Seen" />
+          {items.map((item) => (
+            <TagChip
+              key={item.tag}
+              tag={item.tag}
+              selected
+              size="sm"
+              fill
+              expanded={expandedTag === item.tag}
+              icon={item.icon}
+              label={item.label}
+              labelColor={item.labelColor}
+              onClick={() =>
+                setExpandedTag((current) => (current === item.tag ? null : item.tag))
+              }
+            />
+          ))}
         </div>
       ) : null}
     </div>

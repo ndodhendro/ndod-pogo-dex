@@ -1,10 +1,17 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BottomSheet } from '../components/BottomSheet'
 import { FilePickerButton } from '../components/FilePickerButton'
 import { TagSheet } from '../components/TagSheet'
+import { TagChip } from '../components/TagChip'
 import { AppFooter } from '../components/AppFooter'
-import { TAB_ICONS } from '../data/navIcons'
+import {
+  categoryForTag,
+  lookForTag,
+  SEEN_ICON,
+  sortSpecimenTags,
+  TAB_ICONS,
+} from '../data/navIcons'
 import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
 import {
@@ -14,11 +21,23 @@ import {
   replaceSpecimenFromInbox,
   saveSpecimenFromInbox,
 } from '../lib/collection'
-import { db, type InboxRow, type SpecimenRow } from '../lib/db'
+import { db, type CategoryRow, type InboxRow, type SpecimenRow, type TransferLogRow } from '../lib/db'
+import {
+  DEX_PROGRESS_KINDS,
+  specimenProgressFlags,
+  type DexProgressKind,
+} from '../lib/dexGrid'
 import { isProbablyImageFile } from '../lib/images'
 import { useToast } from '../lib/toast'
-import type { SpecimenFields } from '../lib/tags'
+import { sortTransferLogs, specimenFromTransferLog, transferLogHasSnapshot, TRANSFER_LOG_ACTIONS } from '../lib/transferLogs'
+import { labelForTag, specimenTags, type SpecimenFields, type TagId } from '../lib/tags'
 import styles from './Inbox.module.css'
+
+const PROGRESS_META: Record<DexProgressKind, { icon: string; label: string }> = {
+  seen: { icon: SEEN_ICON, label: 'Seen' },
+  caught: { icon: '🎯', label: 'Caught' },
+  pure: { icon: '🟢', label: 'Pure' },
+}
 
 type PendingDuplicate = {
   item: InboxRow
@@ -30,12 +49,25 @@ type PendingDuplicate = {
 export function InboxPage() {
   const { showToast } = useToast()
   const items = useLiveQuery(() => db.inbox.orderBy('createdAt').reverse().toArray(), []) ?? []
+  const logRows = useLiveQuery(() => db.transferLogs.toArray(), []) ?? []
+  const specimens = useLiveQuery(() => db.specimens.toArray(), []) ?? []
+  const categories =
+    useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
+  const logs = useMemo(() => {
+    const byId = new Map(specimens.map((row) => [row.id, row]))
+    return sortTransferLogs(logRows).flatMap((log) => {
+      const live = byId.get(log.specimenId)
+      if (!transferLogHasSnapshot(log) && !live) return []
+      return [{ log, specimen: specimenFromTransferLog(log, live), live }]
+    })
+  }, [logRows, specimens])
   const [active, setActive] = useState<InboxRow | null>(null)
   const [pendingDiscard, setPendingDiscard] = useState<InboxRow | null>(null)
   const [pendingDuplicate, setPendingDuplicate] = useState<PendingDuplicate | null>(null)
   const [discardBusy, setDiscardBusy] = useState(false)
   const [duplicateBusy, setDuplicateBusy] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [logsOpen, setLogsOpen] = useState(false)
 
   useEffect(() => {
     importPendingShares().catch(() => {
@@ -133,7 +165,7 @@ export function InboxPage() {
         </span>
         Transfer
       </h1>
-      <div className="row-actions" style={{ marginBottom: '1rem' }}>
+      <div className={`row-actions ${styles.toolbar}`}>
         <FilePickerButton
           className="btn btn-primary"
           label={adding ? 'Adding…' : 'Add screenshots'}
@@ -141,11 +173,23 @@ export function InboxPage() {
           preferScreenshotsFolder
           onFiles={(list) => void onFiles(list)}
         />
+        <button
+          type="button"
+          className={`btn ${styles.toolBtn}`}
+          data-tone="inbox"
+          data-on={logsOpen ? 'true' : 'false'}
+          aria-expanded={logsOpen}
+          onClick={() => setLogsOpen((open) => !open)}
+        >
+          <span aria-hidden="true">📋</span>
+          Logs
+          {logs.length > 0 ? <span className={styles.badge}>{logs.length}</span> : null}
+        </button>
       </div>
       {items.length === 0 ? (
         <p className="empty-state">Nothing waiting. Catch something, screenshot it, transfer it here.</p>
       ) : (
-        <div className={styles.list} style={{ marginTop: '1rem' }}>
+        <div className={styles.list}>
           {items.map((item) => (
             <InboxItem
               key={item.id}
@@ -156,6 +200,25 @@ export function InboxPage() {
           ))}
         </div>
       )}
+      {logsOpen ? (
+        <section className={styles.logs} aria-label="Logs">
+          {logs.length === 0 ? (
+            <p className="empty-state">No logs yet.</p>
+          ) : (
+            <div className={styles.logList}>
+              {logs.map(({ log, specimen, live }) => (
+                <TransferLogItem
+                  key={log.id}
+                  log={log}
+                  specimen={specimen}
+                  liveImageId={live?.imageId}
+                  categories={categories}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
       <AppFooter />
       <TagSheet
         open={Boolean(active)}
@@ -283,6 +346,91 @@ function DuplicateShot({
         {url ? <img src={url} alt={label} /> : <span />}
       </div>
     </figure>
+  )
+}
+
+function transferTagLabel(tag: TagId, specimen: SpecimenFields, categories: CategoryRow[]) {
+  const named = categoryForTag(categories, tag)?.name
+  if (tag === 'costume') return specimen.costume || named || labelForTag(tag)
+  if (tag === 'background') return specimen.background || named || labelForTag(tag)
+  return named || labelForTag(tag)
+}
+
+function useBlobUrl(blob?: Blob) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!blob) {
+      setUrl(null)
+      return
+    }
+    const next = URL.createObjectURL(blob)
+    setUrl(next)
+    return () => URL.revokeObjectURL(next)
+  }, [blob])
+  return url
+}
+
+function TransferLogItem({
+  log,
+  specimen,
+  liveImageId,
+  categories,
+}: {
+  log: TransferLogRow
+  specimen: SpecimenFields & { id: string; imageId: string }
+  liveImageId?: string
+  categories: CategoryRow[]
+}) {
+  const liveUrl = useImageUrl(liveImageId, 'thumb')
+  const blobUrl = useBlobUrl(log.thumb)
+  const url = liveUrl ?? blobUrl
+  const species = SPECIES_BY_ID.get(specimen.speciesId)
+  const tags = sortSpecimenTags(specimenTags(specimen), categories)
+  const progress = specimenProgressFlags(specimen, categories)
+  const action = TRANSFER_LOG_ACTIONS[log.action ?? 'save']
+  return (
+    <article className={`group ${styles.log}`}>
+      <div className={styles.logShot}>
+        {url ? <img src={url} alt="" /> : <span />}
+      </div>
+      <div className={styles.logMeta}>
+        <p className={styles.logAction} data-action={log.action ?? 'save'}>
+          <span aria-hidden="true">{action.icon}</span>
+          {action.label}
+        </p>
+        <p className={styles.logId}>#{String(specimen.speciesId).padStart(4, '0')}</p>
+        <p className={styles.logName}>{species?.name ?? 'Unknown'}</p>
+        <div className={styles.logStatus}>
+          {DEX_PROGRESS_KINDS.filter((kind) => progress[kind]).map((kind) => {
+            const meta = PROGRESS_META[kind]
+            return (
+              <p key={kind} className={styles.logKind} data-kind={kind} data-on="true">
+                <span aria-hidden="true">{meta.icon}</span>
+                {meta.label}
+              </p>
+            )
+          })}
+        </div>
+        {tags.length > 0 ? (
+          <div className={styles.logTags}>
+            {tags.map((tag) => {
+              const look = lookForTag(tag, categories)
+              return (
+                <TagChip
+                  key={tag}
+                  tag={tag}
+                  selected
+                  size="sm"
+                  icon={look.emoji}
+                  label={transferTagLabel(tag, specimen, categories)}
+                  labelColor={look.labelColor}
+                />
+              )
+            })}
+          </div>
+        ) : null}
+      </div>
+    </article>
   )
 }
 

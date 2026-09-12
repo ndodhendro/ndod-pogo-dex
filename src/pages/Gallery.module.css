@@ -68,8 +68,9 @@
 
 .tags {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 0.125rem;
+  width: 100%;
   min-width: 0;
 }
 

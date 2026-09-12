@@ -28,6 +28,7 @@ type Props = {
   className?: string
   announce?: boolean
   compact?: boolean
+  embedded?: boolean
   selectedKind?: DexProgressKind | null
   onSelectKind?: (kind: DexProgressKind | null) => void
 }
@@ -44,6 +45,7 @@ export function DexProgress({
   className,
   announce = true,
   compact = false,
+  embedded = false,
   selectedKind = null,
   onSelectKind,
 }: Props) {
@@ -58,9 +60,10 @@ export function DexProgress({
   return (
     <div
       className={[styles.progress, className].filter(Boolean).join(' ')}
-      data-tone={tone}
-      data-compact={compact ? 'true' : undefined}
-      style={labelColor ? categoryChromeStyle(labelColor) : undefined}
+      data-tone={embedded ? undefined : tone}
+      data-compact={compact || embedded ? 'true' : undefined}
+      data-embedded={embedded ? 'true' : undefined}
+      style={embedded ? undefined : labelColor ? categoryChromeStyle(labelColor) : undefined}
     >
       {heading ? <span className={styles.heading}>{heading}</span> : null}
       <div

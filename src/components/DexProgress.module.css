@@ -151,6 +151,25 @@ button.kind {
   height: 0.375rem;
 }
 
+.progress[data-embedded='true'] {
+  margin: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.progress[data-embedded='true'] .kindName {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: hidden;
+  clip: auto;
+  clip-path: none;
+  text-overflow: ellipsis;
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-ui);
+}
+
 .fill {
   position: absolute;
   top: 0;

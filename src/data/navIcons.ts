@@ -268,6 +268,19 @@ export function specimenTagChoices(categories: TagCategoryLook[]): SpecimenTagCh
   return choices
 }
 
+export function sortSpecimenTags(tags: readonly TagId[], categories: TagCategoryLook[]): TagId[] {
+  const rank = new Map<string, number>()
+  specimenTagChoices(categories).forEach((choice, index) => {
+    if (choice.tag != null && !rank.has(choice.tag)) rank.set(choice.tag, index)
+  })
+  return [...tags].sort((a, b) => {
+    const ia = rank.get(a) ?? Number.MAX_SAFE_INTEGER
+    const ib = rank.get(b) ?? Number.MAX_SAFE_INTEGER
+    if (ia !== ib) return ia - ib
+    return a.localeCompare(b)
+  })
+}
+
 /** Tags implied by the current dex track. Shown selected and locked in the filter sheet. */
 export function dexLockedFilterTags(requiredTags: readonly TagId[] = []): TagId[] {
   return requiredTags.length === 0 ? [BASIC_CROP_TAG] : [...requiredTags]

@@ -20,11 +20,6 @@ import {
   BASIC_DEX_TAG,
   catalogForTag,
   countReleasedSlots,
-  isOwnListTag,
-  slotModeLockedToSpecies,
-  slotModeLockedToVariant,
-  tagFollowsBasicList,
-  tagUsesStaticReleasedList,
   type SlotMode,
 } from '../lib/roster'
 import { toastAfterWrite, useToast } from '../lib/toast'
@@ -134,14 +129,6 @@ export function SettingsPage() {
     }
   }
 
-  function askSlotMode(tag: TagId, slotMode: SlotMode) {
-    if (catalogBusy) return
-    const catalog = catalogForTag(catalogs, tag)
-    if (catalog.slotMode === slotMode) return
-    const label = categoryForTag(categories, tag)?.name ?? labelForTag(tag)
-    setPendingSlot({ tag, slotMode, label })
-  }
-
   function confirmSlotMode() {
     if (!pendingSlot) return
     const next = pendingSlot
@@ -235,10 +222,6 @@ export function SettingsPage() {
       </div>
       <div className="group">
         <h2>Preview</h2>
-        <p className="page-sub">
-          Sparkles, auras, and pulses on the preview card. Off uses the same green and gray cover
-          colors as the dex grid.
-        </p>
         <button
           type="button"
           className={styles.prefToggle}
@@ -257,8 +240,7 @@ export function SettingsPage() {
       <div className="group">
         <h2>Account</h2>
         <p className="page-sub">
-          {email ? `Signed in as ${email}.` : 'Signed in with Google.'} Backup copies tags and
-          screenshots to this account.
+          {email ? `Signed in as ${email}.` : 'Signed in with Google.'}
         </p>
         <div className="row-actions">
           <button
@@ -278,21 +260,13 @@ export function SettingsPage() {
       </div>
       <div className="group">
         <h2>Restore</h2>
-        <p className="page-sub">
-          Cloud restore downloads screenshots from the specimens bucket. Gallery restore matches
-          photos on this phone for older backups that never uploaded files.
-        </p>
         <div className="row-actions">
           <RestoreCloudButton />
           <RestoreGalleryButton />
         </div>
       </div>
       <div className="group">
-        <h2>Nearby feeds</h2>
-        <p className="page-sub">
-          Import a PGSData.dat file. Feeds follow this app: pure covers are dropped, missing
-          species that are not yet pure are added back, then the file downloads.
-        </p>
+        <h2>PGSharp</h2>
         <PgsDataSyncButton />
       </div>
       <AppFooter />
@@ -383,124 +357,19 @@ export function SettingsPage() {
           </div>
           <div className="field">
             <span>Pokédex</span>
-            <p className="page-sub">
-              Best buddy, XXL, XXS, Hundo, Nundo, and Max CP use the Basic species list. Alolan,
-              Galarian, Hisuian, Paldean, Mega, Gigantamax, Dynamax, Shadow, Purified, Lucky, Shiny,
-              Gender, Alternate forme, Costume, and Background use the Pokémon GO list. Other
-              tags start empty until you add released slots. Variant slots are for costumes,
-              backgrounds, formes, and gender.
-            </p>
             {dexTags.length === 0 ? (
               <p className="page-sub">Save this tag first to limit its Pokédex.</p>
             ) : (
               <div className={styles.dexEditors}>
                 {dexTags.map((tag) => {
-                  const catalog = catalogForTag(catalogs, tag)
                   const look = lookForTag(tag, categories)
                   const label = categoryForTag(categories, tag)?.name ?? labelForTag(tag)
-                  const followsBasic = tagFollowsBasicList(tag)
-                  const usesGoList = tagUsesStaticReleasedList(tag)
                   return (
                     <div key={tag} className={styles.dexEditor}>
                       <p className={styles.dexTag}>
                         <span aria-hidden="true">{look.emoji}</span>
                         {label}
                       </p>
-                      {followsBasic ? (
-                        <p className="page-sub">Uses the Basic species list.</p>
-                      ) : usesGoList && tag !== BASIC_DEX_TAG ? (
-                        <p className="page-sub">
-                          {tag === 'paldean'
-                            ? 'Uses the Pokémon GO released list, one slot per species. Tauros Combat, Blaze, and Aqua Breed belong on Alternate forme.'
-                            : tag === 'gender'
-                              ? 'Uses the Pokémon GO gender-difference list as Variant slots: Male and Female per species (Venusaur Male, Venusaur Female). Basic stays one Venusaur slot. Hisuian Sneasel has four gender slots. Indeedee is cry-only and is not listed.'
-                              : tag === 'mega'
-                                ? 'Uses the Pokémon GO Mega Evolution list as Variant slots (Venusaur Mega, Charizard Mega X and Mega Y). Kyogre and Groudon count as Mega slots. Staraptor and Chandelure stay off until the wiki marks them released.'
-                                : tag === 'gigantamax'
-                                  ? 'Uses the Pokémon GO Gigantamax list, one slot per released species. Urshifu and other unreleased Gigantamax forms stay off the list.'
-                                  : tag === 'shiny'
-                                    ? 'Uses the Pokémon GO Shiny list, one slot per released species. Greyed wiki rows stay off until Shiny is switched on. Costumes and extra formes belong on those tracks.'
-                                    : tag === 'dynamax'
-                                      ? 'Uses the Pokémon GO Dynamax list, one slot per released species. Greyed wiki rows and Gigantamax-only species stay off the list.'
-                                      : tag === 'shadow'
-                                        ? 'Uses the Pokémon GO Shadow list, one slot per released species. Greyed wiki rows stay off the list. The Purified track uses this same species list.'
-                                        : tag === 'purified'
-                                          ? 'Uses the same Pokémon GO Shadow list, one slot per released species. A species can be purified only if it has a Shadow form.'
-                                          : tag === 'lucky'
-                                            ? 'Uses the Pokémon GO released list except Untradable species, one slot per species. Lucky Pokémon come from trades, so Mew, Celebi, and other wiki Untradable rows stay off. Meltan and Melmetal stay on.'
-                                            : tag === 'costume'
-                                              ? 'Uses the Pokémon GO Event Pokémon list as Variant slots (Bulbasaur Halloween, Pikachu Party hat). Greyed wiki rows stay off until released.'
-                                              : tag === 'background'
-                                                ? 'Uses the Pokémon GO Backgrounds list as Variant slots (Kyogre Las Vegas, Nihilego Wormhole). Location and Special backgrounds are included. Unused wiki rows stay off.'
-                                                : slotModeLockedToSpecies(tag)
-                                                  ? 'Uses the Pokémon GO released list, one slot per species. Extra formes belong on Alternate forme.'
-                                                  : 'Uses the Pokémon GO released list. The roster is for forms that debut after that list.'}
-                        </p>
-                      ) : null}
-                      {followsBasic ? null : (
-                        <>
-                          {isOwnListTag(tag) ? null : (
-                            <button
-                              type="button"
-                              className={styles.prefToggle}
-                              role="switch"
-                              aria-checked={catalog.limitPokedex}
-                              data-tone="settings"
-                              disabled={catalogBusy}
-                              onClick={() =>
-                                void setCatalog(tag, {
-                                  limitPokedex: !catalog.limitPokedex,
-                                  slotMode: catalog.slotMode,
-                                })
-                              }
-                            >
-                              <span className={styles.prefLabel}>
-                                <span aria-hidden="true">📖</span>
-                                Limit Pokédex
-                              </span>
-                              <span
-                                className={styles.switch}
-                                data-on={catalog.limitPokedex ? 'true' : undefined}
-                              />
-                            </button>
-                          )}
-                          {catalog.limitPokedex ? (
-                        <>
-                          {slotModeLockedToSpecies(tag) || slotModeLockedToVariant(tag) ? null : (
-                          <div className="field">
-                            <span>Slots</span>
-                            <div className={styles.segment}>
-                              <button
-                                type="button"
-                                data-on={catalog.slotMode === 'species' ? 'true' : 'false'}
-                                disabled={catalogBusy}
-                                onClick={() => askSlotMode(tag, 'species')}
-                              >
-                                Species
-                              </button>
-                              <button
-                                type="button"
-                                data-on={catalog.slotMode === 'variant' ? 'true' : 'false'}
-                                disabled={catalogBusy}
-                                onClick={() => askSlotMode(tag, 'variant')}
-                              >
-                                Variant
-                              </button>
-                            </div>
-                          </div>
-                          )}
-                          <button
-                            type="button"
-                            className="btn"
-                            onClick={() => setRosterTag(tag)}
-                          >
-                            <span aria-hidden="true">📖</span>
-                            Pokédex roster
-                          </button>
-                        </>
-                      ) : null}
-                        </>
-                      )}
                     </div>
                   )
                 })}

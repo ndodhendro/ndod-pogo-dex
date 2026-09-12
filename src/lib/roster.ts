@@ -534,8 +534,11 @@ export function countFilledSlots(
   requiredTags: readonly TagId[],
   catalogs: readonly TagCatalog[],
   roster: readonly TagRosterEntry[],
+  speciesRange?: { start: number; end: number },
 ): SlotProgress {
-  const slots = slotsForTrack(requiredTags, catalogs, roster)
+  const inRange = (speciesId: number) =>
+    !speciesRange || (speciesId >= speciesRange.start && speciesId <= speciesRange.end)
+  const slots = slotsForTrack(requiredTags, catalogs, roster).filter((slot) => inRange(slot.speciesId))
   const total = slots.length
   if (total === 0) return slotProgress(0, 0, 0, 0)
   const required = [...requiredTags]
@@ -546,6 +549,7 @@ export function countFilledSlots(
   const allowed = limited ? new Set(slots.map((slot) => slotId(slot.speciesId, slot.variant))) : null
 
   for (const specimen of specimens) {
+    if (!inRange(specimen.speciesId)) continue
     const tags = specimenTags(specimen)
     if (!hasAllRequired(tags, required)) continue
     const key = limited

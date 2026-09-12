@@ -350,6 +350,27 @@ describe('countFilledSlots', () => {
     expect(countFilledSlots(rows, [], [], [])).toMatchObject({ seen: 1, caught: 1, pure: 1, filled: 1 })
   })
 
+  it('can limit progress to one generation range', () => {
+    const rows = [
+      specimen({ speciesId: 1 }),
+      specimen({ speciesId: 4, shiny: true }),
+      specimen({ speciesId: 152 }),
+    ]
+    expect(countFilledSlots(rows, [], [], [], { start: 1, end: 151 })).toMatchObject({
+      seen: 2,
+      caught: 2,
+      pure: 1,
+    })
+    expect(countFilledSlots(rows, [], [], [], { start: 1, end: 151 }).total).toBeLessThan(
+      countFilledSlots(rows, [], [], []).total,
+    )
+    expect(countFilledSlots(rows, [], [], [], { start: 152, end: 251 })).toMatchObject({
+      seen: 1,
+      caught: 1,
+      pure: 1,
+    })
+  })
+
   it('counts extra-tag catches as seen and caught, not pure', () => {
     const rows = [specimen({ costume: 'Party Hat', shiny: true }), specimen({ costume: 'Sandals' })]
     expect(countFilledSlots(rows, ['costume'], [costume], roster)).toMatchObject({

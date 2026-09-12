@@ -14,7 +14,12 @@
 }
 
 .icon {
+  flex: 0 0 auto;
   line-height: 1;
+}
+
+.text {
+  min-width: 0;
 }
 
 .chip[data-on='true'] {
@@ -39,4 +44,33 @@
 
 .chip[data-size='sm'] .icon {
   font-size: 0.75rem;
+}
+
+.chip[data-fill='true'] {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  text-align: left;
+  overflow: hidden;
+}
+
+.chip[data-fill='true'] .text {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip[data-fill='true'][data-expanded='true'] {
+  height: auto;
+  align-items: flex-start;
+  overflow: visible;
+}
+
+.chip[data-fill='true'][data-expanded='true'] .text {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
 }

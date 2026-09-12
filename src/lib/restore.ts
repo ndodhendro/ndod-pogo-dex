@@ -2,7 +2,7 @@ import { ingestFile } from './collection'
 import { db, ensureCustomCategoryTags, ensureSeedCategories } from './db'
 import { applyCategoryPull } from './categorySync'
 import { extraTagList, cropTagsFromFields, isSilhouette } from './tags'
-import { cropHeightForTags } from '../data/tagCrops'
+import { cropHeightForSpecimen } from '../data/tagCrops'
 import { hashBlob } from './hash'
 import { newId } from './id'
 import { isProbablyImageFile, makeImageVariants } from './images'
@@ -203,7 +203,10 @@ async function writeRestoredSpecimen(spec: CloudSpecimen, file: Blob, alreadyCro
   )
   const variants = alreadyCropped
     ? await makeImageVariants(file)
-    : await makeImageVariants(file, cropHeightForTags(cropTagsFromFields(spec), heightMap))
+    : await makeImageVariants(
+        file,
+        cropHeightForSpecimen(cropTagsFromFields(spec), heightMap, isSilhouette(spec)),
+      )
   const imageId = newId()
   await db.transaction('rw', db.images, db.specimens, async () => {
     await db.images.add({ id: imageId, ...variants })

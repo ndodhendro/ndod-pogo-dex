@@ -32,6 +32,7 @@ import {
   specimenFillsSlot,
   type SlotMode,
 } from './roster'
+import { upsertTransferLog } from './transferLogs'
 import {
   extraTagList,
   isSilhouette,
@@ -136,12 +137,13 @@ export async function saveSpecimenFromInbox(
   const categories = await db.categories.toArray()
   const catalogs = await db.tagCatalogs.toArray()
 
-  await db.transaction('rw', db.specimens, db.inbox, db.covers, async () => {
+  await db.transaction('rw', db.specimens, db.inbox, db.covers, db.images, db.transferLogs, async () => {
     await db.specimens.add(specimen)
     await db.inbox.delete(inboxId)
     for (const category of categories) {
       await maybeSetCover(category, specimen, incomingTags, catalogs)
     }
+    await upsertTransferLog(specimen, 'save')
   })
 
   return finishSave(specimen, { duplicate: false })
@@ -189,7 +191,7 @@ export async function replaceSpecimenFromInbox(
   const oldHash = existing.fileHash
   const catalogs = await db.tagCatalogs.toArray()
 
-  await db.transaction('rw', db.specimens, db.inbox, db.covers, db.images, db.categories, async () => {
+  await db.transaction('rw', db.specimens, db.inbox, db.covers, db.images, db.categories, db.transferLogs, async () => {
     await db.specimens.put(updated)
     await db.inbox.delete(inboxId)
     const imageStillUsed =
@@ -220,6 +222,7 @@ export async function replaceSpecimenFromInbox(
         await db.covers.delete([mutation.categoryId, mutation.speciesId, mutation.variant])
       }
     }
+    await upsertTransferLog(updated, 'save')
   })
 
   if (oldImageId !== inbox.imageId) forgetImageUrls(oldImageId)
@@ -260,7 +263,7 @@ async function saveExistingScreenshot(
   const categories = await db.categories.toArray()
   const catalogs = await db.tagCatalogs.toArray()
 
-  await db.transaction('rw', db.specimens, db.inbox, db.covers, db.images, async () => {
+  await db.transaction('rw', db.specimens, db.inbox, db.covers, db.images, db.transferLogs, async () => {
     if (!unchanged) await db.specimens.put(updated)
     await db.inbox.delete(inbox.id)
     const imageStillUsed =
@@ -272,6 +275,7 @@ async function saveExistingScreenshot(
         await maybeSetCover(category, updated, incomingTags, catalogs)
       }
     }
+    await upsertTransferLog(updated, 'save')
   })
 
   const row = unchanged ? existing : updated
@@ -324,7 +328,7 @@ export async function updateSpecimen(
   const duplicate = others.some((row) => row.id !== id && visualKey(row) === visualKey(updated))
   const catalogs = await db.tagCatalogs.toArray()
 
-  await db.transaction('rw', db.specimens, db.covers, db.categories, async () => {
+  await db.transaction('rw', db.specimens, db.covers, db.categories, db.images, db.transferLogs, async () => {
     await db.specimens.put(updated)
     const specimens = await db.specimens.toArray()
     const categories = await db.categories.toArray()
@@ -349,6 +353,7 @@ export async function updateSpecimen(
         await db.covers.delete([mutation.categoryId, mutation.speciesId, mutation.variant])
       }
     }
+    await upsertTransferLog(updated, 'edit')
   })
 
   const extraSpecies = existing.speciesId === updated.speciesId ? [] : [existing.speciesId]
@@ -442,8 +447,9 @@ export async function deleteSpecimen(id: string) {
   const { speciesId, imageId } = specimen
   const catalogs = await db.tagCatalogs.toArray()
 
-  await db.transaction('rw', db.specimens, db.covers, db.images, db.inbox, db.categories, async () => {
+  await db.transaction('rw', db.specimens, db.covers, db.images, db.inbox, db.categories, db.transferLogs, async () => {
     const affectedCovers = await db.covers.where('specimenId').equals(id).toArray()
+    await upsertTransferLog(specimen, 'delete')
     await db.specimens.delete(id)
     const imageStillUsed =
       (await db.specimens.where('imageId').equals(imageId).count()) +

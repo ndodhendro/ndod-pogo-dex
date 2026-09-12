@@ -11,6 +11,8 @@ type Props = {
   icon?: string
   labelColor?: string
   size?: 'md' | 'sm'
+  fill?: boolean
+  expanded?: boolean
   onClick?: () => void
 }
 
@@ -20,18 +22,37 @@ function chipTone(tag: TagId) {
   return 'living'
 }
 
-export function TagChip({ tag, selected, locked, label, icon, labelColor, size = 'md', onClick }: Props) {
+export function TagChip({
+  tag,
+  selected,
+  locked,
+  label,
+  icon,
+  labelColor,
+  size = 'md',
+  fill = false,
+  expanded = false,
+  onClick,
+}: Props) {
   const on = Boolean(selected || locked)
   const tone = chipTone(tag)
   const colorStyle = labelColor ? categoryChromeStyle(labelColor) : undefined
+  const text = label ?? labelForTag(tag)
   const body = (
     <>
       <span className={styles.icon} aria-hidden="true">
         {icon ?? (isBuiltInTag(tag) ? TAG_ICONS[tag] : FALLBACK_EMOJI)}
       </span>
-      {label ?? labelForTag(tag)}
+      <span className={styles.text}>{text}</span>
     </>
   )
+  const fillProps = fill
+    ? {
+        'data-fill': 'true' as const,
+        'data-expanded': expanded ? ('true' as const) : 'false',
+        title: text,
+      }
+    : undefined
 
   if (!onClick) {
     return (
@@ -42,6 +63,7 @@ export function TagChip({ tag, selected, locked, label, icon, labelColor, size =
         data-on={on ? 'true' : 'false'}
         data-size={size}
         style={colorStyle}
+        {...fillProps}
       >
         {body}
       </span>
@@ -59,8 +81,10 @@ export function TagChip({ tag, selected, locked, label, icon, labelColor, size =
       data-size={size}
       aria-pressed={locked ? on : on}
       aria-disabled={locked ? true : undefined}
+      aria-expanded={fill ? expanded : undefined}
       style={colorStyle}
       onClick={locked ? undefined : onClick}
+      {...fillProps}
     >
       {body}
     </button>

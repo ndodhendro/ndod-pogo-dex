@@ -111,12 +111,14 @@
 
 .genHeader {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: var(--space-1);
   width: 100%;
-  height: var(--tap-min);
+  height: 100%;
   min-height: var(--tap-min);
-  padding: 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -125,6 +127,14 @@
   font-weight: var(--font-weight-bold);
   letter-spacing: var(--letter-ui);
   text-align: left;
+}
+
+.genTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
 }
 
 .genNumber {
@@ -141,19 +151,11 @@
 
 .genName {
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   overflow: hidden;
   color: var(--tone, var(--color-text));
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-.genRule {
-  flex: 1 1 auto;
-  align-self: center;
-  min-width: var(--space-3);
-  height: 0;
-  border-top: 1px solid color-mix(in srgb, var(--tone, var(--color-border)) 42%, var(--color-border));
 }
 
 .genChevron,

@@ -18,6 +18,7 @@ import {
   pickDexCover,
   specimenMatchesDexFilters,
   specimenMatchesProgressFilter,
+  specimenProgressFlags,
   toggleDexProgressFilter,
 } from './dexGrid'
 import type { SpecimenFields } from './tags'
@@ -189,6 +190,47 @@ describe('specimenMatchesProgressFilter', () => {
     expect(specimenMatchesProgressFilter(extra, [], 'pure')).toBe(false)
     expect(specimenMatchesProgressFilter(pureRow, [], 'pure')).toBe(true)
     expect(specimenMatchesProgressFilter(specimen({ shiny: true }), ['shiny'], 'pure')).toBe(true)
+  })
+})
+
+describe('specimenProgressFlags', () => {
+  const categories = [{ requiredTags: [] as const }, { requiredTags: ['shiny'] as const }]
+
+  it('marks a silhouette as Seen only', () => {
+    expect(specimenProgressFlags(specimen({ silhouette: true }), categories)).toEqual({
+      seen: true,
+      caught: false,
+      pure: false,
+    })
+  })
+
+  it('marks a Basic catch as Caught and Pure', () => {
+    expect(specimenProgressFlags(specimen({ extraTags: ['basic'] }), categories)).toEqual({
+      seen: false,
+      caught: true,
+      pure: true,
+    })
+  })
+
+  it('marks a Shiny catch as Caught and Pure', () => {
+    expect(specimenProgressFlags(specimen({ shiny: true }), categories)).toEqual({
+      seen: false,
+      caught: true,
+      pure: true,
+    })
+  })
+
+  it('is not Pure when no category is an exact match', () => {
+    expect(
+      specimenProgressFlags(specimen({ shiny: true, shadowStatus: 'shadow' }), [
+        { requiredTags: ['shiny'] },
+        { requiredTags: ['shadow'] },
+      ]),
+    ).toEqual({
+      seen: false,
+      caught: true,
+      pure: false,
+    })
   })
 })
 

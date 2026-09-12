@@ -10,7 +10,7 @@ import { SearchField } from '../components/SearchField'
 import { SearchableSelect } from '../components/SearchableSelect'
 import { SpecimenTagSheet } from '../components/TagSheet'
 import { TagChip } from '../components/TagChip'
-import { GENERATION_IDS, groupByGeneration, type Generation } from '../data/generations'
+import { GENERATION_IDS, GENERATIONS, groupByGeneration, type Generation } from '../data/generations'
 import {
   colorForCategory,
   dexFilterTagChoices,
@@ -53,6 +53,7 @@ import {
   specimenFillsSlot,
   slotVariantForTrack,
   trackIsLimited,
+  type SlotProgress,
 } from '../lib/roster'
 import { toastAfterWrite, useToast } from '../lib/toast'
 import { hasAllRequired, isSilhouette, specimenTags, toggleRequiredTags, type TagId } from '../lib/tags'
@@ -158,6 +159,18 @@ export function DexPage() {
     () => countFilledSlots(specimens, category?.requiredTags ?? [], catalogs, roster),
     [specimens, category, catalogs, roster],
   )
+  const generationProgress = useMemo(() => {
+    const required = category?.requiredTags ?? []
+    return new Map(
+      GENERATIONS.map((generation) => [
+        generation.id,
+        countFilledSlots(specimens, required, catalogs, roster, {
+          start: generation.start,
+          end: generation.end,
+        }),
+      ]),
+    )
+  }, [specimens, category, catalogs, roster])
   const tagFiltering = filterTags.length > 0 || Boolean(query.trim())
   const filtering = progressFilter != null || tagFiltering
   const selectedTagCount =
@@ -318,6 +331,7 @@ export function DexPage() {
                   <GenerationHeader
                     generation={row.generation}
                     expanded={!collapsed.has(row.generation.id)}
+                    progress={generationProgress.get(row.generation.id)}
                     onToggle={() => toggle(row.generation.id)}
                   />
                 </div>
@@ -442,7 +456,6 @@ export function DexPage() {
           </button>
         }
       >
-        <p className="page-sub">Show species that have every selected tag on one screenshot.</p>
         <div className="chip-row">
           {tagFilters.map((choice) => {
             const tag = choice.tag as TagId
@@ -469,12 +482,15 @@ export function DexPage() {
 function GenerationHeader({
   generation,
   expanded,
+  progress,
   onToggle,
 }: {
   generation: Generation
   expanded: boolean
+  progress?: SlotProgress
   onToggle: () => void
 }) {
+  const counts = progress ?? { seen: 0, caught: 0, pure: 0, filled: 0, total: 0 }
   return (
     <button
       type="button"
@@ -483,12 +499,23 @@ function GenerationHeader({
       aria-expanded={expanded}
       onClick={onToggle}
     >
-      <span className={styles.genNumber}>{generation.id}</span>
-      <span className={styles.genName}>{generation.name}</span>
-      <span className={styles.genRule} aria-hidden="true" />
-      <span className={styles.genChevron} aria-hidden="true">
-        ▾
+      <span className={styles.genTitle}>
+        <span className={styles.genNumber}>{generation.id}</span>
+        <span className={styles.genName}>{generation.name}</span>
+        <span className={styles.genChevron} aria-hidden="true">
+          ▾
+        </span>
       </span>
+      <DexProgress
+        compact
+        embedded
+        seen={counts.seen}
+        caught={counts.caught}
+        pure={counts.pure}
+        total={counts.total}
+        ariaLabel={`${generation.name} completion`}
+        announce={false}
+      />
     </button>
   )
 }

@@ -11,7 +11,7 @@ export const DEX_MIN_COLUMNS = 3
 export const DEX_MAX_COLUMNS = 6
 export const DEX_LABEL_STACK = 36
 export const DEX_ROW_GAP = 8
-export const DEX_GEN_HEADER_HEIGHT = 44
+export const DEX_GEN_HEADER_HEIGHT = 112
 export const DEX_GEN_SECTION_GAP = 16
 export const DEX_SECTION_ANIM_MS = 240
 
@@ -212,6 +212,24 @@ export function specimenMatchesProgressFilter(
   if (isSilhouette(specimen)) return false
   if (kind === 'caught') return true
   return isGreenCover(specimenTags(specimen), [...required], false, specimen.speciesId, specimen.gender)
+}
+
+/** Seen / Caught / Pure flags for one saved screenshot, not track slot counts. */
+export function specimenProgressFlags(
+  specimen: SpecimenFields,
+  categories: readonly { requiredTags: readonly TagId[] }[],
+): Record<DexProgressKind, boolean> {
+  const silhouette = isSilhouette(specimen)
+  const tags = specimenTags(specimen)
+  return {
+    seen: silhouette,
+    caught: !silhouette,
+    pure:
+      !silhouette &&
+      categories.some((row) =>
+        isGreenCover(tags, [...row.requiredTags], false, specimen.speciesId, specimen.gender),
+      ),
+  }
 }
 
 export function specimenMatchesDexFilters(

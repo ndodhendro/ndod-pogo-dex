@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cropHeightForTags, MAX_TAG_CROP_HEIGHT, SEED_TAG_CROPS } from './tagCrops'
+import { cropHeightForSpecimen, cropHeightForTags, MAX_TAG_CROP_HEIGHT, SEED_TAG_CROPS, SEEN_CROP_HEIGHT } from './tagCrops'
 
 const heights = Object.fromEntries(SEED_TAG_CROPS.map((row) => [row.tag, row.height]))
 
@@ -29,5 +29,18 @@ describe('cropHeightForTags', () => {
   it('uses the tallest height when several tags are on', () => {
     expect(cropHeightForTags(['shiny', 'mega', 'hundo'], heights)).toBe(1055)
     expect(cropHeightForTags(['lucky', 'xxs'], heights)).toBe(930)
+  })
+})
+
+describe('cropHeightForSpecimen', () => {
+  it('locks Seen to 710 even when taller tags are on', () => {
+    expect(SEEN_CROP_HEIGHT).toBe(710)
+    expect(cropHeightForSpecimen(['mega'], heights, true)).toBe(710)
+    expect(cropHeightForSpecimen(['lucky', 'xxs'], heights, true)).toBe(710)
+    expect(cropHeightForSpecimen(['shiny', 'mega', 'hundo'], heights, true)).toBe(710)
+  })
+
+  it('still follows the tallest tag when Seen is off', () => {
+    expect(cropHeightForSpecimen(['mega'], heights, false)).toBe(1055)
   })
 })
