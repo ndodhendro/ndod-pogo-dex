@@ -194,9 +194,15 @@ describe('pickDuplicateLook', () => {
     expect(pickDuplicateLook([newer, older], incoming)?.id).toBe('a')
   })
 
-  it('ignores IV tags when matching a look', () => {
+  it('treats hundo and nundo as different looks', () => {
     const incoming = { ...base(), hundo: true }
     const existing = row('a', 1, { nundo: true })
+    expect(pickDuplicateLook([existing], incoming)).toBeUndefined()
+  })
+
+  it('matches another specimen with the same hundo look', () => {
+    const incoming = { ...base(), hundo: true }
+    const existing = row('a', 1, { hundo: true })
     expect(pickDuplicateLook([existing], incoming)?.id).toBe('a')
   })
 

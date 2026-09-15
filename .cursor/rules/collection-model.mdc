@@ -7,7 +7,7 @@ alwaysApply: true
 
 Unit of collection = one screenshot (`specimen`) with independent tags. Never store a combo name as a tag (`shadow_shiny_polos`). Combos are categories.
 
-Visual uniqueness key: `species + form + shiny + costume + shadowStatus + background + custom tags`. IV is not in that key. "Normal IV" is not a tag.
+Visual uniqueness key: `species + form + shiny + costume + shadowStatus + background + hundo + nundo + custom tags`. "Normal IV" is not a tag.
 
 A **category** is a name plus a set of required tags the user picks. Seed defaults (Basic, Shiny, Shadow, Purified, Costume, Background, Hundo, Nundo). Users may add more.
 

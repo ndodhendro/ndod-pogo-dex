@@ -25,7 +25,7 @@ const shadowPure = specimenTags({
 })
 
 describe('tags', () => {
-  it('does not put IV in the visual uniqueness key', () => {
+  it('treats hundo and nundo as different looks', () => {
     const base = {
       speciesId: 25,
       form: null,
@@ -36,8 +36,9 @@ describe('tags', () => {
       hundo: false,
       nundo: false,
     }
-    expect(visualKey({ ...base, hundo: true })).toBe(visualKey(base))
-    expect(visualKey({ ...base, nundo: true })).toBe(visualKey(base))
+    expect(visualKey({ ...base, hundo: true })).not.toBe(visualKey(base))
+    expect(visualKey({ ...base, nundo: true })).not.toBe(visualKey(base))
+    expect(visualKey({ ...base, hundo: true })).not.toBe(visualKey({ ...base, nundo: true }))
   })
 
   it('includes custom tags in the visual uniqueness key', () => {

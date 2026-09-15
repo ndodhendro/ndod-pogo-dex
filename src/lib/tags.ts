@@ -182,6 +182,8 @@ export function visualKey(s: SpecimenFields): string {
     s.speciesId,
     s.form ?? '',
     s.shiny ? '1' : '0',
+    s.hundo ? '1' : '0',
+    s.nundo ? '1' : '0',
     (s.costume ?? '').trim().toLowerCase(),
     s.shadowStatus,
     (s.background ?? '').trim().toLowerCase(),
