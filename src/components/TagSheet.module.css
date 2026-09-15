@@ -85,6 +85,13 @@
   object-position: top;
 }
 
+.ocr {
+  width: 100%;
+  margin-bottom: var(--space-3);
+  color: var(--tone, var(--color-settings-text));
+  font-weight: 600;
+}
+
 .checkRow {
   display: flex;
   align-items: center;

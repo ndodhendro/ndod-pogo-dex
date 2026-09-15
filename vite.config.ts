@@ -1,8 +1,42 @@
 /// <reference types="vitest/config" />
+import fs from 'node:fs'
 import os from 'node:os'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
+
+const rootDir = path.dirname(fileURLToPath(import.meta.url))
+
+const OCR_FILES = [
+  ['node_modules/tesseract.js/dist/worker.min.js', 'worker.min.js'],
+  [
+    'node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm.js',
+    'tesseract-core-simd-lstm.wasm.js',
+  ],
+  ['node_modules/tesseract.js-core/tesseract-core-simd-lstm.wasm', 'tesseract-core-simd-lstm.wasm'],
+  ['node_modules/@tesseract.js-data/eng/4.0.0_best_int/eng.traineddata.gz', 'eng.traineddata.gz'],
+] as const
+
+function copyOcrAssets() {
+  const dest = path.join(rootDir, 'public', 'ocr')
+  fs.mkdirSync(dest, { recursive: true })
+  for (const [from, name] of OCR_FILES) {
+    const src = path.join(rootDir, from)
+    if (!fs.existsSync(src)) throw new Error(`Missing OCR asset: ${from}`)
+    fs.copyFileSync(src, path.join(dest, name))
+  }
+}
+
+function ocrAssetsPlugin(): Plugin {
+  return {
+    name: 'ocr-assets',
+    buildStart() {
+      copyOcrAssets()
+    },
+  }
+}
 
 const viteBasePath = (globalThis as {
   process?: { env?: Record<string, string | undefined> }
@@ -37,6 +71,7 @@ function lanHostnamesPlugin(): Plugin {
 export default defineConfig({
   base: pagesBase(),
   plugins: [
+    ocrAssetsPlugin(),
     lanHostnamesPlugin(),
     react(),
     VitePWA({
@@ -45,7 +80,8 @@ export default defineConfig({
       filename: 'sw.ts',
       registerType: 'prompt',
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,ico,svg,png,woff2,json,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,ico,svg,png,woff2,json,webmanifest,wasm,gz}'],
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024,
       },
       manifest: false,
       devOptions: {

@@ -18,9 +18,12 @@ import {
   slotsForSelectedTags,
   slotVariantForTrack,
   variantFieldComesFromSlot,
+  type DexSlotDef,
   type TagCatalog,
 } from '../lib/roster'
 import { parseCropBottom } from '../lib/screenshotCrop'
+import { readPokemonName } from '../lib/screenshotOcr'
+import { matchSpeciesFromOcr } from '../lib/speciesOcr'
 import { useToast } from '../lib/toast'
 import {
   cropTagsFromFields,
@@ -118,7 +121,9 @@ export function TagSheet({
   const [tab, setTab] = useState<SheetTab>('tags')
   const [query, setQuery] = useState('')
   const [fields, setFields] = useState<SpecimenFields>(emptyFields)
+  const [ocrHits, setOcrHits] = useState<DexSlotDef[] | null>(null)
   const [busy, setBusy] = useState(false)
+  const [ocrBusy, setOcrBusy] = useState(false)
   const [lightbox, setLightbox] = useState(false)
   const [heightDraft, setHeightDraft] = useState('710')
   const [storedCrop, setStoredCrop] = useState<number | null>(null)
@@ -161,9 +166,10 @@ export function TagSheet({
     [roster, fields.speciesId],
   )
   const matches = useMemo(() => {
+    if (ocrHits) return ocrHits
     if (!query.trim() || query === selectedLabel) return []
     return searchSlots(availableSlots, query).slice(0, 12)
-  }, [query, selectedLabel, availableSlots])
+  }, [ocrHits, query, selectedLabel, availableSlots])
   useEffect(() => {
     if (!open) {
       openedKey.current = null
@@ -174,6 +180,8 @@ export function TagSheet({
     }
     setTab('tags')
     setBusy(false)
+    setOcrBusy(false)
+    setOcrHits(null)
     setLightbox(false)
     keepStoredCrop.current = true
     const seed = initialFieldsRef.current
@@ -219,6 +227,32 @@ export function TagSheet({
     keepStoredCrop.current = false
     setHeightDraft(String(suggestedHeight))
   }, [open, resetKey, suggestedHeight, storedCrop])
+
+  async function runOcr() {
+    if (!imageId || ocrBusy || busy) return
+    setOcrBusy(true)
+    try {
+      const row = await db.images.get(imageId)
+      if (!row?.original) throw new Error('No screenshot to read')
+      const rawText = await readPokemonName(row.original)
+      if (!rawText) throw new Error('Could not read a name')
+      const result = matchSpeciesFromOcr(rawText, availableSlots)
+      if (result.kind === 'strong' && result.slot) {
+        const slot = result.slot
+        setOcrHits(null)
+        setFields((current) => applyRosterSlot(current, slot, specimenTags(current), catalogs))
+        setQuery(slotBoxLabel(slot))
+        return
+      }
+      setFields((current) => ({ ...current, speciesId: 0 }))
+      setQuery(result.query)
+      setOcrHits(result.kind === 'weak' ? result.suggestions : [])
+    } catch (err) {
+      onError(err instanceof Error ? err.message : 'Could not read a name')
+    } finally {
+      setOcrBusy(false)
+    }
+  }
 
   async function save() {
     let warning = specimenSaveWarning(fields)
@@ -316,6 +350,7 @@ export function TagSheet({
                     if (choice.tag == null) return
                     setFields({ ...toggleTag(fields, choice.tag), speciesId: 0 })
                     setQuery('')
+                    setOcrHits(null)
                   }}
                 />
               ))}
@@ -373,9 +408,20 @@ export function TagSheet({
               ) : null}
             </label>
           ) : null}
+          <button
+            type="button"
+            className={`btn btn-ghost ${styles.ocr}`}
+            data-tone={tone}
+            disabled={ocrBusy || busy || !imageId}
+            onClick={() => void runOcr()}
+          >
+            <span aria-hidden="true">🔍</span>
+            {ocrBusy ? 'Reading…' : 'OCR'}
+          </button>
           <SearchField
             value={query}
             onChange={(value) => {
+              setOcrHits(null)
               setQuery(value)
               setFields((f) => {
                 if (!f.speciesId) return f
@@ -395,6 +441,7 @@ export function TagSheet({
                     type="button"
                     data-on={query === label ? 'true' : 'false'}
                     onClick={() => {
+                      setOcrHits(null)
                       setFields((f) => applyRosterSlot(f, slot, specimenTags(f), catalogs))
                       setQuery(label)
                     }}
