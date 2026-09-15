@@ -1,17 +1,47 @@
 import { useState } from 'react'
 import { FilePickerButton } from './FilePickerButton'
-import { restoreFromCloud, restoreFromGallery, type RestoreProgress } from '../lib/restore'
+import { restoreFromCloud, restoreFromGallery } from '../lib/restore'
+import {
+  formatRestoreProgressPercent,
+  restoreBusyLabel,
+  restoreProgressLabel,
+  type RestoreProgress,
+} from '../lib/restoreProgress'
 import { useToast } from '../lib/toast'
+import { yieldUi } from '../lib/yieldUi'
+import styles from './RestoreGalleryButton.module.css'
 
-function progressLabel(progress: RestoreProgress) {
-  if (progress.phase === 'loading') return 'Loading cloud metadata…'
-  if (progress.phase === 'hashing') {
-    return `Hashing photos ${progress.current} / ${progress.total}`
-  }
-  if (progress.phase === 'downloading') {
-    return `Downloading ${progress.current} / ${progress.total}`
-  }
-  return `Restoring ${progress.current} / ${progress.total}`
+function RestoreStatus({
+  progress,
+  idle,
+}: {
+  progress: RestoreProgress | null
+  idle?: string
+}) {
+  if (!progress && !idle) return null
+  return (
+    <>
+      {progress ? (
+        <div className={styles.meterRow}>
+          {progress.total > 0 ? (
+            <progress
+              className={styles.meter}
+              value={progress.current}
+              max={progress.total}
+            />
+          ) : (
+            <progress className={styles.meter} />
+          )}
+          <span className={styles.percent} data-tone="settings" aria-hidden="true">
+            {formatRestoreProgressPercent(progress)}
+          </span>
+        </div>
+      ) : null}
+      <p className={`page-sub ${styles.status}`} role="status" aria-live="polite">
+        {progress ? restoreProgressLabel(progress) : idle}
+      </p>
+    </>
+  )
 }
 
 export function RestoreCloudButton() {
@@ -23,6 +53,7 @@ export function RestoreCloudButton() {
     if (busy) return
     setBusy(true)
     setProgress({ phase: 'loading', current: 0, total: 1 })
+    await yieldUi()
     try {
       const result = await restoreFromCloud(setProgress)
       const parts = [`Restored ${result.restored}`]
@@ -44,12 +75,12 @@ export function RestoreCloudButton() {
   }
 
   return (
-    <div>
+    <div className={styles.block} aria-busy={busy}>
       <button type="button" className="btn" disabled={busy} onClick={() => void onRestore()}>
         <span aria-hidden="true">☁️</span>
-        {busy ? 'Restoring…' : 'Restore from cloud'}
+        {progress ? restoreBusyLabel(progress) : 'Restore from cloud'}
       </button>
-      {progress ? <p className="page-sub">{progressLabel(progress)}</p> : null}
+      <RestoreStatus progress={progress} />
     </div>
   )
 }
@@ -59,10 +90,28 @@ export function RestoreGalleryButton() {
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<RestoreProgress | null>(null)
 
+  function onPicking() {
+    setProgress({ phase: 'picking', current: 0, total: 0 })
+  }
+
+  function onCancel() {
+    setBusy(false)
+    setProgress(null)
+  }
+
+  function onFolderProgress(next: { current: number; total: number }) {
+    setBusy(true)
+    setProgress({ phase: 'reading', current: next.current, total: next.total })
+  }
+
   async function onFiles(list: File[]) {
-    if (list.length === 0) return
+    if (list.length === 0) {
+      onCancel()
+      return
+    }
     setBusy(true)
     setProgress({ phase: 'hashing', current: 0, total: list.length })
+    await yieldUi()
     try {
       const result = await restoreFromGallery([...list], setProgress)
       const parts = [`Restored ${result.restored}`]
@@ -85,23 +134,23 @@ export function RestoreGalleryButton() {
   }
 
   return (
-    <div>
+    <div className={`${styles.block} ${styles.gallery}`} aria-busy={busy}>
       <FilePickerButton
         className="btn"
         icon="🖼️"
-        label={busy ? 'Restoring…' : 'Restore from gallery'}
+        label={progress ? restoreBusyLabel(progress) : 'Restore from gallery'}
         disabled={busy}
         directory
+        onPicking={onPicking}
+        onCancel={onCancel}
+        onFolderProgress={onFolderProgress}
         onFiles={onFiles}
         onError={(err) => showToast(err.message)}
       />
-      {progress ? (
-        <p className="page-sub">{progressLabel(progress)}</p>
-      ) : (
-        <p className="page-sub">
-          Pick the Screenshots folder. Keep this page open until the count finishes.
-        </p>
-      )}
+      <RestoreStatus
+        progress={progress}
+        idle="Pick the Screenshots folder. Keep this page open until restore finishes."
+      />
     </div>
   )
 }

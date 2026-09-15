@@ -1,3 +1,5 @@
+import { yieldUi } from './yieldUi'
+
 export type WellKnownDirectory =
   | 'desktop'
   | 'documents'
@@ -111,23 +113,49 @@ type DirectoryListingHandle = FileSystemDirectoryHandle & {
   values: () => AsyncIterableIterator<FileSystemHandle>
 }
 
-export async function imageFilesFromDirectory(dir: FileSystemDirectoryHandle): Promise<File[]> {
-  const files: File[] = []
+export type FolderReadProgress = {
+  current: number
+  total: number
+}
+
+/** Folder listing, then File blobs. `total` is 0 until listing finishes. */
+export async function imageFilesFromDirectory(
+  dir: FileSystemDirectoryHandle,
+  onProgress?: (progress: FolderReadProgress) => void,
+): Promise<File[]> {
+  onProgress?.({ current: 0, total: 0 })
+  await yieldUi()
+  const fileHandles: FileSystemFileHandle[] = []
   for await (const entry of (dir as DirectoryListingHandle).values()) {
     if (entry.kind !== 'file' || !('getFile' in entry)) continue
-    files.push(await (entry as FileSystemFileHandle).getFile())
+    fileHandles.push(entry as FileSystemFileHandle)
+    onProgress?.({ current: fileHandles.length, total: 0 })
+    if (fileHandles.length % 8 === 0) await yieldUi()
+  }
+  const files: File[] = []
+  const total = fileHandles.length
+  if (total === 0) return files
+  onProgress?.({ current: 0, total })
+  await yieldUi()
+  for (let i = 0; i < fileHandles.length; i++) {
+    files.push(await fileHandles[i].getFile())
+    onProgress?.({ current: i + 1, total })
+    if (i % 4 === 0) await yieldUi()
   }
   return files
 }
 
 /** Folder picker starting in Pictures. Empty array = cancelled. */
-export async function pickScreenshotFolder(): Promise<File[]> {
+export async function pickScreenshotFolder(
+  onProgress?: (progress: FolderReadProgress) => void,
+): Promise<File[]> {
   if (!hasDirectoryPicker(window)) {
     throw new Error('Folder picker API unavailable')
   }
   try {
     const dir = await window.showDirectoryPicker(screenshotFolderOptions())
-    return imageFilesFromDirectory(dir)
+    onProgress?.({ current: 0, total: 0 })
+    return imageFilesFromDirectory(dir, onProgress)
   } catch (err) {
     if (isAbortError(err)) return []
     throw err

@@ -4,6 +4,7 @@ import {
   hasOpenFilePicker,
   pickScreenshotFiles,
   pickScreenshotFolder,
+  type FolderReadProgress,
 } from '../lib/filePicker'
 import styles from './FilePickerButton.module.css'
 
@@ -23,6 +24,9 @@ type Props = {
   directory?: boolean
   onFiles: (files: File[]) => void | Promise<void>
   onError?: (err: Error) => void
+  onPicking?: () => void
+  onCancel?: () => void
+  onFolderProgress?: (progress: FolderReadProgress) => void
 }
 
 export function FilePickerButton({
@@ -36,11 +40,16 @@ export function FilePickerButton({
   directory = false,
   onFiles,
   onError,
+  onPicking,
+  onCancel,
+  onFolderProgress,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const pickingRef = useRef(false)
   const openedAtRef = useRef(0)
   const ignoreUntilRef = useRef(0)
+  const callbacksRef = useRef({ onPicking, onCancel, onFolderProgress, onFiles, onError })
+  callbacksRef.current = { onPicking, onCancel, onFolderProgress, onFiles, onError }
 
   function endPicking() {
     pickingRef.current = false
@@ -48,7 +57,9 @@ export function FilePickerButton({
   }
 
   function reportError(err: unknown) {
-    onError?.(err instanceof Error ? err : new Error('Could not open photos'))
+    callbacksRef.current.onError?.(
+      err instanceof Error ? err : new Error('Could not open photos'),
+    )
   }
 
   useEffect(() => {
@@ -61,25 +72,34 @@ export function FilePickerButton({
       input?.removeAttribute('directory')
     }
 
-    const onCancel = () => endPicking()
-    input?.addEventListener('cancel', onCancel)
+    const onInputCancel = () => {
+      endPicking()
+      callbacksRef.current.onCancel?.()
+    }
+    input?.addEventListener('cancel', onInputCancel)
 
     const onFocus = () => {
       if (!pickingRef.current) return
       if (Date.now() - openedAtRef.current < FOCUS_GRACE_MS) return
+      if (directory && !hasDirectoryPicker(window)) {
+        callbacksRef.current.onFolderProgress?.({ current: 0, total: 0 })
+      }
       endPicking()
     }
 
     window.addEventListener('focus', onFocus)
     return () => {
-      input?.removeEventListener('cancel', onCancel)
+      input?.removeEventListener('cancel', onInputCancel)
       window.removeEventListener('focus', onFocus)
     }
   }, [directory])
 
   async function deliverFiles(files: File[]) {
-    if (files.length === 0) return
-    await onFiles(files)
+    if (files.length === 0) {
+      callbacksRef.current.onCancel?.()
+      return
+    }
+    await callbacksRef.current.onFiles(files)
   }
 
   async function pickFromPictures() {
@@ -94,8 +114,9 @@ export function FilePickerButton({
 
   async function pickFromFolder() {
     try {
-      await deliverFiles(await pickScreenshotFolder())
+      await deliverFiles(await pickScreenshotFolder(callbacksRef.current.onFolderProgress))
     } catch (err) {
+      callbacksRef.current.onCancel?.()
       reportError(err)
     } finally {
       endPicking()
@@ -107,6 +128,7 @@ export function FilePickerButton({
     if (Date.now() < ignoreUntilRef.current) return
     openedAtRef.current = Date.now()
     pickingRef.current = true
+    callbacksRef.current.onPicking?.()
     if (directory && hasDirectoryPicker(window)) {
       void pickFromFolder()
       return

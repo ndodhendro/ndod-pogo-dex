@@ -1,3 +1,4 @@
+import type { RestoreProgress } from './restoreProgress'
 import { ingestFile } from './collection'
 import { db, ensureCustomCategoryTags, ensureSeedCategories } from './db'
 import { applyCategoryPull } from './categorySync'
@@ -10,12 +11,9 @@ import { planCloudPhotoRestore, planGalleryRestore } from './restorePlan'
 import { downloadSpecimenOriginal } from './specimenStorage'
 import { getSupabase } from './supabase'
 import { applyCloudCatalogs, pullCloudCollection, type CloudSpecimen } from './sync'
+import { yieldUi } from './yieldUi'
 
-export type RestoreProgress = {
-  phase: 'loading' | 'hashing' | 'downloading' | 'writing'
-  current: number
-  total: number
-}
+export type { RestoreProgress } from './restoreProgress'
 
 export type RestoreResult = {
   restored: number
@@ -24,12 +22,6 @@ export type RestoreResult = {
   cloudWithoutPhoto: number
   failed?: number
   downloadError?: string
-}
-
-function yieldUi() {
-  return new Promise<void>((resolve) => {
-    window.setTimeout(resolve, 0)
-  })
 }
 
 function isQuotaError(err: unknown) {
@@ -68,6 +60,7 @@ export async function restoreFromCloud(
   onProgress?: (progress: RestoreProgress) => void,
 ): Promise<RestoreResult> {
   onProgress?.({ phase: 'loading', current: 0, total: 1 })
+  await yieldUi()
   const supabase = getSupabase()
   const cloud = await pullCloudCollection()
   if (!supabase || !cloud) throw new Error('Sign in with Google first')
@@ -91,10 +84,15 @@ export async function restoreFromCloud(
   let restored = 0
   let failed = 0
   let downloadError: string | undefined
+  if (plan.download.length > 0) {
+    onProgress?.({ phase: 'downloading', current: 0, total: plan.download.length })
+    await yieldUi()
+  }
   for (let i = 0; i < plan.download.length; i++) {
     const item = plan.download[i]
     const spec = cloudById.get(item.id)
     onProgress?.({ phase: 'downloading', current: i + 1, total: plan.download.length })
+    await yieldUi()
     if (!spec) continue
     const downloaded = await downloadSpecimenOriginal(supabase, item.imagePath)
     if ('error' in downloaded) {
@@ -115,7 +113,6 @@ export async function restoreFromCloud(
       continue
     }
     restored += 1
-    if (i % 2 === 0) await yieldUi()
   }
 
   await applyCloudCovers(cloud)
@@ -138,19 +135,18 @@ export async function restoreFromGallery(
   if (images.length === 0) throw new Error('No photos in that selection.')
 
   // Hash before any network so gallery File blobs stay readable (Android / large picks).
-  const hashed: { hash: string; file: File }[] = []
-  hashed.push({ hash: await hashBlob(images[0]), file: images[0] })
-  onProgress?.({ phase: 'hashing', current: 1, total: images.length })
+  onProgress?.({ phase: 'hashing', current: 0, total: images.length })
   await yieldUi()
-
+  const hashed: { hash: string; file: File }[] = []
   const cloudPromise = pullCloudCollection()
-  for (let i = 1; i < images.length; i++) {
+  for (let i = 0; i < images.length; i++) {
     hashed.push({ hash: await hashBlob(images[i]), file: images[i] })
     onProgress?.({ phase: 'hashing', current: i + 1, total: images.length })
     await yieldUi()
   }
 
   onProgress?.({ phase: 'loading', current: 0, total: 1 })
+  await yieldUi()
   const cloud = await cloudPromise
   if (!cloud) throw new Error('Sign in with Google first')
   if (cloud.specimens.length === 0) {
@@ -178,6 +174,10 @@ export async function restoreFromGallery(
   let restored = 0
   let failed = 0
   let lastError: string | undefined
+  if (plan.restoreIds.length > 0) {
+    onProgress?.({ phase: 'writing', current: 0, total: plan.restoreIds.length })
+    await yieldUi()
+  }
   for (let i = 0; i < plan.restoreIds.length; i++) {
     const spec = cloudById.get(plan.restoreIds[i])
     onProgress?.({ phase: 'writing', current: i + 1, total: plan.restoreIds.length })
@@ -200,14 +200,19 @@ export async function restoreFromGallery(
   const seenUnmatched = new Set<string>()
   let inbox = 0
   let unmatchedIndex = 0
+  const inboxTotal = plan.unmatchedHashes.length
+  if (inboxTotal > 0) {
+    onProgress?.({ phase: 'inbox', current: 0, total: inboxTotal })
+    await yieldUi()
+  }
   for (const row of unmatchedFiles) {
     if (seenUnmatched.has(row.hash)) continue
     seenUnmatched.add(row.hash)
     unmatchedIndex += 1
     onProgress?.({
-      phase: 'writing',
+      phase: 'inbox',
       current: unmatchedIndex,
-      total: plan.unmatchedHashes.length || unmatchedIndex,
+      total: inboxTotal || unmatchedIndex,
     })
     await yieldUi()
     try {

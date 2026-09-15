@@ -1,0 +1,43 @@
+.block {
+  min-width: min(100%, 12rem);
+  flex: 1 1 12rem;
+}
+
+.gallery {
+  flex: 1 1 100%;
+}
+
+.meterRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+
+.meter {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  height: 0.35rem;
+  margin: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  background: var(--color-border);
+  accent-color: var(--color-accent);
+}
+
+.percent {
+  flex: none;
+  min-width: 4ch;
+  color: var(--tone);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-ui);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.status {
+  margin: var(--space-2) 0 0;
+}
