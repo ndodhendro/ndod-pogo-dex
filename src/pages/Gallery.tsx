@@ -11,6 +11,7 @@ import {
   colorForCategory,
   iconForCategory,
   lookForTag,
+  NOT_PURE_ICON,
   SEEN_ICON,
   sortSpecimenTags,
   specimenTagChoices,
@@ -36,6 +37,7 @@ import { listNeighbor } from '../lib/previewSwipe'
 import { toastAfterWrite, useToast } from '../lib/toast'
 import {
   hasAllRequired,
+  isNotPure,
   isSilhouette,
   labelForTag,
   specimenTags,
@@ -381,6 +383,7 @@ export function GalleryPage() {
                         isSilhouette(specimen),
                         specimen.speciesId,
                         specimen.gender,
+                        isNotPure(specimen),
                       )
                     : null
                 }
@@ -537,6 +540,9 @@ function GalleryCard({
     }),
     ...(isSilhouette(specimen)
       ? [{ tag: 'silhouette', icon: SEEN_ICON, label: 'Seen', labelColor: undefined as string | undefined }]
+      : []),
+    ...(isNotPure(specimen)
+      ? [{ tag: 'not-pure', icon: NOT_PURE_ICON, label: 'Not Pure', labelColor: undefined as string | undefined }]
       : []),
   ]
   return (

@@ -1,4 +1,4 @@
-import { extraTagList, isSilhouette, type SpecimenFields } from './tags'
+import { extraTagList, isNotPure, isSilhouette, type SpecimenFields } from './tags'
 import { storageErrorMessage } from './specimenStorage'
 
 export function isSpecimenFileHashConflict(error: {
@@ -31,6 +31,7 @@ export function sameSpecimenMetadata(a: SpecimenFields, b: SpecimenFields): bool
     a.hundo === b.hundo &&
     a.nundo === b.nundo &&
     isSilhouette(a) === isSilhouette(b) &&
+    isNotPure(a) === isNotPure(b) &&
     extraA.length === extraB.length &&
     extraA.every((tag, i) => tag === extraB[i])
   )

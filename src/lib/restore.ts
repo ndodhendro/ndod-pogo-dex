@@ -1,7 +1,7 @@
 import { ingestFile } from './collection'
 import { db, ensureCustomCategoryTags, ensureSeedCategories } from './db'
 import { applyCategoryPull } from './categorySync'
-import { extraTagList, cropTagsFromFields, isSilhouette } from './tags'
+import { extraTagList, cropTagsFromFields, isNotPure, isSilhouette } from './tags'
 import { cropHeightForSpecimen } from '../data/tagCrops'
 import { hashBlob } from './hash'
 import { newId } from './id'
@@ -223,6 +223,7 @@ async function writeRestoredSpecimen(spec: CloudSpecimen, file: Blob, alreadyCro
       nundo: spec.nundo,
       extraTags: extraTagList(spec),
       silhouette: isSilhouette(spec),
+      notPure: isNotPure(spec),
       imageId,
       fileHash: spec.fileHash,
       createdAt: spec.createdAt,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { categoryForTag, lookForTag, SEEN_ICON } from '../data/navIcons'
+import { categoryForTag, lookForTag, NOT_PURE_ICON, SEEN_ICON } from '../data/navIcons'
 import { SPECIES_BY_ID } from '../data/species'
 import { db, type SpecimenRow } from '../lib/db'
 import {
@@ -13,7 +13,7 @@ import {
   type PreviewSwipeAxis,
 } from '../lib/previewSwipe'
 import { coverPurity } from '../lib/covers'
-import { isSilhouette, specimenTags, labelForTag, type TagId } from '../lib/tags'
+import { isNotPure, isSilhouette, specimenTags, labelForTag, type TagId } from '../lib/tags'
 import { usePreviewAnimations } from '../lib/previewPrefs'
 import { screenshotCssSize } from '../lib/screenshotDisplay'
 import { BottomSheet } from './BottomSheet'
@@ -304,6 +304,7 @@ export function CardPreview({
     isSilhouette(specimen),
     specimen.speciesId,
     specimen.gender,
+    isNotPure(specimen),
   )
 
   return (
@@ -395,6 +396,9 @@ export function CardPreview({
             })}
             {isSilhouette(specimen) ? (
               <TagChip tag="silhouette" selected icon={SEEN_ICON} label="Seen" />
+            ) : null}
+            {isNotPure(specimen) ? (
+              <TagChip tag="not-pure" selected icon={NOT_PURE_ICON} label="Not Pure" />
             ) : null}
           </div>
         </div>
@@ -666,6 +670,7 @@ function PreviewPhoto({
         isSilhouette(slide.specimen),
         slide.specimen.speciesId,
         slide.specimen.gender,
+        isNotPure(slide.specimen),
       )
     : null
   return (

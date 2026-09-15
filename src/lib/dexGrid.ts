@@ -2,7 +2,7 @@ import type { Generation } from '../data/generations'
 import { MAX_TAG_CROP_HEIGHT } from '../data/tagCrops'
 import { isGreenCover } from './covers'
 import { SCREENSHOT_WIDTH } from './images'
-import { hasAllRequired, isSilhouette, specimenTags, type SpecimenFields, type TagId } from './tags'
+import { hasAllRequired, isNotPure, isSilhouette, specimenTags, type SpecimenFields, type TagId } from './tags'
 
 /** Matches Dex grid: min card 112px, 8px gaps (`--space-2`), crop frame + label. */
 export const DEX_COL_GAP = 8
@@ -211,7 +211,14 @@ export function specimenMatchesProgressFilter(
   if (kind === 'seen') return true
   if (isSilhouette(specimen)) return false
   if (kind === 'caught') return true
-  return isGreenCover(specimenTags(specimen), [...required], false, specimen.speciesId, specimen.gender)
+  return isGreenCover(
+    specimenTags(specimen),
+    [...required],
+    false,
+    specimen.speciesId,
+    specimen.gender,
+    isNotPure(specimen),
+  )
 }
 
 /** Seen / Caught / Pure flags for one saved screenshot, not track slot counts. */
@@ -227,7 +234,14 @@ export function specimenProgressFlags(
     pure:
       !silhouette &&
       categories.some((row) =>
-        isGreenCover(tags, [...row.requiredTags], false, specimen.speciesId, specimen.gender),
+        isGreenCover(
+          tags,
+          [...row.requiredTags],
+          false,
+          specimen.speciesId,
+          specimen.gender,
+          isNotPure(specimen),
+        ),
       ),
   }
 }

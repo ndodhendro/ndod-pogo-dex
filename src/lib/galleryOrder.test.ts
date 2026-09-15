@@ -53,6 +53,16 @@ describe('galleryDefaultRank', () => {
       galleryDefaultRank(spec('combo', { shiny: true, shadowStatus: 'shadow' }), withCombo),
     ).toEqual([8])
   })
+
+  it('does not rank a not-pure catch as a green cover', () => {
+    const withCombo = [...categories, { requiredTags: ['shiny', 'shadow'] as const, sortOrder: 8 }]
+    expect(
+      galleryDefaultRank(spec('combo', { shiny: true, shadowStatus: 'shadow' }), withCombo),
+    ).toEqual([8])
+    expect(
+      galleryDefaultRank(spec('combo', { shiny: true, shadowStatus: 'shadow', notPure: true }), withCombo),
+    ).toEqual([1, 2, 8])
+  })
 })
 
 describe('sortGallerySpecimens', () => {

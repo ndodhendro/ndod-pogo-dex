@@ -1,6 +1,6 @@
 import { db, type SpecimenRow, type TransferLogRow } from './db'
 import { newId } from './id'
-import { extraTagList, fieldsFromSpecimen, isSilhouette, type SpecimenFields } from './tags'
+import { extraTagList, fieldsFromSpecimen, isNotPure, isSilhouette, type SpecimenFields } from './tags'
 
 export type TransferLogAction = 'save' | 'edit' | 'delete'
 
@@ -60,6 +60,7 @@ export function specimenFromTransferLog(
         nundo: Boolean(log.nundo),
         extraTags: extraTagList(log),
         silhouette: isSilhouette(log),
+        notPure: isNotPure(log),
       }),
     }
   }
@@ -101,6 +102,7 @@ function snapshotFromSpecimen(
     nundo: specimen.nundo,
     extraTags: extraTagList(specimen),
     silhouette: isSilhouette(specimen),
+    notPure: isNotPure(specimen),
     imageId: specimen.imageId,
     thumb,
   }

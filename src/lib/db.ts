@@ -19,6 +19,7 @@ export type SpecimenRow = {
   nundo: boolean
   extraTags?: TagId[]
   silhouette?: boolean
+  notPure?: boolean
   imageId: string
   fileHash?: string | null
   createdAt: number
@@ -95,6 +96,7 @@ export type TransferLogRow = {
   nundo?: boolean
   extraTags?: TagId[]
   silhouette?: boolean
+  notPure?: boolean
   imageId?: string | null
   thumb?: Blob
   createdAt: number

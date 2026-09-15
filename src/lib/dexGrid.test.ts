@@ -194,6 +194,12 @@ describe('specimenMatchesProgressFilter', () => {
     expect(specimenMatchesProgressFilter(pureRow, [], 'pure')).toBe(true)
     expect(specimenMatchesProgressFilter(specimen({ shiny: true }), ['shiny'], 'pure')).toBe(true)
   })
+
+  it('keeps a not-pure catch in Caught but not Pure', () => {
+    const marked = specimen({ notPure: true })
+    expect(specimenMatchesProgressFilter(marked, [], 'caught')).toBe(true)
+    expect(specimenMatchesProgressFilter(marked, [], 'pure')).toBe(false)
+  })
 })
 
 describe('specimenProgressFlags', () => {
@@ -212,6 +218,14 @@ describe('specimenProgressFlags', () => {
       seen: false,
       caught: true,
       pure: true,
+    })
+  })
+
+  it('is Caught but not Pure when marked not pure', () => {
+    expect(specimenProgressFlags(specimen({ extraTags: ['basic'], notPure: true }), categories)).toEqual({
+      seen: false,
+      caught: true,
+      pure: false,
     })
   })
 

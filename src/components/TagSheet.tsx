@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { categoryForTag, SEEN_ICON, specimenTagChoices } from '../data/navIcons'
+import { categoryForTag, SEEN_ICON, NOT_PURE_ICON, specimenTagChoices } from '../data/navIcons'
 import { cropHeightForSpecimen } from '../data/tagCrops'
 import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
@@ -50,6 +50,7 @@ const emptyFields = (): SpecimenFields => ({
   nundo: false,
   extraTags: ['basic'],
   silhouette: false,
+  notPure: false,
 })
 
 function rosterVariantNames(
@@ -402,6 +403,17 @@ export function TagSheet({
               type="checkbox"
               checked={Boolean(fields.silhouette)}
               onChange={(e) => setFields((f) => ({ ...f, silhouette: e.target.checked }))}
+            />
+          </label>
+          <label className={styles.checkRow}>
+            <span className={styles.checkCopy}>
+              <span aria-hidden="true">{NOT_PURE_ICON}</span>
+              Mark as not Pure
+            </span>
+            <input
+              type="checkbox"
+              checked={Boolean(fields.notPure)}
+              onChange={(e) => setFields((f) => ({ ...f, notPure: e.target.checked }))}
             />
           </label>
         </>

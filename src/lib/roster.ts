@@ -19,6 +19,7 @@ import {
   formNameForTag,
   hasAllRequired,
   isFormTag,
+  isNotPure,
   isSilhouette,
   labelForTag,
   specimenTags,
@@ -559,7 +560,9 @@ export function countFilledSlots(
     seen.add(key)
     if (isSilhouette(specimen)) continue
     caught.add(key)
-    if (isGreenCover(tags, required, false, specimen.speciesId, specimen.gender)) pure.add(key)
+    if (isGreenCover(tags, required, false, specimen.speciesId, specimen.gender, isNotPure(specimen))) {
+      pure.add(key)
+    }
   }
   return slotProgress(seen.size, caught.size, pure.size, total)
 }

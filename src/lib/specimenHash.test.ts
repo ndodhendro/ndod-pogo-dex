@@ -61,6 +61,10 @@ describe('sameSpecimenMetadata', () => {
     expect(sameSpecimenMetadata(base, { ...base, silhouette: true })).toBe(false)
   })
 
+  it('notices a not-pure flag change', () => {
+    expect(sameSpecimenMetadata(base, { ...base, notPure: true })).toBe(false)
+  })
+
   it('notices a gender variant change', () => {
     expect(sameSpecimenMetadata({ ...base, gender: 'Male' }, { ...base, gender: 'Female' })).toBe(
       false,

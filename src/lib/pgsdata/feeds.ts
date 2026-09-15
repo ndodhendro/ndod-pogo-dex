@@ -1,7 +1,7 @@
 import { isGreenCover } from '../covers'
 import type { CategoryRow, SpecimenRow, TagCatalogRow, TagRosterRow } from '../db'
 import { slotsForTrack } from '../roster'
-import { isSilhouette, specimenTags, type TagId } from '../tags'
+import { isNotPure, isSilhouette, specimenTags, type TagId } from '../tags'
 
 export type PgsFeed = {
   name?: string
@@ -123,6 +123,7 @@ export function pureSpeciesByFeedKey(
           false,
           specimen.speciesId,
           specimen.gender,
+          isNotPure(specimen),
         )
       ) {
         continue

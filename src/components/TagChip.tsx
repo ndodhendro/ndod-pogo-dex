@@ -17,7 +17,7 @@ type Props = {
 }
 
 function chipTone(tag: TagId) {
-  if (tag === 'silhouette') return 'nundo'
+  if (tag === 'silhouette' || tag === 'not-pure') return 'nundo'
   if (isBuiltInTag(tag) || isFormTag(tag)) return tag
   return 'living'
 }

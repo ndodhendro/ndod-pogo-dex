@@ -585,6 +585,7 @@ function buildSlots(
             isSilhouette(cover),
             cover.speciesId,
             cover.gender,
+            cover.notPure,
           )
         : null
     slots.push({

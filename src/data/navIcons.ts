@@ -27,6 +27,8 @@ export const TAB_ICONS = {
 
 export const SEEN_ICON = '👁️'
 
+export const NOT_PURE_ICON = '🔘'
+
 export const TAB_LOGOS = {
   dex: 'nav/pokedex.png',
 } as const

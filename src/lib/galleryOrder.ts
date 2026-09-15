@@ -1,6 +1,6 @@
 import { insertCategoryIdAt } from './categoryOrder'
 import { isGreenCover } from './covers'
-import { hasAllRequired, isSilhouette, specimenTags, type SpecimenFields, type TagId } from './tags'
+import { hasAllRequired, isNotPure, isSilhouette, specimenTags, type SpecimenFields, type TagId } from './tags'
 
 export type GalleryCategory = {
   requiredTags: TagId[]
@@ -25,8 +25,9 @@ function compareNumberLists(a: readonly number[], b: readonly number[]) {
 export function galleryDefaultRank(specimen: SpecimenFields, categories: readonly GalleryCategory[]) {
   const tags = specimenTags(specimen)
   const silhouette = isSilhouette(specimen)
+  const notPure = isNotPure(specimen)
   const green = categories.filter((row) =>
-    isGreenCover(tags, row.requiredTags, silhouette, specimen.speciesId, specimen.gender),
+    isGreenCover(tags, row.requiredTags, silhouette, specimen.speciesId, specimen.gender, notPure),
   )
   if (green.length > 0) {
     const best = green.reduce((a, b) => {

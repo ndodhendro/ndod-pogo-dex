@@ -345,6 +345,15 @@ describe('countFilledSlots', () => {
     ).toMatchObject({ seen: 1, caught: 0, pure: 0, filled: 0 })
   })
 
+  it('counts a not-pure catch as seen and caught, not pure', () => {
+    expect(countFilledSlots([specimen({ notPure: true })], [], [], [])).toMatchObject({
+      seen: 1,
+      caught: 1,
+      pure: 0,
+      filled: 1,
+    })
+  })
+
   it('still counts a slot that also has a catch', () => {
     const rows = [specimen({ silhouette: true }), specimen()]
     expect(countFilledSlots(rows, [], [], [])).toMatchObject({ seen: 1, caught: 1, pure: 1, filled: 1 })

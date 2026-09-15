@@ -47,6 +47,8 @@ export type SpecimenFields = {
   extraTags?: TagId[]
   /** Seen in the wild, not caught. Not a tag; never counts as a pure cover. */
   silhouette?: boolean
+  /** Manual override: exact tags still count as gray / not pure. */
+  notPure?: boolean
 }
 
 export const TAG_LABELS: Record<BuiltInTagId, string> = {
@@ -82,6 +84,10 @@ export function isSilhouette(s: { silhouette?: boolean } | null | undefined): bo
   return s?.silhouette === true
 }
 
+export function isNotPure(s: { notPure?: boolean } | null | undefined): boolean {
+  return s?.notPure === true
+}
+
 export function fieldsFromSpecimen(row: SpecimenFields): SpecimenFields {
   return {
     speciesId: row.speciesId,
@@ -95,6 +101,7 @@ export function fieldsFromSpecimen(row: SpecimenFields): SpecimenFields {
     nundo: row.nundo,
     extraTags: extraTagList(row),
     silhouette: isSilhouette(row),
+    notPure: isNotPure(row),
   }
 }
 
@@ -135,6 +142,7 @@ export function clearVisualTags(fields: SpecimenFields): SpecimenFields {
     nundo: false,
     extraTags: [],
     silhouette: isSilhouette(fields),
+    notPure: isNotPure(fields),
   }
 }
 

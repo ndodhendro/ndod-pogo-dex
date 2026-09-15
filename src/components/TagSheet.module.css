@@ -108,3 +108,7 @@
   accent-color: var(--color-accent);
   flex-shrink: 0;
 }
+
+.checkRow + .checkRow {
+  margin-top: 0;
+}

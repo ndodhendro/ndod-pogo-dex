@@ -5,13 +5,23 @@ import {
   slotVariantForTrack,
   type TagCatalog,
 } from './roster'
-import { hasAllRequired, isExactMatch, isSilhouette, specimenTags, type SpecimenFields, type TagId } from './tags'
+import {
+  hasAllRequired,
+  isExactMatch,
+  isNotPure,
+  isSilhouette,
+  specimenTags,
+  type SpecimenFields,
+  type TagId,
+} from './tags'
 
 export type CoverPurity = 'green' | 'gray'
 
 export type CoverSilhouetteOpts = {
   currentSilhouette?: boolean
   incomingSilhouette?: boolean
+  currentNotPure?: boolean
+  incomingNotPure?: boolean
   speciesId?: number
   currentGender?: string | null
   incomingGender?: string | null
@@ -47,8 +57,9 @@ export function isGreenCover(
   silhouette = false,
   speciesId?: number,
   gender?: string | null,
+  notPure = false,
 ): boolean {
-  if (silhouette) return false
+  if (silhouette || notPure) return false
   if (isGenderCategory(required)) {
     if (isHisuianSneaselGender(speciesId, gender)) {
       return tagsAreExactly(tags, ['gender', 'hisuian'])
@@ -64,9 +75,10 @@ export function coverPurity(
   silhouette = false,
   speciesId?: number,
   gender?: string | null,
+  notPure = false,
 ): CoverPurity | null {
   if (!hasAllRequired(specimenTags, required)) return null
-  return isGreenCover(specimenTags, required, silhouette, speciesId, gender) ? 'green' : 'gray'
+  return isGreenCover(specimenTags, required, silhouette, speciesId, gender, notPure) ? 'green' : 'gray'
 }
 
 export function speciesInCategory(
@@ -91,6 +103,7 @@ export function shouldAutoReplaceCover(
     opts?.incomingSilhouette,
     speciesId,
     opts?.incomingGender,
+    opts?.incomingNotPure,
   )
   const currentExact = isGreenCover(
     currentCoverTags,
@@ -98,6 +111,7 @@ export function shouldAutoReplaceCover(
     opts?.currentSilhouette,
     speciesId,
     opts?.currentGender,
+    opts?.currentNotPure,
   )
   return incomingExact && !currentExact
 }
@@ -110,6 +124,7 @@ export function pickCoverAfterDelete(
     tags: TagId[]
     createdAt: number
     silhouette?: boolean
+    notPure?: boolean
     gender?: string | null
   }[],
   speciesId?: number,
@@ -117,8 +132,8 @@ export function pickCoverAfterDelete(
   const candidates = remaining.filter((row) => hasAllRequired(row.tags, required))
   if (candidates.length === 0) return null
   const sorted = [...candidates].sort((a, b) => {
-    const aExact = isGreenCover(a.tags, required, a.silhouette, speciesId, a.gender) ? 1 : 0
-    const bExact = isGreenCover(b.tags, required, b.silhouette, speciesId, b.gender) ? 1 : 0
+    const aExact = isGreenCover(a.tags, required, a.silhouette, speciesId, a.gender, a.notPure) ? 1 : 0
+    const bExact = isGreenCover(b.tags, required, b.silhouette, speciesId, b.gender, b.notPure) ? 1 : 0
     if (aExact !== bExact) return bExact - aExact
     return b.createdAt - a.createdAt
   })
@@ -204,6 +219,7 @@ export function coverMutationsAfterEdit(
             tags: specimenTags(row),
             createdAt: row.createdAt,
             silhouette: isSilhouette(row),
+            notPure: isNotPure(row),
             gender: row.gender,
           }))
       : []
@@ -220,17 +236,21 @@ export function coverMutationsAfterEdit(
     const current = byKey.get(coverSlotKey(category.id, updated.speciesId, variant))
     let currentTags: TagId[] | null = null
     let currentSilhouette = false
+    let currentNotPure = false
     let currentGender: string | null | undefined
     if (current) {
       const coverSpecimen = specimens.find((row) => row.id === current.specimenId)
       currentTags = coverSpecimen ? specimenTags(coverSpecimen) : null
       currentSilhouette = isSilhouette(coverSpecimen)
+      currentNotPure = isNotPure(coverSpecimen)
       currentGender = coverSpecimen?.gender
     }
     if (
       shouldAutoReplaceCover(category.requiredTags, currentTags, nextTags, {
         currentSilhouette,
         incomingSilhouette: isSilhouette(updated),
+        currentNotPure,
+        incomingNotPure: isNotPure(updated),
         speciesId: updated.speciesId,
         currentGender,
         incomingGender: updated.gender,

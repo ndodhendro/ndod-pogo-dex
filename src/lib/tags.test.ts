@@ -140,11 +140,16 @@ describe('toggleTag', () => {
       nundo: false,
       extraTags: [],
       silhouette: false,
+      notPure: false,
     })
   })
 
   it('keeps the silhouette flag when visual tags are cleared', () => {
     expect(clearVisualTags({ ...toggleTag(base(), 'shiny'), silhouette: true }).silhouette).toBe(true)
+  })
+
+  it('keeps the not-pure flag when visual tags are cleared', () => {
+    expect(clearVisualTags({ ...toggleTag(base(), 'shiny'), notPure: true }).notPure).toBe(true)
   })
 })
 
@@ -211,9 +216,14 @@ describe('fieldsFromSpecimen', () => {
     expect(fields.shiny).toBe(true)
     expect(fields.extraTags).toEqual(['lucky'])
     expect(fields.silhouette).toBe(false)
+    expect(fields.notPure).toBe(false)
   })
 
   it('copies the silhouette flag', () => {
     expect(fieldsFromSpecimen({ ...base(), silhouette: true }).silhouette).toBe(true)
+  })
+
+  it('copies the not-pure flag', () => {
+    expect(fieldsFromSpecimen({ ...base(), notPure: true }).notPure).toBe(true)
   })
 })

@@ -21,7 +21,7 @@ import {
   specimenObjectPath,
   uploadSpecimenOriginal,
 } from './specimenStorage'
-import { extraTagList, isSilhouette, type ShadowStatus, type TagId } from './tags'
+import { extraTagList, isNotPure, isSilhouette, type ShadowStatus, type TagId } from './tags'
 import { coversForPendingSpecimens, specimenNeedsCloudPush, type BackupProgress } from './syncBackup'
 
 export type CloudSpecimen = {
@@ -37,6 +37,7 @@ export type CloudSpecimen = {
   nundo: boolean
   extraTags?: TagId[]
   silhouette?: boolean
+  notPure?: boolean
   fileHash: string
   imagePath?: string | null
   createdAt: number
@@ -168,6 +169,7 @@ function specimenCloudRow(
     nundo: specimen.nundo,
     extra_tags: extraTagList(specimen),
     silhouette: isSilhouette(specimen),
+    not_pure: isNotPure(specimen),
     image_path: imagePath,
     file_hash: fileHash,
     created_at: new Date(specimen.createdAt).toISOString(),
@@ -660,6 +662,7 @@ export async function pullCloudCollection(): Promise<{
     nundo: boolean
     extra_tags?: string[] | null
     silhouette?: boolean | null
+    not_pure?: boolean | null
     file_hash: string | null
     image_path?: string | null
     created_at: string
@@ -716,6 +719,7 @@ export async function pullCloudCollection(): Promise<{
         nundo: row.nundo,
         extraTags: extraTagList({ extraTags: row.extra_tags ?? [] }),
         silhouette: Boolean(row.silhouette),
+        notPure: Boolean(row.not_pure),
         fileHash: row.file_hash as string,
         imagePath: row.image_path ?? null,
         createdAt: new Date(row.created_at).getTime(),

@@ -35,6 +35,7 @@ import {
 import { upsertTransferLog } from './transferLogs'
 import {
   extraTagList,
+  isNotPure,
   isSilhouette,
   pickDuplicateLook,
   resolveRequiredTags,
@@ -128,6 +129,7 @@ export async function saveSpecimenFromInbox(
     nundo: fields.nundo,
     extraTags,
     silhouette: isSilhouette(fields),
+    notPure: isNotPure(fields),
     imageId: inbox.imageId,
     fileHash,
     createdAt: Date.now(),
@@ -183,6 +185,7 @@ export async function replaceSpecimenFromInbox(
     nundo: fields.nundo,
     extraTags,
     silhouette: isSilhouette(fields),
+    notPure: isNotPure(fields),
     imageId: inbox.imageId,
     fileHash,
     cloudBackupPending: true,
@@ -259,6 +262,7 @@ async function saveExistingScreenshot(
     nundo: fields.nundo,
     extraTags: extraTagList(fields),
     silhouette: isSilhouette(fields),
+    notPure: isNotPure(fields),
     cloudBackupPending: true,
   }
   const unchanged = sameSpecimenMetadata(existing, updated)
@@ -310,6 +314,7 @@ export async function updateSpecimen(
     nundo: fields.nundo,
     extraTags,
     silhouette: isSilhouette(fields),
+    notPure: isNotPure(fields),
     cloudBackupPending: true,
   }
   const metaUnchanged = sameSpecimenMetadata(existing, updated)
@@ -401,17 +406,21 @@ async function maybeSetCover(
   const current = await db.covers.get([category.id, specimen.speciesId, variant])
   let currentTags: TagId[] | null = null
   let currentSilhouette = false
+  let currentNotPure = false
   let currentGender: string | null | undefined
   if (current) {
     const coverSpecimen = await db.specimens.get(current.specimenId)
     currentTags = coverSpecimen ? specimenTags(coverSpecimen) : null
     currentSilhouette = isSilhouette(coverSpecimen)
+    currentNotPure = isNotPure(coverSpecimen)
     currentGender = coverSpecimen?.gender
   }
   if (
     shouldAutoReplaceCover(category.requiredTags, currentTags, incomingTags, {
       currentSilhouette,
       incomingSilhouette: isSilhouette(specimen),
+      currentNotPure,
+      incomingNotPure: isNotPure(specimen),
       speciesId: specimen.speciesId,
       currentGender,
       incomingGender: specimen.gender,
@@ -430,7 +439,7 @@ export async function setAsCover(categoryId: string, specimenId: string) {
   const specimen = await db.specimens.get(specimenId)
   const category = await db.categories.get(categoryId)
   if (!specimen || !category) throw new Error('Missing specimen or category')
-  if (coverPurity(specimenTags(specimen), category.requiredTags, isSilhouette(specimen), specimen.speciesId, specimen.gender) == null) {
+  if (coverPurity(specimenTags(specimen), category.requiredTags, isSilhouette(specimen), specimen.speciesId, specimen.gender, isNotPure(specimen)) == null) {
     throw new Error('This specimen is not in this category')
   }
   const catalogs = await db.tagCatalogs.toArray()
@@ -483,6 +492,7 @@ export async function deleteSpecimen(id: string) {
           tags: specimenTags(row),
           createdAt: row.createdAt,
           silhouette: isSilhouette(row),
+          notPure: isNotPure(row),
           gender: row.gender,
         }))
       const nextId = category

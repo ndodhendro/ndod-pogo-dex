@@ -195,13 +195,28 @@ describe('covers', () => {
     expect(coverPurity([], [], true)).toBe('gray')
   })
 
+  it('marks a not-pure flag gray even when the tags are exact', () => {
+    expect(coverPurity(shadowPure, ['shadow'], false, undefined, undefined, true)).toBe('gray')
+    expect(coverPurity([], [], false, undefined, undefined, true)).toBe('gray')
+  })
+
   it('auto-replaces a silhouette cover with the first exact catch', () => {
     expect(shouldAutoReplaceCover(['shadow'], shadowPure, shadowPure, { currentSilhouette: true })).toBe(true)
+  })
+
+  it('auto-replaces a not-pure cover with the first exact catch', () => {
+    expect(shouldAutoReplaceCover(['shadow'], shadowPure, shadowPure, { currentNotPure: true })).toBe(true)
   })
 
   it('does not let a silhouette replace a green cover', () => {
     expect(
       shouldAutoReplaceCover(['shadow'], shadowPure, shadowPure, { incomingSilhouette: true }),
+    ).toBe(false)
+  })
+
+  it('does not let a not-pure specimen replace a green cover', () => {
+    expect(
+      shouldAutoReplaceCover(['shadow'], shadowPure, shadowPure, { incomingNotPure: true }),
     ).toBe(false)
   })
 
@@ -364,6 +379,20 @@ describe('coverMutationsAfterEdit', () => {
         [shadowCat],
         [{ categoryId: 'shadow', speciesId: 1, specimenId: 'sil' }],
         [sil, incoming],
+      ),
+    ).toEqual([{ op: 'put', categoryId: 'shadow', speciesId: 1, variant: '', specimenId: 'incoming' }])
+  })
+
+  it('replaces a not-pure cover when a later exact catch is saved', () => {
+    const marked = spec({ id: 'marked', shadowStatus: 'shadow', notPure: true })
+    const incoming = spec({ id: 'incoming', shadowStatus: 'shadow', createdAt: 2 })
+    expect(
+      coverMutationsAfterEdit(
+        incoming,
+        incoming,
+        [shadowCat],
+        [{ categoryId: 'shadow', speciesId: 1, specimenId: 'marked' }],
+        [marked, incoming],
       ),
     ).toEqual([{ op: 'put', categoryId: 'shadow', speciesId: 1, variant: '', specimenId: 'incoming' }])
   })
