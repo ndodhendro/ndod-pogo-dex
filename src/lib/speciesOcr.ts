@@ -82,11 +82,30 @@ export function ocrNameCandidates(raw: string): string[] {
   }
   for (const line of raw.split(/\r?\n/)) add(line)
   add(raw)
+  for (const token of normalizeOcrName(raw).split(' ')) {
+    if (token.length >= 4) add(token)
+  }
   return out
+}
+
+function containedDistance(candidate: string, speciesName: string): number | null {
+  const words = candidate.split(' ')
+  if (words.includes(speciesName)) return 0
+  if (speciesName.split(' ').every((word) => word.length > 0 && words.includes(word))) {
+    return Math.max(0, words.length - speciesName.split(' ').length)
+  }
+  const compactCandidate = compactName(candidate)
+  const compactSpecies = compactName(speciesName)
+  if (compactSpecies.length < 5 || !compactCandidate.includes(compactSpecies)) return null
+  const extra = compactCandidate.length - compactSpecies.length
+  if (extra > 2) return null
+  return extra === 0 ? 0 : 1
 }
 
 function nameDistance(candidate: string, speciesName: string): number {
   if (candidate === speciesName) return 0
+  const contained = containedDistance(candidate, speciesName)
+  if (contained != null) return contained
   const compactCandidate = compactName(candidate)
   const compactSpecies = compactName(speciesName)
   if (compactCandidate === compactSpecies) return 0

@@ -18,6 +18,7 @@ const basicSlots = [
   slot(122, 'Mr. Mime'),
   slot(208, 'Steelix'),
   slot(250, 'Ho-Oh'),
+  slot(485, 'Heatran'),
   slot(29, 'Nidoran ♀'),
   slot(32, 'Nidoran ♂'),
 ]
@@ -45,6 +46,12 @@ describe('matchSpeciesFromOcr', () => {
     const result = matchSpeciesFromOcr('Pikachu', basicSlots)
     expect(result.kind).toBe('strong')
     expect(result.slot?.speciesId).toBe(25)
+  })
+
+  it('auto-picks the nearest species when OCR wraps the name in junk', () => {
+    const result = matchSpeciesFromOcr(' A Heatran p', basicSlots)
+    expect(result.kind).toBe('strong')
+    expect(result.slot?.speciesId).toBe(485)
   })
 
   it('auto-picks a unique one-letter typo on a long name', () => {
