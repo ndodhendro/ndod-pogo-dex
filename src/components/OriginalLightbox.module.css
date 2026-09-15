@@ -1,0 +1,24 @@
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-sheet) + 20);
+  overflow: auto;
+  overscroll-behavior: contain;
+  background: #000;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  cursor: zoom-out;
+}
+
+.lightbox img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+}
+
+.lightbox img:not([data-sized='true']) {
+  visibility: hidden;
+}

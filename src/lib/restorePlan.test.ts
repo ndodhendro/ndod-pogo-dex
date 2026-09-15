@@ -25,6 +25,14 @@ describe('planGalleryRestore', () => {
     expect(plan.restoreIds).toEqual(['spec-1'])
     expect(plan.alreadyLocalHashes).toEqual(['aaa'])
   })
+
+  it('keeps one restore id per cloud specimen across a large pick', () => {
+    const bigCloud = new Map(Array.from({ length: 1000 }, (_, i) => [`h${i}`, { id: `s${i}` }]))
+    const hashes = Array.from({ length: 1000 }, (_, i) => `h${i}`)
+    const plan = planGalleryRestore(hashes, bigCloud, new Set())
+    expect(plan.restoreIds).toHaveLength(1000)
+    expect(plan.unmatchedHashes).toEqual([])
+  })
 })
 
 describe('planCloudPhotoRestore', () => {

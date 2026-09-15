@@ -1,5 +1,11 @@
 export const PREVIEW_SWIPE_LOCK = 12
 export const PREVIEW_SWIPE_COMMIT = 64
+/** Finger jitter below this still counts as a tap, even if the swipe axis already locked. */
+export const PREVIEW_TAP_SLOP = 32
+
+export function previewIsTap(dx: number, dy: number, slop = PREVIEW_TAP_SLOP): boolean {
+  return Math.abs(dx) < slop && Math.abs(dy) < slop
+}
 
 export type PreviewSwipeAxis = 'x' | 'y' | null
 export type PreviewSwipeAction = 'next' | 'prev' | 'close-up' | 'close-down' | null

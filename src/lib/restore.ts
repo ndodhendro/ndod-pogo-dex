@@ -32,6 +32,14 @@ function yieldUi() {
   })
 }
 
+function isQuotaError(err: unknown) {
+  return err instanceof DOMException && err.name === 'QuotaExceededError'
+}
+
+function errorMessage(err: unknown, fallback: string) {
+  return err instanceof Error ? err.message : fallback
+}
+
 async function applyCloudCategories(
   cloud: NonNullable<Awaited<ReturnType<typeof pullCloudCollection>>>,
 ) {
@@ -126,8 +134,24 @@ export async function restoreFromGallery(
   files: File[],
   onProgress?: (progress: RestoreProgress) => void,
 ): Promise<RestoreResult> {
+  const images = files.filter(isProbablyImageFile)
+  if (images.length === 0) throw new Error('No photos in that selection.')
+
+  // Hash before any network so gallery File blobs stay readable (Android / large picks).
+  const hashed: { hash: string; file: File }[] = []
+  hashed.push({ hash: await hashBlob(images[0]), file: images[0] })
+  onProgress?.({ phase: 'hashing', current: 1, total: images.length })
+  await yieldUi()
+
+  const cloudPromise = pullCloudCollection()
+  for (let i = 1; i < images.length; i++) {
+    hashed.push({ hash: await hashBlob(images[i]), file: images[i] })
+    onProgress?.({ phase: 'hashing', current: i + 1, total: images.length })
+    await yieldUi()
+  }
+
   onProgress?.({ phase: 'loading', current: 0, total: 1 })
-  const cloud = await pullCloudCollection()
+  const cloud = await cloudPromise
   if (!cloud) throw new Error('Sign in with Google first')
   if (cloud.specimens.length === 0) {
     throw new Error('No cloud metadata yet. Save tagged specimens while signed in first.')
@@ -135,16 +159,6 @@ export async function restoreFromGallery(
 
   await applyCloudCategories(cloud)
   await applyCloudCatalogs(cloud)
-
-  const images = files.filter(isProbablyImageFile)
-  const hashed: { hash: string; file: File }[] = []
-  for (let i = 0; i < images.length; i++) {
-    hashed.push({ hash: await hashBlob(images[i]), file: images[i] })
-    if (i % 4 === 0) {
-      onProgress?.({ phase: 'hashing', current: i + 1, total: images.length })
-      await yieldUi()
-    }
-  }
 
   const localWithHash = await db.specimens.filter((row) => Boolean(row.fileHash)).toArray()
   const localHashes = new Set(localWithHash.map((row) => row.fileHash as string))
@@ -162,16 +176,22 @@ export async function restoreFromGallery(
 
   const cloudById = new Map(cloud.specimens.map((row) => [row.id, row]))
   let restored = 0
+  let failed = 0
+  let lastError: string | undefined
   for (let i = 0; i < plan.restoreIds.length; i++) {
     const spec = cloudById.get(plan.restoreIds[i])
+    onProgress?.({ phase: 'writing', current: i + 1, total: plan.restoreIds.length })
+    await yieldUi()
     if (!spec) continue
     const file = blobByHash.get(spec.fileHash)
     if (!file) continue
-    await writeRestoredSpecimen(spec, file, false)
-    restored += 1
-    if (i % 2 === 0) {
-      onProgress?.({ phase: 'writing', current: i + 1, total: plan.restoreIds.length })
-      await yieldUi()
+    try {
+      await writeRestoredSpecimen(spec, file, false)
+      restored += 1
+    } catch (err) {
+      failed += 1
+      lastError = errorMessage(err, 'Could not restore screenshot')
+      if (isQuotaError(err)) break
     }
   }
 
@@ -179,11 +199,25 @@ export async function restoreFromGallery(
   const unmatchedFiles = hashed.filter((row) => unmatchedSet.has(row.hash))
   const seenUnmatched = new Set<string>()
   let inbox = 0
+  let unmatchedIndex = 0
   for (const row of unmatchedFiles) {
     if (seenUnmatched.has(row.hash)) continue
     seenUnmatched.add(row.hash)
-    await ingestFile(row.file)
-    inbox += 1
+    unmatchedIndex += 1
+    onProgress?.({
+      phase: 'writing',
+      current: unmatchedIndex,
+      total: plan.unmatchedHashes.length || unmatchedIndex,
+    })
+    await yieldUi()
+    try {
+      await ingestFile(row.file)
+      inbox += 1
+    } catch (err) {
+      failed += 1
+      lastError = errorMessage(err, 'Could not add screenshot')
+      if (isQuotaError(err)) break
+    }
   }
 
   await applyCloudCovers(cloud)
@@ -193,6 +227,8 @@ export async function restoreFromGallery(
     alreadyLocal: plan.alreadyLocalHashes.length,
     inbox,
     cloudWithoutPhoto: cloud.specimens.filter((row) => !blobByHash.has(row.fileHash)).length,
+    failed,
+    downloadError: lastError,
   }
 }
 

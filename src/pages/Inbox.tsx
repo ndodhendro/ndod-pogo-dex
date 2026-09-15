@@ -187,7 +187,7 @@ export function InboxPage() {
           label={adding ? 'Adding…' : 'Add screenshots'}
           disabled={adding}
           preferScreenshotsFolder
-          onFiles={(list) => void onFiles(list)}
+          onFiles={onFiles}
         />
         <button
           type="button"

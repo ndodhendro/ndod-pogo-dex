@@ -164,6 +164,8 @@ describe('slotsForTrack', () => {
     expect(catalogForTag([background], 'background').slotMode).toBe('variant')
     expect(slots).toHaveLength(GO_BACKGROUND.length)
     expect(slots.some((slot) => slot.speciesId === 382 && slot.variant === 'Las Vegas, US')).toBe(true)
+    expect(slots.some((slot) => slot.speciesId === 3 && slot.variant === 'Mega Evolve')).toBe(true)
+    expect(slots.some((slot) => slot.speciesId === 719 && slot.variant === 'Mega Evolve')).toBe(true)
     expect(
       slots.some((slot) => slot.speciesId === 793 && slot.variant === 'Pokémon GO Fest 2024: Wormhole'),
     ).toBe(true)
@@ -263,8 +265,9 @@ describe('slotsForTrack', () => {
     const background: TagCatalog = { tag: 'background', limitPokedex: true, slotMode: 'variant' }
     const slots = slotsForSelectedTags(['mega', 'background'], [mega, background], [])
     const venusaur = slots.filter((slot) => slot.speciesId === 3)
-    expect(venusaur).toHaveLength(2)
+    expect(venusaur).toHaveLength(3)
     expect(venusaur.some((slot) => slot.variant.includes('Mega Evolution'))).toBe(true)
+    expect(venusaur.some((slot) => slot.variant.includes('Mega Evolve'))).toBe(true)
     expect(venusaur.some((slot) => slot.variant.includes('Max Finale'))).toBe(true)
     expect(slots.every((slot) => GO_MEGA.some((row) => row.speciesId === slot.speciesId))).toBe(true)
     expect(slots.every((slot) => GO_BACKGROUND.some((row) => row.speciesId === slot.speciesId))).toBe(

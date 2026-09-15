@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { categoryForTag, SEEN_ICON, NOT_PURE_ICON, specimenTagChoices } from '../data/navIcons'
 import { cropHeightForSpecimen } from '../data/tagCrops'
@@ -34,6 +34,7 @@ import {
   type TagId,
 } from '../lib/tags'
 import { BottomSheet } from './BottomSheet'
+import { OriginalLightbox } from './OriginalLightbox'
 import { SearchField } from './SearchField'
 import { TagChip } from './TagChip'
 import styles from './TagSheet.module.css'
@@ -118,6 +119,7 @@ export function TagSheet({
   const [query, setQuery] = useState('')
   const [fields, setFields] = useState<SpecimenFields>(emptyFields)
   const [busy, setBusy] = useState(false)
+  const [lightbox, setLightbox] = useState(false)
   const [heightDraft, setHeightDraft] = useState('710')
   const [storedCrop, setStoredCrop] = useState<number | null>(null)
   const openedKey = useRef<string | null>(null)
@@ -125,6 +127,7 @@ export function TagSheet({
   const initialFieldsRef = useRef(initialFields)
   initialFieldsRef.current = initialFields
   const previewUrl = useImageUrl(imageId, 'original')
+  const closeLightbox = useCallback(() => setLightbox(false), [])
   const heightMap = useTagCropHeights()
   const categories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
   const catalogs = useLiveQuery(() => db.tagCatalogs.toArray(), []) ?? []
@@ -166,10 +169,12 @@ export function TagSheet({
       openedKey.current = null
       keepStoredCrop.current = true
       setStoredCrop(null)
+      setLightbox(false)
       return
     }
     setTab('tags')
     setBusy(false)
+    setLightbox(false)
     keepStoredCrop.current = true
     const seed = initialFieldsRef.current
     const next = seed ? fieldsFromSpecimen(seed) : emptyFields()
@@ -258,6 +263,7 @@ export function TagSheet({
   }
 
   return (
+    <>
     <BottomSheet open={open} title={title} nested={nested} showClose={false} onClose={onClose}>
       <div className={styles.tabs} role="tablist" aria-label={title} data-tone={tone}>
         <button
@@ -286,9 +292,14 @@ export function TagSheet({
       {tab === 'tags' ? (
         <>
           {previewUrl ? (
-            <div className={styles.shotPreview}>
+            <button
+              type="button"
+              className={styles.shotPreview}
+              aria-label="View original screenshot"
+              onClick={() => setLightbox(true)}
+            >
               <img src={previewUrl} alt="" />
-            </div>
+            </button>
           ) : null}
           <div className="field">
             <span>Tags</span>
@@ -450,6 +461,10 @@ export function TagSheet({
         {busy ? 'Saving…' : saveLabel}
       </button>
     </BottomSheet>
+    {lightbox && previewUrl ? (
+      <OriginalLightbox src={previewUrl} alt="" onClose={closeLightbox} />
+    ) : null}
+    </>
   )
 }
 

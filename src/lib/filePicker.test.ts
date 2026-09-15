@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   resetScreenshotPickerHandle,
+  RESTORE_FOLDER_PICKER_ID,
   SCREENSHOT_PICKER_ID,
   rememberScreenshotHandle,
+  screenshotFolderOptions,
   screenshotOpenOptions,
 } from './filePicker'
 
@@ -21,5 +23,15 @@ describe('screenshotOpenOptions', () => {
     rememberScreenshotHandle(handle)
     expect(screenshotOpenOptions(false).startIn).toBe(handle)
     resetScreenshotPickerHandle()
+  })
+})
+
+describe('screenshotFolderOptions', () => {
+  it('starts in Pictures and fits the File System Access id limit', () => {
+    const options = screenshotFolderOptions()
+    expect(options.startIn).toBe('pictures')
+    expect(options.mode).toBe('read')
+    expect(options.id).toBe(RESTORE_FOLDER_PICKER_ID)
+    expect(RESTORE_FOLDER_PICKER_ID.length).toBeLessThanOrEqual(32)
   })
 })

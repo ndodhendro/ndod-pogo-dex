@@ -6,6 +6,7 @@ import { db, type SpecimenRow } from '../lib/db'
 import {
   previewCarouselSettleX,
   previewCloseSettleY,
+  previewIsTap,
   previewSwipeAxis,
   previewSwipeCommit,
   previewSwipeOffset,
@@ -15,8 +16,8 @@ import {
 import { coverPurity } from '../lib/covers'
 import { isNotPure, isSilhouette, specimenTags, labelForTag, type TagId } from '../lib/tags'
 import { usePreviewAnimations } from '../lib/previewPrefs'
-import { screenshotCssSize } from '../lib/screenshotDisplay'
 import { BottomSheet } from './BottomSheet'
+import { OriginalLightbox } from './OriginalLightbox'
 import { TagChip } from './TagChip'
 import styles from './CardPreview.module.css'
 
@@ -73,8 +74,9 @@ export function CardPreview({
   const [snap, setSnap] = useState(false)
   const [lightbox, setLightbox] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const lightboxStart = useRef<{ x: number; y: number } | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const tapOpenRef = useRef(false)
+  const lightboxTimer = useRef(0)
   const canNext = Boolean(onNext)
   const canPrev = Boolean(onPrev)
   const closing = settling === 'close-up' || settling === 'close-down'
@@ -125,7 +127,11 @@ export function CardPreview({
     axisRef.current = null
     deltaRef.current = { dx: 0, dy: 0 }
     settlingRef.current = null
+    tapOpenRef.current = false
+    window.clearTimeout(lightboxTimer.current)
   }, [specimen.id])
+
+  useEffect(() => () => window.clearTimeout(lightboxTimer.current), [])
 
   useEffect(() => {
     if (!snap) return
@@ -224,14 +230,9 @@ export function CardPreview({
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId)
     }
-    const wasSwipe = Boolean(axisRef.current)
-    const action = previewSwipeCommit(
-      axisRef.current,
-      deltaRef.current.dx,
-      deltaRef.current.dy,
-      canPrev,
-      canNext,
-    )
+    const { dx, dy } = deltaRef.current
+    const action = previewSwipeCommit(axisRef.current, dx, dy, canPrev, canNext)
+    const tapped = previewIsTap(dx, dy)
     startRef.current = null
     axisRef.current = null
     deltaRef.current = { dx: 0, dy: 0 }
@@ -253,7 +254,22 @@ export function CardPreview({
       return
     }
     setDrag({ x: 0, y: 0 })
-    if (!wasSwipe && imageUrl) setLightbox(true)
+    tapOpenRef.current = tapped && Boolean(imageUrl)
+    if (!tapOpenRef.current) return
+    window.clearTimeout(lightboxTimer.current)
+    lightboxTimer.current = window.setTimeout(() => {
+      if (!tapOpenRef.current) return
+      tapOpenRef.current = false
+      setLightbox(true)
+    }, 0)
+  }
+
+  function onPhotoClick(e: React.MouseEvent<HTMLDivElement>) {
+    e.stopPropagation()
+    if (!tapOpenRef.current || !imageUrl) return
+    tapOpenRef.current = false
+    window.clearTimeout(lightboxTimer.current)
+    setLightbox(true)
   }
 
   function onTrackTransitionEnd(e: React.TransitionEvent<HTMLDivElement>) {
@@ -267,18 +283,6 @@ export function CardPreview({
     if (e.propertyName !== 'transform') return
     if (e.target !== e.currentTarget) return
     finishClose()
-  }
-
-  function onLightboxPointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    lightboxStart.current = { x: e.clientX, y: e.clientY }
-  }
-
-  function onLightboxPointerUp(e: React.PointerEvent<HTMLDivElement>) {
-    const start = lightboxStart.current
-    lightboxStart.current = null
-    if (!start) return
-    if (Math.abs(e.clientX - start.x) > 10 || Math.abs(e.clientY - start.y) > 10) return
-    setLightbox(false)
   }
 
   async function confirmRemove() {
@@ -335,6 +339,7 @@ export function CardPreview({
           onPointerMove={swiping ? onPointerMove : undefined}
           onPointerUp={swiping ? endPointer : undefined}
           onPointerCancel={swiping ? endPointer : undefined}
+          onClick={onPhotoClick}
         >
           {showAura && tags.includes('shadow') ? (
             <TagAura specimenId={specimen.id} tone="shadow" animate={animatePreview} />
@@ -425,26 +430,7 @@ export function CardPreview({
         </div>
       </div>
       {lightbox && imageUrl ? (
-        <div
-          className={styles.lightbox}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Original screenshot"
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => {
-            e.stopPropagation()
-            onLightboxPointerDown(e)
-          }}
-          onPointerUp={(e) => {
-            e.stopPropagation()
-            onLightboxPointerUp(e)
-          }}
-          onPointerCancel={() => {
-            lightboxStart.current = null
-          }}
-        >
-          <LightboxImage src={imageUrl} alt={species?.name ?? ''} />
-        </div>
+        <OriginalLightbox src={imageUrl} alt={species?.name ?? ''} onClose={() => setLightbox(false)} />
       ) : null}
     </div>
     <BottomSheet
@@ -623,34 +609,6 @@ const SHINY_SPARKLES: ReadonlyArray<{
   { x: '24%', y: '70%', size: 16, dur: '6.8s', delay: '3.8s' },
   { x: '50%', y: '28%', size: 16, dur: '4.8s', delay: '4.2s' },
 ]
-
-function LightboxImage({ src, alt }: { src: string; alt: string }) {
-  const imgRef = useRef<HTMLImageElement>(null)
-  const [display, setDisplay] = useState<{ width: number; height: number } | null>(null)
-
-  const measure = useCallback((img: HTMLImageElement) => {
-    if (!img.naturalWidth) return
-    setDisplay(screenshotCssSize(img.naturalWidth, img.naturalHeight, window.devicePixelRatio || 1))
-  }, [])
-
-  useEffect(() => {
-    setDisplay(null)
-    const img = imgRef.current
-    if (img?.complete) measure(img)
-  }, [src, measure])
-
-  return (
-    <img
-      ref={imgRef}
-      src={src}
-      alt={alt}
-      draggable={false}
-      data-sized={display ? 'true' : undefined}
-      style={display ? { width: display.width, height: display.height } : undefined}
-      onLoad={(e) => measure(e.currentTarget)}
-    />
-  )
-}
 
 function PreviewPhoto({
   slide,

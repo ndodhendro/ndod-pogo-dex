@@ -25,7 +25,25 @@ export const GO_ALTERNATE_FORME: readonly FormVariant[] = data['alternate-forme'
 export const GO_GENDER: readonly FormVariant[] = data.gender
 export const GO_MEGA: readonly FormVariant[] = data.mega
 export const GO_COSTUME: readonly FormVariant[] = data.costume
-export const GO_BACKGROUND: readonly FormVariant[] = data.background
+
+/** Species summary background while Mega Evolved. Not the Mega Evolution event souvenir. */
+export const MEGA_EVOLVE_BACKGROUND = 'Mega Evolve'
+
+function withMegaEvolveBackgrounds(rows: readonly FormVariant[]): FormVariant[] {
+  const seen = new Set(rows.map((row) => `${row.speciesId}:${row.variant.trim().toLowerCase()}`))
+  const extra: FormVariant[] = []
+  const megaSpecies = [...new Set(GO_MEGA.map((row) => row.speciesId))].sort((a, b) => a - b)
+  for (const speciesId of megaSpecies) {
+    const key = `${speciesId}:${MEGA_EVOLVE_BACKGROUND.toLowerCase()}`
+    if (seen.has(key)) continue
+    extra.push({ speciesId, variant: MEGA_EVOLVE_BACKGROUND })
+  }
+  return [...rows, ...extra].sort(
+    (a, b) => a.speciesId - b.speciesId || a.variant.localeCompare(b.variant),
+  )
+}
+
+export const GO_BACKGROUND: readonly FormVariant[] = withMegaEvolveBackgrounds(data.background)
 
 /** Regional form, Mega, Gigantamax, Dynamax, Shadow, Purified, Lucky, Shiny, Costume, Background, and unique Gender species from Pokémon GO wiki pages. */
 export const GO_FORM_SPECIES_IDS = {

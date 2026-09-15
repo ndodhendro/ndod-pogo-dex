@@ -62,7 +62,7 @@ export function RestoreGalleryButton() {
   async function onFiles(list: File[]) {
     if (list.length === 0) return
     setBusy(true)
-    setProgress({ phase: 'loading', current: 0, total: 1 })
+    setProgress({ phase: 'hashing', current: 0, total: list.length })
     try {
       const result = await restoreFromGallery([...list], setProgress)
       const parts = [`Restored ${result.restored}`]
@@ -71,7 +71,11 @@ export function RestoreGalleryButton() {
       if (result.cloudWithoutPhoto) {
         parts.push(`${result.cloudWithoutPhoto} cloud specimens had no matching photo`)
       }
-      showToast(parts.join('. ') + '.', 'success')
+      if (result.failed) {
+        const detail = result.downloadError ? ` (${result.downloadError})` : ''
+        parts.push(`${result.failed} failed${detail}`)
+      }
+      showToast(parts.join('. ') + '.', result.failed ? 'warning' : 'success')
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not restore')
     } finally {
@@ -87,9 +91,17 @@ export function RestoreGalleryButton() {
         icon="🖼️"
         label={busy ? 'Restoring…' : 'Restore from gallery'}
         disabled={busy}
-        onFiles={(list) => void onFiles(list)}
+        directory
+        onFiles={onFiles}
+        onError={(err) => showToast(err.message)}
       />
-      {progress ? <p className="page-sub">{progressLabel(progress)}</p> : null}
+      {progress ? (
+        <p className="page-sub">{progressLabel(progress)}</p>
+      ) : (
+        <p className="page-sub">
+          Pick the Screenshots folder. Keep this page open until the count finishes.
+        </p>
+      )}
     </div>
   )
 }

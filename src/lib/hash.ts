@@ -97,10 +97,9 @@ export function sha256Bytes(message: Uint8Array): Uint8Array {
 
 export async function hashBlob(blob: Blob): Promise<string> {
   const buf = await blob.arrayBuffer()
-  const bytes = new Uint8Array(buf)
   const subtle = globalThis.crypto?.subtle
   if (subtle && typeof subtle.digest === 'function') {
-    return bytesToHex(await subtle.digest('SHA-256', bytes))
+    return bytesToHex(await subtle.digest('SHA-256', buf))
   }
-  return bytesToHex(sha256Bytes(bytes))
+  return bytesToHex(sha256Bytes(new Uint8Array(buf)))
 }

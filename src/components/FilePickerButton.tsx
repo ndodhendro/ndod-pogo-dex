@@ -1,5 +1,10 @@
-import { useEffect, useRef } from 'react'
-import { hasOpenFilePicker, pickScreenshotFiles } from '../lib/filePicker'
+import { useEffect, useRef, type ChangeEvent } from 'react'
+import {
+  hasDirectoryPicker,
+  hasOpenFilePicker,
+  pickScreenshotFiles,
+  pickScreenshotFolder,
+} from '../lib/filePicker'
 import styles from './FilePickerButton.module.css'
 
 const GHOST_CLICK_MS = 500
@@ -14,7 +19,10 @@ type Props = {
   multiple?: boolean
   /** Open in Pictures (and remember Screenshots after the first pick) when the OS allows it. */
   preferScreenshotsFolder?: boolean
-  onFiles: (files: File[]) => void
+  /** Pick a folder of screenshots. Better for restoring hundreds of photos. */
+  directory?: boolean
+  onFiles: (files: File[]) => void | Promise<void>
+  onError?: (err: Error) => void
 }
 
 export function FilePickerButton({
@@ -25,7 +33,9 @@ export function FilePickerButton({
   accept = 'image/*',
   multiple = true,
   preferScreenshotsFolder = false,
+  directory = false,
   onFiles,
+  onError,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const pickingRef = useRef(false)
@@ -37,8 +47,20 @@ export function FilePickerButton({
     ignoreUntilRef.current = Date.now() + GHOST_CLICK_MS
   }
 
+  function reportError(err: unknown) {
+    onError?.(err instanceof Error ? err : new Error('Could not open photos'))
+  }
+
   useEffect(() => {
     const input = inputRef.current
+    if (directory) {
+      input?.setAttribute('webkitdirectory', 'true')
+      input?.setAttribute('directory', 'true')
+    } else {
+      input?.removeAttribute('webkitdirectory')
+      input?.removeAttribute('directory')
+    }
+
     const onCancel = () => endPicking()
     input?.addEventListener('cancel', onCancel)
 
@@ -53,12 +75,28 @@ export function FilePickerButton({
       input?.removeEventListener('cancel', onCancel)
       window.removeEventListener('focus', onFocus)
     }
-  }, [])
+  }, [directory])
+
+  async function deliverFiles(files: File[]) {
+    if (files.length === 0) return
+    await onFiles(files)
+  }
 
   async function pickFromPictures() {
     try {
-      const files = await pickScreenshotFiles(multiple)
-      if (files.length > 0) onFiles(files)
+      await deliverFiles(await pickScreenshotFiles(multiple))
+    } catch (err) {
+      reportError(err)
+    } finally {
+      endPicking()
+    }
+  }
+
+  async function pickFromFolder() {
+    try {
+      await deliverFiles(await pickScreenshotFolder())
+    } catch (err) {
+      reportError(err)
     } finally {
       endPicking()
     }
@@ -69,11 +107,29 @@ export function FilePickerButton({
     if (Date.now() < ignoreUntilRef.current) return
     openedAtRef.current = Date.now()
     pickingRef.current = true
-    if (preferScreenshotsFolder && hasOpenFilePicker(window)) {
+    if (directory && hasDirectoryPicker(window)) {
+      void pickFromFolder()
+      return
+    }
+    if (!directory && preferScreenshotsFolder && hasOpenFilePicker(window)) {
       void pickFromPictures()
       return
     }
     inputRef.current?.click()
+  }
+
+  async function onInputChange(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget
+    const files = input.files ? Array.from(input.files) : []
+    endPicking()
+    try {
+      await deliverFiles(files)
+    } catch (err) {
+      reportError(err)
+    } finally {
+      // Clearing too early detaches gallery File blobs (Android / large picks).
+      input.value = ''
+    }
   }
 
   return (
@@ -85,16 +141,11 @@ export function FilePickerButton({
       <input
         ref={inputRef}
         type="file"
-        accept={accept}
-        multiple={multiple}
+        accept={directory ? undefined : accept}
+        multiple={directory || multiple}
         className={styles.input}
         tabIndex={-1}
-        onChange={(event) => {
-          const files = event.target.files ? Array.from(event.target.files) : []
-          endPicking()
-          event.target.value = ''
-          if (files.length > 0) onFiles(files)
-        }}
+        onChange={(event) => void onInputChange(event)}
       />
     </>
   )

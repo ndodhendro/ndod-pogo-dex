@@ -19,6 +19,7 @@ export type OpenFilePickerOptions = {
 
 /** Must stay ≤32 characters (File System Access). */
 export const SCREENSHOT_PICKER_ID = 'pogo-screenshots'
+export const RESTORE_FOLDER_PICKER_ID = 'pogo-restore-folder'
 
 const IMAGE_TYPES = [
   {
@@ -31,8 +32,15 @@ const IMAGE_TYPES = [
 
 let lastScreenshotHandle: FileSystemFileHandleLike | undefined
 
+type DirectoryPickerOptions = {
+  id?: string
+  startIn?: WellKnownDirectory
+  mode?: 'read' | 'readwrite'
+}
+
 type PickerWindow = Window & {
   showOpenFilePicker?: (options?: OpenFilePickerOptions) => Promise<FileSystemFileHandleLike[]>
+  showDirectoryPicker?: (options?: DirectoryPickerOptions) => Promise<FileSystemDirectoryHandle>
 }
 
 export function hasOpenFilePicker(
@@ -41,6 +49,22 @@ export function hasOpenFilePicker(
   showOpenFilePicker: (options?: OpenFilePickerOptions) => Promise<FileSystemFileHandleLike[]>
 } {
   return typeof (win as PickerWindow).showOpenFilePicker === 'function'
+}
+
+export function hasDirectoryPicker(
+  win: Window = window,
+): win is Window & {
+  showDirectoryPicker: (options?: DirectoryPickerOptions) => Promise<FileSystemDirectoryHandle>
+} {
+  return typeof (win as PickerWindow).showDirectoryPicker === 'function'
+}
+
+export function screenshotFolderOptions(): DirectoryPickerOptions {
+  return {
+    id: RESTORE_FOLDER_PICKER_ID,
+    startIn: 'pictures',
+    mode: 'read',
+  }
 }
 
 export function screenshotOpenOptions(multiple: boolean): OpenFilePickerOptions {
@@ -74,7 +98,36 @@ export async function pickScreenshotFiles(multiple: boolean): Promise<File[]> {
   try {
     const handles = await window.showOpenFilePicker(screenshotOpenOptions(multiple))
     if (handles[0]) rememberScreenshotHandle(handles[0])
-    return Promise.all(handles.map((handle) => handle.getFile()))
+    const files: File[] = []
+    for (const handle of handles) files.push(await handle.getFile())
+    return files
+  } catch (err) {
+    if (isAbortError(err)) return []
+    throw err
+  }
+}
+
+type DirectoryListingHandle = FileSystemDirectoryHandle & {
+  values: () => AsyncIterableIterator<FileSystemHandle>
+}
+
+export async function imageFilesFromDirectory(dir: FileSystemDirectoryHandle): Promise<File[]> {
+  const files: File[] = []
+  for await (const entry of (dir as DirectoryListingHandle).values()) {
+    if (entry.kind !== 'file' || !('getFile' in entry)) continue
+    files.push(await (entry as FileSystemFileHandle).getFile())
+  }
+  return files
+}
+
+/** Folder picker starting in Pictures. Empty array = cancelled. */
+export async function pickScreenshotFolder(): Promise<File[]> {
+  if (!hasDirectoryPicker(window)) {
+    throw new Error('Folder picker API unavailable')
+  }
+  try {
+    const dir = await window.showDirectoryPicker(screenshotFolderOptions())
+    return imageFilesFromDirectory(dir)
   } catch (err) {
     if (isAbortError(err)) return []
     throw err

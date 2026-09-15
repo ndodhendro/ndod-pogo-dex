@@ -46,7 +46,7 @@ export function PgsDataSyncButton() {
       disabled={busy}
       accept=".dat,application/octet-stream"
       multiple={false}
-      onFiles={(list) => void onFiles(list)}
+      onFiles={onFiles}
     />
   )
 }

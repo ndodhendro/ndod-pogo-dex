@@ -3,11 +3,13 @@ import {
   listNeighbor,
   previewCarouselSettleX,
   previewCloseSettleY,
+  previewIsTap,
   previewSwipeAxis,
   previewSwipeCommit,
   previewSwipeOffset,
   PREVIEW_SWIPE_COMMIT,
   PREVIEW_SWIPE_LOCK,
+  PREVIEW_TAP_SLOP,
 } from './previewSwipe'
 
 describe('previewSwipeAxis', () => {
@@ -19,6 +21,19 @@ describe('previewSwipeAxis', () => {
   it('locks to the dominant axis', () => {
     expect(previewSwipeAxis(40, 8)).toBe('x')
     expect(previewSwipeAxis(-8, -40)).toBe('y')
+  })
+})
+
+describe('previewIsTap', () => {
+  it('treats lock-distance jitter as a tap', () => {
+    expect(previewIsTap(PREVIEW_SWIPE_LOCK, 0)).toBe(true)
+    expect(previewIsTap(0, PREVIEW_SWIPE_LOCK)).toBe(true)
+  })
+
+  it('stops being a tap at the slop distance', () => {
+    expect(previewIsTap(PREVIEW_TAP_SLOP - 1, 0)).toBe(true)
+    expect(previewIsTap(PREVIEW_TAP_SLOP, 0)).toBe(false)
+    expect(previewIsTap(0, PREVIEW_TAP_SLOP)).toBe(false)
   })
 })
 
