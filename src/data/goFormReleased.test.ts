@@ -167,7 +167,7 @@ describe('GO regional and alternate forme lists', () => {
   })
 
   it('lists wiki Event Pokémon costumes and skips greyed rows', () => {
-    expect(GO_COSTUME).toHaveLength(309)
+    expect(GO_COSTUME).toHaveLength(303)
     expect(GO_FORM_SPECIES_IDS.costume.size).toBe(123)
     expect(GO_COSTUME.filter((row) => row.speciesId === 1).map((row) => row.variant)).toEqual([
       'Halloween',
@@ -176,6 +176,15 @@ describe('GO regional and alternate forme lists', () => {
     ])
     expect(GO_COSTUME.some((row) => row.speciesId === 25 && row.variant === 'Party hat')).toBe(true)
     expect(GO_COSTUME.some((row) => row.speciesId === 150 && row.variant === 'Armored')).toBe(true)
+    expect(GO_COSTUME.some((row) => row.speciesId === 710 && row.variant === 'Halloween Party')).toBe(
+      true,
+    )
+    expect(GO_COSTUME.some((row) => row.speciesId === 711 && row.variant === 'Halloween Party')).toBe(
+      true,
+    )
+    expect(GO_COSTUME.some((row) => row.speciesId === 710 && /jumbo variety/i.test(row.variant))).toBe(
+      false,
+    )
     expect(GO_COSTUME.some((row) => row.speciesId === 999)).toBe(true)
     expect(GO_COSTUME.some((row) => /friede/i.test(row.variant))).toBe(false)
     expect(GO_COSTUME.some((row) => /pokéxciting/i.test(row.variant))).toBe(false)

@@ -95,7 +95,7 @@ export function SettingsPage() {
   const [backupProgress, setBackupProgress] = useState<BackupProgress | null>(null)
   const previewAnimations = usePreviewAnimations()
   const [tagsOpen, setTagsOpen] = useState(false)
-  const [rosterTag, setRosterTag] = useState<TagId | null>(null)
+  const [rosterTags, setRosterTags] = useState<TagId[]>([])
   const [pendingSlot, setPendingSlot] = useState<{
     tag: TagId
     slotMode: SlotMode
@@ -103,6 +103,9 @@ export function SettingsPage() {
   } | null>(null)
   const [catalogBusy, setCatalogBusy] = useState(false)
   const dexTags = picked.length > 0 ? picked : editing?.seed ? [BASIC_DEX_TAG] : []
+  const comboVariantTags = dexTags.filter(
+    (tag) => catalogForTag(catalogs, tag).slotMode === 'variant',
+  )
 
   useEffect(() => {
     void ensureSeedCategories()
@@ -120,7 +123,7 @@ export function SettingsPage() {
     setEmoji(FALLBACK_EMOJI)
     setLabelColor(DEFAULT_LABEL_COLOR)
     setLookLocked(false)
-    setRosterTag(null)
+    setRosterTags([])
     setPendingSlot(null)
   }
 
@@ -492,7 +495,7 @@ export function SettingsPage() {
                               <button
                                 type="button"
                                 className="btn"
-                                onClick={() => setRosterTag(tag)}
+                                onClick={() => setRosterTags([tag])}
                               >
                                 <span aria-hidden="true">📖</span>
                                 Pokédex roster
@@ -504,6 +507,22 @@ export function SettingsPage() {
                     </div>
                   )
                 })}
+                {comboVariantTags.length > 1 ? (
+                  <div className={styles.dexEditor}>
+                    <p className="page-sub">
+                      Combined slots pair those variant lists (Pikachu Kurta Male, Pumpkaboo Large
+                      Variety Halloween Party).
+                    </p>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => setRosterTags(comboVariantTags)}
+                    >
+                      <span aria-hidden="true">📖</span>
+                      Combined Pokédex roster
+                    </button>
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
@@ -557,11 +576,16 @@ export function SettingsPage() {
         </div>
       </BottomSheet>
       <RosterSheet
-        open={Boolean(rosterTag)}
-        tag={rosterTag}
-        slotMode={rosterTag ? catalogForTag(catalogs, rosterTag).slotMode : 'species'}
-        title={`${rosterTag ? (categoryForTag(categories, rosterTag)?.name ?? labelForTag(rosterTag)) : 'Tag'} Pokédex`}
-        onClose={() => setRosterTag(null)}
+        open={rosterTags.length > 0}
+        tags={rosterTags}
+        title={`${
+          rosterTags.length > 1
+            ? `${name.trim() || editing?.name || 'Tag'} combined`
+            : rosterTags[0]
+              ? (categoryForTag(categories, rosterTags[0])?.name ?? labelForTag(rosterTags[0]))
+              : 'Tag'
+        } Pokédex`}
+        onClose={() => setRosterTags([])}
       />
     </section>
   )

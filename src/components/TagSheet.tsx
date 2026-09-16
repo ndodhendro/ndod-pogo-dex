@@ -23,7 +23,14 @@ import {
 } from '../lib/roster'
 import { parseCropBottom } from '../lib/screenshotCrop'
 import { readPokemonName } from '../lib/screenshotOcr'
-import { matchSpeciesFromOcr } from '../lib/speciesOcr'
+import {
+  applyOcrGenderSpecies,
+  genderSlotsForSpecies,
+  isGenderDexSpecies,
+  matchSpeciesFromOcr,
+  ocrMatchesGenderSpecies,
+  uniqueOcrSpeciesId,
+} from '../lib/speciesOcr'
 import { useToast } from '../lib/toast'
 import {
   cropTagsFromFields,
@@ -88,6 +95,14 @@ function selectedSlotLabel(
   })
 }
 
+function baseSpeciesBoxLabel(speciesId: number) {
+  return slotBoxLabel({
+    speciesId,
+    variant: '',
+    name: slotDisplayName(speciesId, ''),
+  })
+}
+
 type SheetTab = 'tags' | 'crop'
 
 type TagSheetProps = {
@@ -125,6 +140,7 @@ export function TagSheet({
   const [query, setQuery] = useState('')
   const [fields, setFields] = useState<SpecimenFields>(emptyFields)
   const [ocrHits, setOcrHits] = useState<DexSlotDef[] | null>(null)
+  const [speciesMenuOpen, setSpeciesMenuOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [ocrBusy, setOcrBusy] = useState(false)
   const [lightbox, setLightbox] = useState(false)
@@ -168,11 +184,32 @@ export function TagSheet({
     () => rosterVariantNames(roster, 'background', fields.speciesId),
     [roster, fields.speciesId],
   )
+  const genderChoices = useMemo(
+    () => genderSlotsForSpecies(availableSlots, fields.speciesId),
+    [availableSlots, fields.speciesId],
+  )
   const matches = useMemo(() => {
     if (ocrHits) return ocrHits
+    if (
+      speciesMenuOpen &&
+      tags.includes('gender') &&
+      fields.speciesId &&
+      (!query.trim() || query === selectedLabel)
+    ) {
+      return genderChoices
+    }
     if (!query.trim() || query === selectedLabel) return []
     return searchSlots(availableSlots, query).slice(0, 12)
-  }, [ocrHits, query, selectedLabel, availableSlots])
+  }, [
+    ocrHits,
+    speciesMenuOpen,
+    tags,
+    fields.speciesId,
+    query,
+    selectedLabel,
+    genderChoices,
+    availableSlots,
+  ])
   useEffect(() => {
     if (!open) {
       openedKey.current = null
@@ -185,6 +222,7 @@ export function TagSheet({
     setBusy(false)
     setOcrBusy(false)
     setOcrHits(null)
+    setSpeciesMenuOpen(false)
     setLightbox(false)
     keepStoredCrop.current = true
     const seed = initialFieldsRef.current
@@ -240,9 +278,20 @@ export function TagSheet({
       const rawText = await readPokemonName(row.original)
       if (!rawText) throw new Error('Could not read a name')
       const result = matchSpeciesFromOcr(rawText, availableSlots)
+      if (ocrMatchesGenderSpecies(result)) {
+        const speciesId = uniqueOcrSpeciesId(result)
+        if (speciesId) {
+          setOcrHits(null)
+          setSpeciesMenuOpen(false)
+          setFields((current) => applyOcrGenderSpecies(current, speciesId))
+          setQuery(baseSpeciesBoxLabel(speciesId))
+          return
+        }
+      }
       if (result.kind === 'strong' && result.slot) {
         const slot = result.slot
         setOcrHits(null)
+        setSpeciesMenuOpen(false)
         setFields((current) => applyRosterSlot(current, slot, specimenTags(current), catalogs))
         setQuery(slotBoxLabel(slot))
         return
@@ -250,6 +299,7 @@ export function TagSheet({
       setFields((current) => ({ ...current, speciesId: 0 }))
       setQuery(result.query)
       setOcrHits(result.kind === 'weak' ? result.suggestions : [])
+      setSpeciesMenuOpen(false)
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Could not read a name')
     } finally {
@@ -357,6 +407,7 @@ export function TagSheet({
                     setFields({ ...toggleTag(fields, choice.tag), speciesId: 0 })
                     setQuery('')
                     setOcrHits(null)
+                    setSpeciesMenuOpen(false)
                   }}
                 />
               ))}
@@ -429,11 +480,18 @@ export function TagSheet({
             onChange={(value) => {
               setOcrHits(null)
               setQuery(value)
+              if (value !== selectedLabel) setSpeciesMenuOpen(false)
               setFields((f) => {
                 if (!f.speciesId) return f
                 if (value === selectedSlotLabel(f, specimenTags(f), catalogs)) return f
                 return { ...f, speciesId: 0 }
               })
+            }}
+            onFocus={() => {
+              if (tags.includes('gender') && genderChoices.length > 0) setSpeciesMenuOpen(true)
+            }}
+            onClick={() => {
+              if (tags.includes('gender') && genderChoices.length > 0) setSpeciesMenuOpen(true)
             }}
             placeholder="Species name or number"
           />
@@ -448,6 +506,13 @@ export function TagSheet({
                     data-on={query === label ? 'true' : 'false'}
                     onClick={() => {
                       setOcrHits(null)
+                      if (isGenderDexSpecies(slot.speciesId) && !normalizeVariant(slot.variant)) {
+                        setSpeciesMenuOpen(true)
+                        setFields((f) => applyOcrGenderSpecies(f, slot.speciesId))
+                        setQuery(baseSpeciesBoxLabel(slot.speciesId))
+                        return
+                      }
+                      setSpeciesMenuOpen(false)
                       setFields((f) => applyRosterSlot(f, slot, specimenTags(f), catalogs))
                       setQuery(label)
                     }}

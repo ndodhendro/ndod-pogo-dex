@@ -29,6 +29,14 @@ import {
   specimenProgressFlags,
   type DexProgressKind,
 } from '../lib/dexGrid'
+import {
+  INBOX_SORT_EMOJI,
+  INBOX_SORT_LABEL,
+  mergeInboxDisplay,
+  nextInboxSort,
+  sameInboxOrder,
+  type InboxSortDir,
+} from '../lib/inboxOrder'
 import { isProbablyImageFile } from '../lib/images'
 import { useToast } from '../lib/toast'
 import {
@@ -87,8 +95,17 @@ export function InboxPage() {
   const [duplicateBusy, setDuplicateBusy] = useState(false)
   const [adding, setAdding] = useState(false)
   const [view, setView] = useState<TransferView>('untagged')
+  const [sortDir, setSortDir] = useState<InboxSortDir>('asc')
+  const [orderIds, setOrderIds] = useState<string[]>([])
   const showingLogs = view === 'logs'
   const canDiscardAll = !showingLogs && items.length > 0
+  const displayed = useMemo(() => mergeInboxDisplay(items, orderIds), [items, orderIds])
+  const showSort = canDiscardAll
+
+  useEffect(() => {
+    const next = displayed.map((row) => row.id)
+    setOrderIds((prev) => (sameInboxOrder(prev, next) ? prev : next))
+  }, [displayed])
 
   useEffect(() => {
     importPendingShares().catch(() => {
@@ -208,13 +225,33 @@ export function InboxPage() {
         {showingLogs ? 'Logs' : 'Untagged Screenshots'}
       </h1>
       <div className={styles.toolbar}>
-        <FilePickerButton
-          className="btn btn-primary"
-          label={adding ? 'Adding…' : 'Add screenshots'}
-          disabled={adding || discardAllBusy}
-          preferScreenshotsFolder
-          onFiles={onFiles}
-        />
+        <div className={styles.primaryActions} data-sort={showSort ? 'true' : undefined}>
+          <FilePickerButton
+            className="btn btn-primary"
+            label={adding ? 'Adding…' : 'Add screenshots'}
+            disabled={adding || discardAllBusy}
+            preferScreenshotsFolder
+            onFiles={onFiles}
+          />
+          {showSort ? (
+            <button
+              type="button"
+              className={`btn ${styles.sortBtn}`}
+              disabled={discardAllBusy}
+              aria-label={
+                sortDir === 'asc' ? 'Sort filename A to Z' : 'Sort filename Z to A'
+              }
+              onClick={() => {
+                const next = nextInboxSort(displayed, sortDir)
+                setSortDir(next.dir)
+                setOrderIds(next.ids)
+              }}
+            >
+              <span aria-hidden="true">{INBOX_SORT_EMOJI[sortDir]}</span>
+              {INBOX_SORT_LABEL[sortDir]}
+            </button>
+          ) : null}
+        </div>
         {canDiscardAll ? (
           <button
             type="button"
@@ -288,7 +325,7 @@ export function InboxPage() {
         <p className="empty-state">Nothing waiting. Catch something, screenshot it, transfer it here.</p>
       ) : (
         <div className={styles.list}>
-          {items.map((item) => (
+          {displayed.map((item) => (
             <InboxItem
               key={item.id}
               item={item}
@@ -348,8 +385,17 @@ export function InboxPage() {
         </p>
         {pendingDuplicate ? (
           <div className={styles.compare}>
-            <DuplicateShot imageId={pendingDuplicate.existing.imageId} label="Current" />
-            <DuplicateShot imageId={pendingDuplicate.item.imageId} label="New" tone="inbox" />
+            <DuplicateShot
+              imageId={pendingDuplicate.existing.imageId}
+              fileName={pendingDuplicate.existing.fileName}
+              label="Current"
+            />
+            <DuplicateShot
+              imageId={pendingDuplicate.item.imageId}
+              fileName={pendingDuplicate.item.fileName}
+              label="New"
+              tone="inbox"
+            />
           </div>
         ) : null}
         <div className="confirm-actions">
@@ -444,10 +490,12 @@ export function InboxPage() {
 
 function DuplicateShot({
   imageId,
+  fileName,
   label,
   tone,
 }: {
   imageId: string
+  fileName?: string | null
   label: string
   tone?: string
 }) {
@@ -460,6 +508,7 @@ function DuplicateShot({
       <div className={styles.shotFrame}>
         {url ? <img src={url} alt={label} /> : <span />}
       </div>
+      <FileNameCopy fileName={fileName} size="sm" className={styles.shotFileName} />
     </figure>
   )
 }

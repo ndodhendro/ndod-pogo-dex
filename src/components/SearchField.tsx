@@ -3,6 +3,8 @@ import styles from './SearchField.module.css'
 type Props = {
   value: string
   onChange: (value: string) => void
+  onFocus?: () => void
+  onClick?: () => void
   placeholder?: string
   className?: string
   autoFocus?: boolean
@@ -12,6 +14,8 @@ type Props = {
 export function SearchField({
   value,
   onChange,
+  onFocus,
+  onClick,
   placeholder = 'Search',
   className,
   autoFocus,
@@ -22,6 +26,8 @@ export function SearchField({
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onFocus={onFocus}
+        onClick={onClick}
         placeholder={placeholder}
         autoCapitalize="none"
         autoCorrect="off"

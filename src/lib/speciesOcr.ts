@@ -1,5 +1,7 @@
+import { GO_FORM_SPECIES_IDS } from '../data/goFormReleased'
 import { SPECIES } from '../data/species'
-import type { DexSlotDef } from './roster'
+import { normalizeVariant, type DexSlotDef } from './roster'
+import { specimenTags, toggleTag, type SpecimenFields } from './tags'
 
 const FORM_PREFIX =
   /^(alolan|galarian|hisuian|paldean|mega|primal|shadow|purified|gigantamax|dynamax|origin|therian)\s+/
@@ -12,7 +14,55 @@ export type OcrSpeciesResult = {
   query: string
   kind: 'strong' | 'weak' | 'none'
   slot?: DexSlotDef
+  /** Unique catalog species when OCR ranked to one species, even if variant slots are ambiguous. */
+  speciesId?: number
   suggestions: DexSlotDef[]
+}
+
+export function isGenderDexSpecies(speciesId: number): boolean {
+  return GO_FORM_SPECIES_IDS.gender.has(speciesId)
+}
+
+export function uniqueOcrSpeciesId(result: OcrSpeciesResult): number | undefined {
+  if (result.speciesId) return result.speciesId
+  if (result.slot?.speciesId) return result.slot.speciesId
+  const ids = new Set(result.suggestions.map((row) => row.speciesId))
+  if (ids.size === 1) return [...ids][0]
+  return undefined
+}
+
+export function ocrMatchesGenderSpecies(result: OcrSpeciesResult): boolean {
+  const speciesId = result.speciesId ?? result.slot?.speciesId
+  return Boolean(speciesId && isGenderDexSpecies(speciesId))
+}
+
+export function applyOcrGenderSpecies(fields: SpecimenFields, speciesId: number): SpecimenFields {
+  let next = { ...fields, speciesId }
+  if (!specimenTags(next).includes('gender')) next = toggleTag(next, 'gender')
+  return { ...next, speciesId, gender: '' }
+}
+
+function genderVariantRank(variant: string): number {
+  const value = variant.trim().toLowerCase()
+  if (value === 'male') return 0
+  if (value === 'female') return 1
+  if (value === 'hisuian male') return 2
+  if (value === 'hisuian female') return 3
+  return 50
+}
+
+export function genderSlotsForSpecies(
+  slots: readonly DexSlotDef[],
+  speciesId: number,
+): DexSlotDef[] {
+  if (!speciesId) return []
+  return slots
+    .filter((slot) => slot.speciesId === speciesId && Boolean(normalizeVariant(slot.variant)))
+    .sort(
+      (a, b) =>
+        genderVariantRank(a.variant) - genderVariantRank(b.variant) ||
+        a.variant.localeCompare(b.variant),
+    )
 }
 
 type RankedSpecies = {
@@ -196,6 +246,7 @@ export function matchSpeciesFromOcr(
         query: slot.name,
         kind: 'strong',
         slot,
+        speciesId: uniqueStrong.id,
         suggestions: [],
       }
     }
@@ -223,6 +274,7 @@ export function matchSpeciesFromOcr(
     rawText: raw,
     query: titleOcrName(bestCandidate),
     kind: suggestions.length > 0 ? 'weak' : 'none',
+    speciesId: uniqueStrong?.id,
     suggestions: suggestions.slice(0, MAX_SUGGESTIONS),
   }
 }

@@ -91,14 +91,15 @@ const SPECIES_ONLY_TAGS = new Set<string>([
   'lucky',
 ])
 const VARIANT_ONLY_TAGS = new Set<string>(['gender', 'mega', 'costume', 'background'])
-/** Form, then gender, then costume/background so combo labels read like Venusaur Mega Male. */
+/** Forme, then costume, then gender so combo labels read like Pikachu Kurta Male. */
 const VARIANT_COMBINE_RANK: Record<string, number> = {
   'alternate-forme': 0,
   mega: 1,
-  gender: 2,
-  costume: 3,
+  costume: 2,
+  gender: 3,
   background: 4,
 }
+const SIZE_FORME = /^(small|medium|large|jumbo) variety$/i
 
 export function defaultSlotMode(tag: TagId): SlotMode {
   if (SPECIES_ONLY_TAGS.has(tag)) return 'species'
@@ -196,11 +197,32 @@ function variantTagsOnTrack(tags: readonly TagId[], catalogs: readonly TagCatalo
   )
 }
 
-function joinVariantParts(parts: readonly SlotVariantPart[]): string {
+export function joinVariantParts(parts: readonly SlotVariantPart[]): string {
   return parts
     .map((part) => normalizeVariant(part.variant))
     .filter(Boolean)
     .join(' ')
+}
+
+function slotPartVariant(slot: DexSlotDef, tag: TagId): string {
+  const part = slot.variantParts?.find((item) => item.tag === tag)
+  return normalizeVariant(part?.variant ?? (slot.variantParts?.length ? '' : slot.variant))
+}
+
+function costumeCarriesForme(costume: string, forme: string): boolean {
+  const name = costume.trim().toLowerCase()
+  const suffix = forme.trim().toLowerCase()
+  if (!name || !suffix) return false
+  return name === suffix || name.endsWith(` ${suffix}`)
+}
+
+function costumeLabelForForme(costume: string, forme: string): string {
+  const raw = costume.trim()
+  const suffix = forme.trim()
+  if (!suffix || !costumeCarriesForme(raw, suffix)) return raw
+  const stripped = raw.slice(0, raw.length - suffix.length).trim().replace(/[-–—]+$/, '').trim()
+  if (/^halloween$/i.test(stripped) && SIZE_FORME.test(suffix)) return 'Halloween Party'
+  return stripped || raw
 }
 
 export function slotVariantForTrack(
@@ -383,12 +405,99 @@ function ensureVariantParts(slot: DexSlotDef, tag: TagId): DexSlotDef {
   return { ...slot, variantParts: [{ tag, variant: normalizeVariant(slot.variant) }] }
 }
 
+function pushCombinedSlot(
+  out: DexSlotDef[],
+  seen: Set<string>,
+  speciesId: number,
+  parts: readonly SlotVariantPart[],
+) {
+  const variant = joinVariantParts(parts)
+  if (!variant) return
+  const key = slotId(speciesId, variant)
+  if (seen.has(key)) return
+  seen.add(key)
+  out.push({
+    speciesId,
+    variant,
+    name: slotDisplayName(speciesId, variant),
+    variantParts: parts,
+  })
+}
+
+function pairCostumeFormeSlots(
+  left: DexSlotDef[],
+  leftTag: TagId,
+  right: DexSlotDef[],
+  rightTag: TagId,
+): DexSlotDef[] {
+  const formeTag = leftTag === 'alternate-forme' ? leftTag : rightTag
+  const costumeTag = leftTag === 'costume' ? leftTag : rightTag
+  const formeSlots = (formeTag === leftTag ? left : right).map((slot) =>
+    ensureVariantParts(slot, formeTag),
+  )
+  const costumeSlots = (costumeTag === leftTag ? left : right).map((slot) =>
+    ensureVariantParts(slot, costumeTag),
+  )
+  const costumesBySpecies = new Map<number, DexSlotDef[]>()
+  for (const slot of costumeSlots) {
+    const list = costumesBySpecies.get(slot.speciesId) ?? []
+    list.push(slot)
+    costumesBySpecies.set(slot.speciesId, list)
+  }
+  const out: DexSlotDef[] = []
+  const seen = new Set<string>()
+  const formesBySpecies = new Map<number, DexSlotDef[]>()
+  for (const slot of formeSlots) {
+    const list = formesBySpecies.get(slot.speciesId) ?? []
+    list.push(slot)
+    formesBySpecies.set(slot.speciesId, list)
+  }
+  for (const [speciesId, formes] of formesBySpecies) {
+    const costumes = costumesBySpecies.get(speciesId) ?? []
+    const formeNames = formes.map((slot) => slotPartVariant(slot, formeTag)).filter(Boolean)
+    for (const costumeSlot of costumes) {
+      const costumeName = slotPartVariant(costumeSlot, costumeTag)
+      const carried = [...formeNames]
+        .sort((a, b) => b.length - a.length)
+        .find((forme) => costumeCarriesForme(costumeName, forme))
+      const matchedFormes = carried
+        ? formes.filter((slot) => variantsMatch(slotPartVariant(slot, formeTag), carried))
+        : formes
+      for (const formeSlot of matchedFormes) {
+        const formeName = slotPartVariant(formeSlot, formeTag)
+        const costumeLabel = carried
+          ? costumeLabelForForme(costumeName, formeName)
+          : costumeName
+        const merged = [...(formeSlot.variantParts ?? []), ...(costumeSlot.variantParts ?? [])]
+        const byTag = new Map<TagId, string>()
+        for (const part of merged) {
+          if (part.tag === costumeTag) byTag.set(costumeTag, costumeLabel)
+          else if (part.tag === formeTag) byTag.set(formeTag, formeName)
+          else byTag.set(part.tag, normalizeVariant(part.variant))
+        }
+        const parts = sortVariantTags([...byTag.keys()]).map((tag) => ({
+          tag,
+          variant: byTag.get(tag) ?? '',
+        }))
+        pushCombinedSlot(out, seen, speciesId, parts)
+      }
+    }
+  }
+  return out
+}
+
 function cartesianVariantSlots(
   left: DexSlotDef[],
   leftTag: TagId,
   right: DexSlotDef[],
   rightTag: TagId,
 ): DexSlotDef[] {
+  if (
+    (leftTag === 'costume' && rightTag === 'alternate-forme') ||
+    (leftTag === 'alternate-forme' && rightTag === 'costume')
+  ) {
+    return pairCostumeFormeSlots(left, leftTag, right, rightTag)
+  }
   const bySpecies = new Map<number, DexSlotDef[]>()
   for (const slot of right) {
     const list = bySpecies.get(slot.speciesId) ?? []
@@ -400,18 +509,7 @@ function cartesianVariantSlots(
   for (const raw of left) {
     const a = ensureVariantParts(raw, leftTag)
     for (const b of bySpecies.get(a.speciesId) ?? []) {
-      const parts = [...(a.variantParts ?? []), ...(b.variantParts ?? [])]
-      const variant = joinVariantParts(parts)
-      if (!variant) continue
-      const key = slotId(a.speciesId, variant)
-      if (seen.has(key)) continue
-      seen.add(key)
-      out.push({
-        speciesId: a.speciesId,
-        variant,
-        name: slotDisplayName(a.speciesId, variant),
-        variantParts: parts,
-      })
+      pushCombinedSlot(out, seen, a.speciesId, [...(a.variantParts ?? []), ...(b.variantParts ?? [])])
     }
   }
   return out
@@ -460,10 +558,6 @@ export function trackIsLimited(requiredTags: readonly TagId[], catalogs: readonl
   return true
 }
 
-export function isRosterNamedVariantTag(tag: TagId): boolean {
-  return tag === 'costume'
-}
-
 export function slotsForTrack(
   requiredTags: readonly TagId[],
   catalogs: readonly TagCatalog[],
@@ -478,12 +572,20 @@ export function slotsForSelectedTags(
   catalogs: readonly TagCatalog[],
   roster: readonly TagRosterEntry[],
 ): DexSlotDef[] {
-  const named = tags.filter(isRosterNamedVariantTag)
-  const rest = tags.filter((tag) => !isRosterNamedVariantTag(tag))
-  if (named.length > 0 && variantTagsOnTrack(rest, catalogs).length > 0) {
-    return slotsForTrack(rest, catalogs, roster)
-  }
   return slotsForTrack(tags, catalogs, roster)
+}
+
+export function extraCartesianSlots(
+  tags: readonly TagId[],
+  catalogs: readonly TagCatalog[],
+  roster: readonly TagRosterEntry[],
+): DexSlotDef[] {
+  const wiki = new Set(
+    slotsForTrack(tags, catalogs, []).map((slot) => slotId(slot.speciesId, slot.variant)),
+  )
+  return slotsForTrack(tags, catalogs, roster).filter(
+    (slot) => !wiki.has(slotId(slot.speciesId, slot.variant)),
+  )
 }
 
 /** Costume/background come from the species slot only when that slot encodes them. */

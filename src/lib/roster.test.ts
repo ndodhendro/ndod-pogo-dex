@@ -7,6 +7,7 @@ import {
   countReleasedSlots,
   defaultLimitPokedex,
   defaultSlotMode,
+  extraCartesianSlots,
   slotModeLockedToSpecies,
   slotModeLockedToVariant,
   fieldsAllowedOnLimitedTags,
@@ -225,41 +226,77 @@ describe('slotsForTrack', () => {
     ).toBe(true)
   })
 
-  it('keeps Mega Gender species on Transfer when Costume is also selected', () => {
-    const mega: TagCatalog = { tag: 'mega', limitPokedex: true, slotMode: 'variant' }
+  it('combines Gender and Costume into Kurta Male / Kurta Female slots', () => {
     const gender: TagCatalog = { tag: 'gender', limitPokedex: true, slotMode: 'variant' }
-    const shinyTrack: TagCatalog = { tag: 'shiny', limitPokedex: true, slotMode: 'species' }
-    const catalogs = [mega, gender, shinyTrack, costume]
-    const tags = ['mega', 'shiny', 'gender', 'costume'] as const
-    const slots = slotsForSelectedTags(tags, catalogs, roster)
-    expect(slots.filter((slot) => slot.speciesId === 3).map((slot) => slot.variant)).toEqual([
-      'Mega Female',
-      'Mega Male',
-    ])
-    expect(variantFieldComesFromSlot('costume', tags, catalogs, slots)).toBe(false)
-    const withPartyHat: TagRosterEntry[] = [
-      ...roster,
-      { tag: 'costume', speciesId: 3, variant: 'Party Hat' },
-    ]
+    const slots = slotsForSelectedTags(['gender', 'costume'], [gender, costume], [])
+    const kurta = slots.filter((slot) => slot.speciesId === 25 && /kurta/i.test(slot.variant))
+    expect(kurta.map((slot) => slot.variant)).toEqual(['Kurta Female', 'Kurta Male'])
+    expect(kurta.some((slot) => slot.name === 'Pikachu Kurta Male')).toBe(true)
+    expect(kurta.some((slot) => slot.name === 'Pikachu Kurta Female')).toBe(true)
+    expect(variantFieldComesFromSlot('costume', ['gender', 'costume'], [gender, costume], slots)).toBe(
+      true,
+    )
+    const male = kurta.find((slot) => slot.variant === 'Kurta Male')!
     expect(
-      slotsForTrack(['mega', 'gender', 'costume'], [mega, gender, costume], withPartyHat)
-        .filter((slot) => slot.speciesId === 3 && /party hat/i.test(slot.variant))
-        .map((slot) => slot.variant)
-        .sort(),
-    ).toEqual(['Mega Female Party Hat', 'Mega Male Party Hat'])
+      applyRosterSlot(specimen({ extraTags: ['gender'], gender: '', costume: '' }), male, ['gender', 'costume'], [
+        gender,
+        costume,
+      ]),
+    ).toMatchObject({
+      speciesId: 25,
+      gender: 'Male',
+      costume: 'Kurta',
+      extraTags: ['gender'],
+    })
+  })
+
+  it('combines Alternate forme and Costume into Pumpkaboo size Halloween Party slots', () => {
+    const forme: TagCatalog = { tag: 'alternate-forme', limitPokedex: true, slotMode: 'variant' }
+    const slots = slotsForTrack(['alternate-forme', 'costume'], [forme, costume], [])
+    const pumpkaboo = slots.filter((slot) => slot.speciesId === 710)
+    expect(pumpkaboo.map((slot) => slot.variant).sort()).toEqual([
+      'Jumbo Variety Halloween Party',
+      'Large Variety Halloween Party',
+      'Small Variety Halloween Party',
+    ])
+    expect(slots.some((slot) => slot.name === 'Pumpkaboo Large Variety Halloween Party')).toBe(true)
+    expect(slots.some((slot) => slot.name === 'Pumpkaboo Jumbo Variety Halloween Party')).toBe(true)
+    expect(pumpkaboo.some((slot) => /halloween jumbo variety/i.test(slot.variant))).toBe(false)
+    const large = pumpkaboo.find((slot) => slot.variant === 'Large Variety Halloween Party')!
     expect(
       applyRosterSlot(
-        specimen({
-          shiny: true,
-          costume: '',
-          extraTags: ['mega', 'gender'],
-          gender: '',
-        }),
-        slots.find((slot) => slot.speciesId === 3 && slot.variant === 'Mega Male')!,
-        tags,
-        catalogs,
+        specimen({ extraTags: ['alternate-forme'], form: '', costume: '' }),
+        large,
+        ['alternate-forme', 'costume'],
+        [forme, costume],
       ),
-    ).toMatchObject({ speciesId: 3, form: 'Mega', gender: 'Male', costume: '' })
+    ).toMatchObject({
+      speciesId: 710,
+      form: 'Large Variety',
+      costume: 'Halloween Party',
+      extraTags: ['alternate-forme'],
+    })
+  })
+
+  it('lets a roster extra add a missing Gender + Costume combo', () => {
+    const gender: TagCatalog = { tag: 'gender', limitPokedex: true, slotMode: 'variant' }
+    const extra: TagRosterEntry[] = [{ tag: 'costume', speciesId: 25, variant: 'Festival Shirt' }]
+    const added = extraCartesianSlots(['gender', 'costume'], [gender, costume], extra)
+    expect(added.map((slot) => slot.variant).sort()).toEqual([
+      'Festival Shirt Female',
+      'Festival Shirt Male',
+    ])
+    expect(added.some((slot) => slot.name === 'Pikachu Festival Shirt Male')).toBe(true)
+  })
+
+  it('pairs a size-in-costume extra only with that Pumpkaboo forme', () => {
+    const forme: TagCatalog = { tag: 'alternate-forme', limitPokedex: true, slotMode: 'variant' }
+    const extra: TagRosterEntry[] = [
+      { tag: 'costume', speciesId: 710, variant: 'Candy Large Variety' },
+    ]
+    const added = extraCartesianSlots(['alternate-forme', 'costume'], [forme, costume], extra)
+    expect(added.map((slot) => slot.variant)).toEqual(['Large Variety Candy'])
+    expect(added.some((slot) => /jumbo/i.test(slot.variant))).toBe(false)
   })
 
   it('combines Mega and Background variants for overlapping species', () => {

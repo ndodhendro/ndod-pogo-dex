@@ -57,7 +57,12 @@ for (const row of [...regular, ...extra]) {
     missing.push(row.name)
     continue
   }
-  const variant = (row.flags.form || row.key).trim()
+  const variantRaw = (row.flags.form || row.key).trim()
+  const sizeForme = variantRaw.match(/^(.*)\s+((?:Small|Medium|Large|Jumbo) Variety)$/i)
+  const variant =
+    sizeForme && (speciesId === 710 || speciesId === 711) && /halloween/i.test(sizeForme[1])
+      ? 'Halloween Party'
+      : variantRaw
   const key = `${speciesId}:${variant.toLowerCase()}`
   if (seen.has(key)) continue
   seen.add(key)

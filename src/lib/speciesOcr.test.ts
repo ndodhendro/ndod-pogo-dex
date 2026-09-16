@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyOcrGenderSpecies,
+  genderSlotsForSpecies,
+  isGenderDexSpecies,
   matchSpeciesFromOcr,
   normalizeOcrName,
+  ocrMatchesGenderSpecies,
   ocrNameCandidates,
 } from './speciesOcr'
+import { slotsForSelectedTags } from './roster'
 import type { DexSlotDef } from './roster'
+import type { SpecimenFields } from './tags'
 
 function slot(speciesId: number, name: string, variant = ''): DexSlotDef {
   return { speciesId, variant, name }
@@ -22,6 +28,28 @@ const basicSlots = [
   slot(29, 'Nidoran ♀'),
   slot(32, 'Nidoran ♂'),
 ]
+
+const genderSlots = [
+  slot(25, 'Pikachu Male', 'Male'),
+  slot(25, 'Pikachu Female', 'Female'),
+  slot(215, 'Sneasel Male', 'Male'),
+  slot(215, 'Sneasel Female', 'Female'),
+  slot(215, 'Sneasel Hisuian Male', 'Hisuian Male'),
+  slot(215, 'Sneasel Hisuian Female', 'Hisuian Female'),
+]
+
+const fields = (): SpecimenFields => ({
+  speciesId: 0,
+  form: null,
+  shiny: false,
+  shadowStatus: 'none',
+  costume: null,
+  background: null,
+  gender: null,
+  hundo: false,
+  nundo: false,
+  extraTags: ['basic'],
+})
 
 describe('normalizeOcrName', () => {
   it('strips GO chrome and maps gender marks', () => {
@@ -46,6 +74,25 @@ describe('matchSpeciesFromOcr', () => {
     const result = matchSpeciesFromOcr('Pikachu', basicSlots)
     expect(result.kind).toBe('strong')
     expect(result.slot?.speciesId).toBe(25)
+    expect(result.speciesId).toBe(25)
+    expect(ocrMatchesGenderSpecies(result)).toBe(true)
+  })
+
+  it('does not treat a non-gender species as a gender OCR hit', () => {
+    const result = matchSpeciesFromOcr('Bulbasaur', basicSlots)
+    expect(result.kind).toBe('strong')
+    expect(result.speciesId).toBe(1)
+    expect(isGenderDexSpecies(1)).toBe(false)
+    expect(ocrMatchesGenderSpecies(result)).toBe(false)
+  })
+
+  it('keeps a unique gender species when Male and Female slots are both present', () => {
+    const result = matchSpeciesFromOcr('Pikachu', genderSlots)
+    expect(result.kind).toBe('weak')
+    expect(result.speciesId).toBe(25)
+    expect(result.slot).toBeUndefined()
+    expect(ocrMatchesGenderSpecies(result)).toBe(true)
+    expect(result.suggestions.map((row) => row.variant)).toEqual(['Male', 'Female'])
   })
 
   it('auto-picks the nearest species when OCR wraps the name in junk', () => {
@@ -104,8 +151,15 @@ describe('matchSpeciesFromOcr', () => {
     const result = matchSpeciesFromOcr('Pikachu', costumes)
     expect(result.kind).toBe('weak')
     expect(result.slot).toBeUndefined()
+    expect(result.speciesId).toBe(25)
     expect(result.suggestions).toHaveLength(2)
     expect(result.query).toBe('Pikachu')
+  })
+
+  it('does not treat Nidoran without a mark as a unique gender species', () => {
+    const result = matchSpeciesFromOcr('Nidoran', basicSlots)
+    expect(ocrMatchesGenderSpecies(result)).toBe(false)
+    expect(result.speciesId).toBeUndefined()
   })
 
   it('puts raw OCR in the query when nothing matches', () => {
@@ -120,5 +174,50 @@ describe('matchSpeciesFromOcr', () => {
     expect(result.kind).toBe('weak')
     expect(result.suggestions.some((row) => row.speciesId === 95)).toBe(true)
     expect(result.slot).toBeUndefined()
+  })
+})
+
+describe('applyOcrGenderSpecies', () => {
+  it('turns Gender on, keeps the base species, and leaves Male/Female unpicked', () => {
+    const next = applyOcrGenderSpecies(fields(), 25)
+    expect(next.speciesId).toBe(25)
+    expect(next.extraTags).toEqual(['basic', 'gender'])
+    expect(next.gender).toBe('')
+  })
+
+  it('resets an already picked variant when OCR runs again', () => {
+    const tagged = applyOcrGenderSpecies(
+      { ...fields(), speciesId: 25, extraTags: ['basic', 'gender'], gender: 'Male' },
+      25,
+    )
+    expect(tagged.gender).toBe('')
+    expect(tagged.extraTags).toEqual(['basic', 'gender'])
+  })
+})
+
+describe('genderSlotsForSpecies', () => {
+  it('returns Male and Female for a dimorphic species', () => {
+    expect(genderSlotsForSpecies(genderSlots, 25).map((row) => row.variant)).toEqual([
+      'Male',
+      'Female',
+    ])
+  })
+
+  it('returns Hisuian variants with Johto for Sneasel', () => {
+    expect(genderSlotsForSpecies(genderSlots, 215).map((row) => row.variant)).toEqual([
+      'Male',
+      'Female',
+      'Hisuian Male',
+      'Hisuian Female',
+    ])
+  })
+
+  it('lists Pikachu Male and Female after Gender is turned on from OCR', () => {
+    const next = applyOcrGenderSpecies(fields(), 25)
+    const slots = slotsForSelectedTags(next.extraTags ?? [], [], [])
+    expect(genderSlotsForSpecies(slots, 25).map((row) => row.name)).toEqual([
+      'Pikachu Male',
+      'Pikachu Female',
+    ])
   })
 })
