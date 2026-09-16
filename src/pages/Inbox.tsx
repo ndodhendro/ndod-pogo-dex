@@ -5,6 +5,7 @@ import { FilePickerButton } from '../components/FilePickerButton'
 import { TagSheet } from '../components/TagSheet'
 import { TagChip } from '../components/TagChip'
 import { AppFooter } from '../components/AppFooter'
+import { FileNameCopy } from '../components/FileNameCopy'
 import {
   categoryForTag,
   lookForTag,
@@ -47,6 +48,10 @@ const PROGRESS_META: Record<DexProgressKind, { icon: string; label: string }> = 
 }
 
 type TransferView = 'untagged' | 'logs'
+
+function untaggedRemainingLabel(count: number) {
+  return `${count.toLocaleString('en-US')} remaining`
+}
 
 type PendingDuplicate = {
   item: InboxRow
@@ -181,7 +186,7 @@ export function InboxPage() {
         </span>
         {showingLogs ? 'Logs' : 'Untagged Screenshots'}
       </h1>
-      <div className={`row-actions ${styles.toolbar}`}>
+      <div className={styles.toolbar}>
         <FilePickerButton
           className="btn btn-primary"
           label={adding ? 'Adding…' : 'Add screenshots'}
@@ -189,28 +194,41 @@ export function InboxPage() {
           preferScreenshotsFolder
           onFiles={onFiles}
         />
-        <button
-          type="button"
-          className={`btn ${styles.toolBtn}`}
-          data-tone="inbox"
-          data-on={showingLogs ? 'false' : 'true'}
-          aria-pressed={!showingLogs}
-          onClick={() => setView('untagged')}
-        >
-          <span aria-hidden="true">{TAB_ICONS.inbox}</span>
-          Untagged Screenshots
-        </button>
-        <button
-          type="button"
-          className={`btn ${styles.toolBtn}`}
-          data-tone="inbox"
-          data-on={showingLogs ? 'true' : 'false'}
-          aria-pressed={showingLogs}
-          onClick={() => setView('logs')}
-        >
-          <span aria-hidden="true">📋</span>
-          Logs
-        </button>
+        <div className="row-actions">
+          <button
+            type="button"
+            className={`btn ${styles.toolBtn}`}
+            data-tone="inbox"
+            data-on={showingLogs ? 'false' : 'true'}
+            aria-pressed={!showingLogs}
+            onClick={() => setView('untagged')}
+          >
+            <span className={styles.toolLabel}>
+              <span className={styles.toolName}>
+                <span aria-hidden="true">{TAB_ICONS.inbox}</span>
+                Untagged Screenshots
+              </span>
+              <span
+                className={styles.remaining}
+                role="status"
+                data-wrap={items.length > 9999 ? 'true' : undefined}
+              >
+                {untaggedRemainingLabel(items.length)}
+              </span>
+            </span>
+          </button>
+          <button
+            type="button"
+            className={`btn ${styles.toolBtn}`}
+            data-tone="inbox"
+            data-on={showingLogs ? 'true' : 'false'}
+            aria-pressed={showingLogs}
+            onClick={() => setView('logs')}
+          >
+            <span aria-hidden="true">📋</span>
+            Logs
+          </button>
+        </div>
       </div>
       {showingLogs ? (
         <section className={styles.logs} aria-label="Logs">
@@ -224,6 +242,7 @@ export function InboxPage() {
                   log={log}
                   specimen={specimen}
                   liveImageId={live?.imageId}
+                  liveFileName={live?.fileName}
                   categories={categories}
                 />
               ))}
@@ -250,6 +269,7 @@ export function InboxPage() {
         title="Tag screenshot"
         resetKey={active?.id ?? ''}
         imageId={active?.imageId}
+        fileName={active?.fileName}
         saveLabel="Save specimen"
         tone="inbox"
         onClose={() => setActive(null)}
@@ -399,11 +419,13 @@ function TransferLogItem({
   log,
   specimen,
   liveImageId,
+  liveFileName,
   categories,
 }: {
   log: TransferLogRow
   specimen: SpecimenFields & { id: string; imageId: string }
   liveImageId?: string
+  liveFileName?: string | null
   categories: CategoryRow[]
 }) {
   const liveUrl = useImageUrl(liveImageId, 'thumb')
@@ -414,28 +436,38 @@ function TransferLogItem({
   const progress = specimenProgressFlags(specimen, categories)
   const action = TRANSFER_LOG_ACTIONS[log.action ?? 'save']
   return (
-    <article className={`group ${styles.log}`}>
-      <div className={styles.logShot}>
-        {url ? <img src={url} alt="" /> : <span />}
-      </div>
-      <div className={styles.logMeta}>
+    <article className={styles.item}>
+      {url ? <img src={url} alt="" /> : <span />}
+      <div className={styles.itemMeta}>
+        <FileNameCopy
+          fileName={log.fileName ?? liveFileName}
+          size="compact"
+          className={styles.fileName}
+        />
         <p className={styles.logAction} data-action={log.action ?? 'save'}>
           <span aria-hidden="true">{action.icon}</span>
           {action.label}
         </p>
-        <p className={styles.logId}>#{String(specimen.speciesId).padStart(4, '0')}</p>
-        <p className={styles.logName}>{species?.name ?? 'Unknown'}</p>
-        <div className={styles.logStatus}>
-          {DEX_PROGRESS_KINDS.filter((kind) => progress[kind]).map((kind) => {
-            const meta = PROGRESS_META[kind]
-            return (
-              <p key={kind} className={styles.logKind} data-kind={kind} data-on="true">
-                <span aria-hidden="true">{meta.icon}</span>
-                {meta.label}
-              </p>
-            )
-          })}
-        </div>
+        <p className={`page-sub ${styles.itemTime}`}>
+          {new Date(log.updatedAt).toLocaleString()}
+        </p>
+        <p className={styles.logSpecies}>
+          <span className={styles.logId}>#{String(specimen.speciesId).padStart(4, '0')}</span>
+          {species?.name ?? 'Unknown'}
+        </p>
+        {DEX_PROGRESS_KINDS.some((kind) => progress[kind]) ? (
+          <div className={styles.logStatus}>
+            {DEX_PROGRESS_KINDS.filter((kind) => progress[kind]).map((kind) => {
+              const meta = PROGRESS_META[kind]
+              return (
+                <p key={kind} className={styles.logKind} data-kind={kind} data-on="true">
+                  <span aria-hidden="true">{meta.icon}</span>
+                  {meta.label}
+                </p>
+              )
+            })}
+          </div>
+        ) : null}
         {tags.length > 0 ? (
           <div className={styles.logTags}>
             {tags.map((tag) => {
@@ -472,19 +504,20 @@ function InboxItem({
   return (
     <div className={styles.item}>
       {url ? <img src={url} alt="" /> : <span />}
-      <div>
+      <div className={styles.itemMeta}>
+        <FileNameCopy fileName={item.fileName} size="compact" className={styles.fileName} />
         <strong data-tone="inbox">Untagged</strong>
-        <p className="page-sub" style={{ margin: 0 }}>
+        <p className={`page-sub ${styles.itemTime}`}>
           {new Date(item.createdAt).toLocaleString()}
         </p>
-      </div>
-      <div className="row-actions">
-        <button type="button" className="btn btn-primary" onClick={onTag}>
-          Tag
-        </button>
-        <button type="button" className="btn btn-danger" onClick={onDiscard}>
-          Discard
-        </button>
+        <div className={`row-actions ${styles.itemActions}`}>
+          <button type="button" className="btn btn-primary" onClick={onTag}>
+            Tag
+          </button>
+          <button type="button" className="btn btn-danger" onClick={onDiscard}>
+            Discard
+          </button>
+        </div>
       </div>
     </div>
   )

@@ -6,6 +6,7 @@ import { extraTagList, cropTagsFromFields, isNotPure, isSilhouette } from './tag
 import { cropHeightForSpecimen } from '../data/tagCrops'
 import { hashBlob } from './hash'
 import { newId } from './id'
+import { screenshotFileName } from './screenshotFileName'
 import { isProbablyImageFile, makeImageVariants } from './images'
 import { planCloudPhotoRestore, planGalleryRestore } from './restorePlan'
 import { downloadSpecimenOriginal } from './specimenStorage'
@@ -267,6 +268,7 @@ async function writeRestoredSpecimen(spec: CloudSpecimen, file: Blob, alreadyCro
       notPure: isNotPure(spec),
       imageId,
       fileHash: spec.fileHash,
+      fileName: screenshotFileName(file),
       createdAt: spec.createdAt,
       gallerySort: spec.gallerySort,
       cloudBackupPending: false,

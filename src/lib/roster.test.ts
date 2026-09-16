@@ -13,11 +13,13 @@ import {
   limitedRosterWarning,
   nationalDexSlots,
   searchSlots,
+  searchVariantNames,
   slotDisplayName,
   slotsForSelectedTags,
   slotsForTrack,
   specimenFillsSlot,
   trackIsLimited,
+  uniqueVariantNamesForTag,
   usesRosterVariantField,
   variantFieldComesFromSlot,
   type TagCatalog,
@@ -539,6 +541,39 @@ describe('usesRosterVariantField', () => {
   it('hides free-text costume when the Costume roster is limited', () => {
     expect(usesRosterVariantField('costume', [costume])).toBe(true)
     expect(usesRosterVariantField('costume', [{ ...costume, limitPokedex: false }])).toBe(true)
+  })
+})
+
+describe('uniqueVariantNamesForTag', () => {
+  it('lists unique Costume names from the wiki list and extra roster rows', () => {
+    const names = uniqueVariantNamesForTag('costume', roster)
+    expect(names.some((name) => name.toLowerCase() === 'party hat')).toBe(true)
+    expect(names).toContain('Halloween Cape')
+    expect(names).toContain('Sandals')
+    expect(names.filter((name) => name.toLowerCase() === 'party hat')).toHaveLength(1)
+  })
+
+  it('lists unique Gender names from the wiki list', () => {
+    const names = uniqueVariantNamesForTag('gender', [])
+    expect(names).toEqual(expect.arrayContaining(['Female', 'Hisuian Female', 'Hisuian Male', 'Male']))
+  })
+})
+
+describe('searchVariantNames', () => {
+  const names = ['Halloween Cape', 'Party Hat', 'Sandals']
+
+  it('filters existing names as the user types', () => {
+    expect(searchVariantNames(names, 'hat')).toEqual(['Party Hat'])
+    expect(searchVariantNames(names, 'cape')).toEqual(['Halloween Cape'])
+  })
+
+  it('hides suggestions once the typed name matches exactly', () => {
+    expect(searchVariantNames(names, 'Party Hat')).toEqual([])
+  })
+
+  it('keeps a new typed name with no suggestions', () => {
+    expect(searchVariantNames(names, 'Star Crown')).toEqual([])
+    expect(searchVariantNames(names, '')).toEqual([])
   })
 })
 

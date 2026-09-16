@@ -323,6 +323,28 @@ function releasedVariantSlots(roster: readonly TagRosterEntry[], tag: TagId): De
   return slots.sort((a, b) => a.speciesId - b.speciesId || a.variant.localeCompare(b.variant))
 }
 
+export function uniqueVariantNamesForTag(
+  tag: TagId,
+  roster: readonly TagRosterEntry[],
+): string[] {
+  const names = new Map<string, string>()
+  for (const slot of releasedVariantSlots(roster, tag)) {
+    const label = normalizeVariant(slot.variant)
+    if (!label) continue
+    const key = label.toLowerCase()
+    if (!names.has(key)) names.set(key, label)
+  }
+  return [...names.values()].sort((a, b) => a.localeCompare(b))
+}
+
+export function searchVariantNames(names: readonly string[], query: string, limit = 12): string[] {
+  const typed = query.trim()
+  const q = typed.toLowerCase()
+  if (!q) return []
+  if (names.some((name) => name === typed)) return []
+  return names.filter((name) => name.toLowerCase().includes(q)).slice(0, limit)
+}
+
 function intersectIds(current: Set<number> | null, next: Set<number>): Set<number> {
   if (!current) return next
   const out = new Set<number>()

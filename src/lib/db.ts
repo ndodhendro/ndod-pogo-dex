@@ -22,6 +22,8 @@ export type SpecimenRow = {
   notPure?: boolean
   imageId: string
   fileHash?: string | null
+  /** Original screenshot basename with extension, when known. */
+  fileName?: string | null
   createdAt: number
   /** Species gallery order. Missing means newest-first by createdAt. */
   gallerySort?: number
@@ -39,6 +41,7 @@ export type ImageRow = {
 export type InboxRow = {
   id: string
   imageId: string
+  fileName?: string | null
   createdAt: number
 }
 
@@ -98,6 +101,7 @@ export type TransferLogRow = {
   silhouette?: boolean
   notPure?: boolean
   imageId?: string | null
+  fileName?: string | null
   thumb?: Blob
   createdAt: number
   updatedAt: number

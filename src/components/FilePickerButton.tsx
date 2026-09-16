@@ -155,7 +155,7 @@ export function FilePickerButton({
   }
 
   return (
-    <>
+    <div className={styles.host}>
       <button type="button" className={className} disabled={disabled} onClick={openPicker}>
         {icon ? <span aria-hidden="true">{icon}</span> : null}
         {label}
@@ -169,6 +169,6 @@ export function FilePickerButton({
         tabIndex={-1}
         onChange={(event) => void onInputChange(event)}
       />
-    </>
+    </div>
   )
 }

@@ -104,27 +104,24 @@ function snapshotFromSpecimen(
     silhouette: isSilhouette(specimen),
     notPure: isNotPure(specimen),
     imageId: specimen.imageId,
+    fileName: specimen.fileName ?? null,
     thumb,
   }
 }
 
-export async function upsertTransferLog(
+/** Always insert so save, edit, and delete stay as separate history rows. */
+export async function appendTransferLog(
   specimen: SpecimenRow,
   action: TransferLogAction,
   now = Date.now(),
 ) {
   const image = await db.images.get(specimen.imageId)
   const snapshot = snapshotFromSpecimen(specimen, action, image?.thumb)
-  const existing = await db.transferLogs.where('specimenId').equals(specimen.id).first()
-  if (existing) {
-    await db.transferLogs.update(existing.id, { ...snapshot, updatedAt: now })
-  } else {
-    await db.transferLogs.add({
-      id: newId(),
-      ...snapshot,
-      createdAt: now,
-      updatedAt: now,
-    })
-  }
+  await db.transferLogs.add({
+    id: newId(),
+    ...snapshot,
+    createdAt: now,
+    updatedAt: now,
+  })
   await pruneTransferLogs()
 }

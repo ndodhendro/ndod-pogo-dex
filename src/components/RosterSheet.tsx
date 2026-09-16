@@ -5,11 +5,13 @@ import { addRosterEntry, removeRosterEntry } from '../lib/collection'
 import { db } from '../lib/db'
 import {
   normalizeVariant,
+  searchVariantNames,
   slotBoxLabel,
   slotDisplayName,
   slotIsStaticReleased,
   staticReleasedCount,
   tagUsesStaticReleasedList,
+  uniqueVariantNamesForTag,
   type SlotMode,
 } from '../lib/roster'
 import { toastAfterWrite, useToast } from '../lib/toast'
@@ -53,6 +55,14 @@ export function RosterSheet({
     if (!adding || !speciesQuery.trim() || speciesQuery === selectedLabel) return []
     return searchSpecies(speciesQuery).slice(0, 12)
   }, [adding, speciesQuery, selectedLabel])
+  const variantNames = useMemo(() => {
+    if (!tag || slotMode !== 'variant') return []
+    return uniqueVariantNamesForTag(tag, rows)
+  }, [tag, slotMode, rows])
+  const variantMatches = useMemo(() => {
+    if (!adding || slotMode !== 'variant') return []
+    return searchVariantNames(variantNames, variant)
+  }, [adding, slotMode, variant, variantNames])
 
   const usesGoList = tag ? tagUsesStaticReleasedList(tag) : false
   const extraRows = useMemo(() => {
@@ -173,15 +183,29 @@ export function RosterSheet({
             </p>
           ) : null}
           {slotMode === 'variant' ? (
-            <label className="field">
+            <div className={styles.addField}>
               <span>Variant</span>
-              <input
+              <SearchField
                 value={variant}
-                onChange={(e) => setVariant(e.target.value)}
-                placeholder="Party Hat"
-                autoComplete="off"
+                onChange={setVariant}
+                placeholder="Search or type a variant"
+                aria-label="Variant"
               />
-            </label>
+              {variantMatches.length > 0 ? (
+                <div className={styles.matches}>
+                  {variantMatches.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      data-on={variant === name ? 'true' : 'false'}
+                      onClick={() => setVariant(name)}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
           ) : null}
           <div className="field">
             <span>Status</span>
@@ -202,7 +226,7 @@ export function RosterSheet({
               </button>
             </div>
           </div>
-          <div className={styles.addActions}>
+          <div className="row-actions">
             <button type="button" className="btn" onClick={resetAdd}>
               Cancel
             </button>

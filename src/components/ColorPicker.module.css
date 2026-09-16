@@ -18,6 +18,10 @@
   gap: var(--space-3);
 }
 
+.picker :global(.btn) {
+  width: 100%;
+}
+
 .pad {
   position: relative;
   height: 8.5rem;

@@ -74,6 +74,11 @@
   min-width: 0;
 }
 
+.fileName {
+  width: 100%;
+  min-width: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .grid[data-reordering='true'] .cell:not([data-dragging='true']) {
     transition: none;

@@ -37,6 +37,7 @@ import {
   type TagId,
 } from '../lib/tags'
 import { BottomSheet } from './BottomSheet'
+import { FileNameCopy } from './FileNameCopy'
 import { OriginalLightbox } from './OriginalLightbox'
 import { SearchField } from './SearchField'
 import { TagChip } from './TagChip'
@@ -94,6 +95,7 @@ type TagSheetProps = {
   title: string
   resetKey: string
   imageId?: string
+  fileName?: string | null
   initialFields?: SpecimenFields
   saveLabel: string
   tone: string
@@ -109,6 +111,7 @@ export function TagSheet({
   title,
   resetKey,
   imageId,
+  fileName,
   initialFields,
   saveLabel,
   tone,
@@ -325,16 +328,19 @@ export function TagSheet({
       </div>
       {tab === 'tags' ? (
         <>
-          {previewUrl ? (
-            <button
-              type="button"
-              className={styles.shotPreview}
-              aria-label="View original screenshot"
-              onClick={() => setLightbox(true)}
-            >
-              <img src={previewUrl} alt="" />
-            </button>
-          ) : null}
+          <div className={styles.shotBlock}>
+            {previewUrl ? (
+              <button
+                type="button"
+                className={styles.shotPreview}
+                aria-label="View original screenshot"
+                onClick={() => setLightbox(true)}
+              >
+                <img src={previewUrl} alt="" />
+              </button>
+            ) : null}
+            <FileNameCopy fileName={fileName} size="md" className={styles.fileName} />
+          </div>
           <div className="field">
             <span>Tags</span>
             <div className="chip-row">
@@ -531,6 +537,7 @@ export function SpecimenTagSheet({
       title="Edit tags"
       resetKey={specimen?.id ?? ''}
       imageId={specimen?.imageId}
+      fileName={specimen?.fileName}
       initialFields={specimen ?? undefined}
       saveLabel="Save tags"
       tone="living"

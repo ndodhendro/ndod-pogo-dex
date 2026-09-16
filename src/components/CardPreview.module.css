@@ -273,6 +273,10 @@
   font-size: var(--font-size-sm);
 }
 
+.fileName {
+  margin-top: var(--space-3);
+}
+
 .confirmCopy {
   margin: 0 0 var(--space-4);
 }

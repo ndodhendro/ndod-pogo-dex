@@ -41,6 +41,7 @@ async function handleShareTarget(request: Request) {
       tx.objectStore(SHARE_STORE).put({
         id: newId(),
         blob: file,
+        fileName: file.name || undefined,
         createdAt: Date.now(),
       })
       tx.oncomplete = () => resolve()

@@ -134,7 +134,7 @@ export function RestoreGalleryButton() {
   }
 
   return (
-    <div className={`${styles.block} ${styles.gallery}`} aria-busy={busy}>
+    <div className={styles.block} aria-busy={busy}>
       <FilePickerButton
         className="btn"
         icon="🖼️"

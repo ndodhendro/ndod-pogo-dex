@@ -1,10 +1,10 @@
 .block {
-  min-width: min(100%, 12rem);
-  flex: 1 1 12rem;
+  min-width: 0;
+  width: 100%;
 }
 
-.gallery {
-  flex: 1 1 100%;
+.block :global(.btn) {
+  width: 100%;
 }
 
 .meterRow {

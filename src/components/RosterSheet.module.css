@@ -48,6 +48,18 @@
   font-weight: var(--font-weight-medium);
 }
 
+.addField {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.addField > span {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--letter-ui);
+}
+
 .segment {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -68,15 +80,6 @@
   background: var(--color-accent-soft);
   border-color: transparent;
   color: var(--color-living-text);
-}
-
-.addActions {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.addActions .btn {
-  flex: 1;
 }
 
 .list {

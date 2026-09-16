@@ -1,3 +1,17 @@
+.host {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+:global(.group) > .host {
+  margin-top: var(--space-3);
+}
+
+.host > button {
+  width: 100%;
+}
+
 .input {
   position: fixed;
   left: 0;

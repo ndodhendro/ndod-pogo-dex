@@ -282,23 +282,27 @@ a {
   font-size: var(--font-size-sm);
 }
 
-.row-actions {
-  display: flex;
+.row-actions,
+.confirm-actions,
+.stack-actions {
+  display: grid;
   gap: var(--space-2);
-  flex-wrap: wrap;
+  width: 100%;
 }
 
+.row-actions,
 .confirm-actions {
-  display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  gap: var(--space-2);
-  width: 100%;
 }
 
-.confirm-actions > .btn {
+.stack-actions .btn,
+.row-actions .btn,
+.confirm-actions .btn {
   width: 100%;
   min-width: 0;
+  white-space: normal;
+  text-align: center;
 }
 
 .group {
@@ -326,6 +330,7 @@ a {
 
 .group > .btn {
   margin-top: var(--space-3);
+  width: 100%;
 }
 
 .group-row .page-sub {
@@ -351,6 +356,7 @@ a {
 }
 
 .btn-primary {
+  width: 100%;
   background: var(--color-accent);
   color: #06281c;
   border-color: transparent;

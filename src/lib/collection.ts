@@ -8,6 +8,7 @@ import { galleryOrderPatch } from './galleryOrder'
 import { newId } from './id'
 import { cropBottomFromBlob, makeImageVariants } from './images'
 import { hashBlob } from './hash'
+import { screenshotFileName } from './screenshotFileName'
 import { cloudBackupErrorMessage, pickSpecimenToKeepForHash, sameSpecimenMetadata } from './specimenHash'
 import { rebaseSpecimenId } from './specimenMerge'
 import {
@@ -32,7 +33,7 @@ import {
   specimenFillsSlot,
   type SlotMode,
 } from './roster'
-import { upsertTransferLog } from './transferLogs'
+import { appendTransferLog } from './transferLogs'
 import {
   extraTagList,
   isNotPure,
@@ -45,15 +46,20 @@ import {
   type TagId,
 } from './tags'
 
-export async function ingestFile(file: File | Blob): Promise<InboxRow> {
+export async function ingestFile(
+  file: File | Blob,
+  fileName?: string | null,
+): Promise<InboxRow> {
   const variants = await makeImageVariants(file)
   const imageId = newId()
   const inboxId = newId()
+  const name = screenshotFileName(fileName) ?? screenshotFileName(file)
   await db.transaction('rw', db.images, db.inbox, async () => {
     await db.images.add({ id: imageId, ...variants })
     await db.inbox.add({
       id: inboxId,
       imageId,
+      fileName: name,
       createdAt: Date.now(),
     })
   })
@@ -132,6 +138,7 @@ export async function saveSpecimenFromInbox(
     notPure: isNotPure(fields),
     imageId: inbox.imageId,
     fileHash,
+    fileName: inbox.fileName ?? null,
     createdAt: Date.now(),
     cloudBackupPending: true,
   }
@@ -145,7 +152,7 @@ export async function saveSpecimenFromInbox(
     for (const category of categories) {
       await maybeSetCover(category, specimen, incomingTags, catalogs)
     }
-    await upsertTransferLog(specimen, 'save')
+    await appendTransferLog(specimen, 'save')
   })
 
   return finishSave(specimen, { duplicate: false })
@@ -188,6 +195,7 @@ export async function replaceSpecimenFromInbox(
     notPure: isNotPure(fields),
     imageId: inbox.imageId,
     fileHash,
+    fileName: inbox.fileName ?? existing.fileName ?? null,
     cloudBackupPending: true,
   }
   const oldImageId = existing.imageId
@@ -228,7 +236,7 @@ export async function replaceSpecimenFromInbox(
         await db.covers.delete([mutation.categoryId, mutation.speciesId, mutation.variant])
       }
     }
-    await upsertTransferLog(updated, 'save')
+    await appendTransferLog(updated, 'save')
   })
 
   if (oldImageId !== inbox.imageId) forgetImageUrls(oldImageId)
@@ -263,6 +271,7 @@ async function saveExistingScreenshot(
     extraTags: extraTagList(fields),
     silhouette: isSilhouette(fields),
     notPure: isNotPure(fields),
+    fileName: inbox.fileName ?? existing.fileName ?? null,
     cloudBackupPending: true,
   }
   const unchanged = sameSpecimenMetadata(existing, updated)
@@ -272,6 +281,9 @@ async function saveExistingScreenshot(
 
   await db.transaction('rw', db.specimens, db.inbox, db.covers, db.images, db.transferLogs, async () => {
     if (!unchanged) await db.specimens.put(updated)
+    else if ((updated.fileName ?? null) !== (existing.fileName ?? null)) {
+      await db.specimens.update(existing.id, { fileName: updated.fileName ?? null })
+    }
     await db.inbox.delete(inbox.id)
     const imageStillUsed =
       (await db.specimens.where('imageId').equals(inbox.imageId).count()) +
@@ -282,7 +294,7 @@ async function saveExistingScreenshot(
         await maybeSetCover(category, updated, incomingTags, catalogs)
       }
     }
-    await upsertTransferLog(updated, 'save')
+    await appendTransferLog(updated, 'save')
   })
 
   const row = unchanged ? existing : updated
@@ -361,7 +373,7 @@ export async function updateSpecimen(
         await db.covers.delete([mutation.categoryId, mutation.speciesId, mutation.variant])
       }
     }
-    await upsertTransferLog(updated, 'edit')
+    await appendTransferLog(updated, 'edit')
   })
 
   const extraSpecies = existing.speciesId === updated.speciesId ? [] : [existing.speciesId]
@@ -464,7 +476,7 @@ export async function deleteSpecimen(id: string) {
     [db.specimens, db.covers, db.images, db.inbox, db.categories, db.transferLogs],
     async () => {
     const affectedCovers = await db.covers.where('specimenId').equals(id).toArray()
-    await upsertTransferLog(specimen, 'delete')
+    await appendTransferLog(specimen, 'delete')
     await db.specimens.delete(id)
     const imageStillUsed =
       (await db.specimens.where('imageId').equals(imageId).count()) +
@@ -704,16 +716,16 @@ export async function importPendingShares() {
   })
   if (!shareDb) return 0
 
-  const items = await new Promise<{ id: string; blob: Blob }[]>((resolve) => {
+  const items = await new Promise<{ id: string; blob: Blob; fileName?: string }[]>((resolve) => {
     const tx = shareDb.transaction(SHARE_STORE, 'readonly')
     const req = tx.objectStore(SHARE_STORE).getAll()
-    req.onsuccess = () => resolve(req.result as { id: string; blob: Blob }[])
+    req.onsuccess = () => resolve(req.result as { id: string; blob: Blob; fileName?: string }[])
     req.onerror = () => resolve([])
   })
 
   for (const item of items) {
     try {
-      await ingestFile(item.blob)
+      await ingestFile(item.blob, item.fileName)
     } catch {
       // Keep the share row so the user can retry from Transfer refresh.
       continue

@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom'
 import { BottomSheet } from '../components/BottomSheet'
 import { CardPreview } from '../components/CardPreview'
 import { DexCard } from '../components/DexCard'
+import { FileNameCopy } from '../components/FileNameCopy'
 import { SpecimenTagSheet } from '../components/TagSheet'
 import { TagChip } from '../components/TagChip'
 import {
@@ -592,6 +593,7 @@ function GalleryCard({
           ))}
         </div>
       ) : null}
+      <FileNameCopy fileName={specimen.fileName} className={styles.fileName} />
     </div>
   )
 }

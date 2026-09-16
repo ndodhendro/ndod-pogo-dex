@@ -17,6 +17,7 @@ import { coverPurity } from '../lib/covers'
 import { isNotPure, isSilhouette, specimenTags, labelForTag, type TagId } from '../lib/tags'
 import { usePreviewAnimations } from '../lib/previewPrefs'
 import { BottomSheet } from './BottomSheet'
+import { FileNameCopy } from './FileNameCopy'
 import { OriginalLightbox } from './OriginalLightbox'
 import { TagChip } from './TagChip'
 import styles from './CardPreview.module.css'
@@ -406,6 +407,7 @@ export function CardPreview({
               <TagChip tag="not-pure" selected icon={NOT_PURE_ICON} label="Not Pure" />
             ) : null}
           </div>
+          <FileNameCopy fileName={specimen.fileName} size="md" className={styles.fileName} />
         </div>
         <div className={styles.actions}>
           <button
