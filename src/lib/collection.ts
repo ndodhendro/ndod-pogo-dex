@@ -69,11 +69,34 @@ export async function ingestFile(
 export async function discardInbox(id: string) {
   const row = await db.inbox.get(id)
   if (!row) return
+  let droppedImage = false
   await db.transaction('rw', db.inbox, db.images, db.specimens, async () => {
     await db.inbox.delete(id)
     const used = await db.specimens.where('imageId').equals(row.imageId).count()
-    if (used === 0) await db.images.delete(row.imageId)
+    if (used === 0) {
+      await db.images.delete(row.imageId)
+      droppedImage = true
+    }
   })
+  if (droppedImage) forgetImageUrls(row.imageId)
+}
+
+export async function discardAllInbox() {
+  const rows = await db.inbox.toArray()
+  if (rows.length === 0) return 0
+  const imageIds = [...new Set(rows.map((row) => row.imageId))]
+  let droppedImageIds: string[] = []
+  await db.transaction('rw', db.inbox, db.images, db.specimens, async () => {
+    await db.inbox.clear()
+    droppedImageIds = []
+    for (const imageId of imageIds) {
+      const used = await db.specimens.where('imageId').equals(imageId).count()
+      if (used === 0) droppedImageIds.push(imageId)
+    }
+    if (droppedImageIds.length > 0) await db.images.bulkDelete(droppedImageIds)
+  })
+  for (const imageId of droppedImageIds) forgetImageUrls(imageId)
+  return rows.length
 }
 
 export async function saveSpecimenFromInbox(

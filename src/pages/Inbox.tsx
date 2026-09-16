@@ -16,6 +16,7 @@ import {
 import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
 import {
+  discardAllInbox,
   discardInbox,
   importPendingShares,
   ingestFile,
@@ -79,12 +80,15 @@ export function InboxPage() {
   }, [logRows, specimens])
   const [active, setActive] = useState<InboxRow | null>(null)
   const [pendingDiscard, setPendingDiscard] = useState<InboxRow | null>(null)
+  const [pendingDiscardAll, setPendingDiscardAll] = useState(false)
   const [pendingDuplicate, setPendingDuplicate] = useState<PendingDuplicate | null>(null)
   const [discardBusy, setDiscardBusy] = useState(false)
+  const [discardAllBusy, setDiscardAllBusy] = useState(false)
   const [duplicateBusy, setDuplicateBusy] = useState(false)
   const [adding, setAdding] = useState(false)
   const [view, setView] = useState<TransferView>('untagged')
   const showingLogs = view === 'logs'
+  const canDiscardAll = !showingLogs && items.length > 0
 
   useEffect(() => {
     importPendingShares().catch(() => {
@@ -122,7 +126,7 @@ export function InboxPage() {
 
   async function confirmDiscard() {
     const item = pendingDiscard
-    if (!item || discardBusy) return
+    if (!item || discardBusy || discardAllBusy) return
     setDiscardBusy(true)
     try {
       await discardInbox(item.id)
@@ -133,6 +137,23 @@ export function InboxPage() {
       showToast(err instanceof Error ? err.message : 'Could not discard')
     } finally {
       setDiscardBusy(false)
+    }
+  }
+
+  async function confirmDiscardAll() {
+    if (!pendingDiscardAll || discardAllBusy || discardBusy) return
+    setDiscardAllBusy(true)
+    try {
+      const count = await discardAllInbox()
+      setActive(null)
+      setPendingDiscard(null)
+      setPendingDiscardAll(false)
+      if (count === 1) showToast('Screenshot discarded', 'success')
+      else if (count > 1) showToast(`${count} screenshots discarded`, 'success')
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not discard')
+    } finally {
+      setDiscardAllBusy(false)
     }
   }
 
@@ -190,10 +211,24 @@ export function InboxPage() {
         <FilePickerButton
           className="btn btn-primary"
           label={adding ? 'Adding…' : 'Add screenshots'}
-          disabled={adding}
+          disabled={adding || discardAllBusy}
           preferScreenshotsFolder
           onFiles={onFiles}
         />
+        {canDiscardAll ? (
+          <button
+            type="button"
+            className="btn btn-danger"
+            disabled={adding || discardAllBusy}
+            onClick={() => {
+              setPendingDiscard(null)
+              setPendingDiscardAll(true)
+            }}
+          >
+            <span aria-hidden="true">🗑️</span>
+            Discard all
+          </button>
+        ) : null}
         <div className="row-actions">
           <button
             type="button"
@@ -259,6 +294,7 @@ export function InboxPage() {
               item={item}
               onTag={() => setActive(item)}
               onDiscard={() => setPendingDiscard(item)}
+              disabled={adding || discardAllBusy}
             />
           ))}
         </div>
@@ -365,6 +401,40 @@ export function InboxPage() {
             onClick={() => void confirmDiscard()}
           >
             {discardBusy ? 'Discarding…' : 'Discard'}
+          </button>
+        </div>
+      </BottomSheet>
+      <BottomSheet
+        open={pendingDiscardAll}
+        title="Discard all screenshots"
+        showClose={false}
+        onClose={() => {
+          if (discardAllBusy) return
+          setPendingDiscardAll(false)
+        }}
+      >
+        <p className={`page-sub ${styles.confirmCopy}`}>
+          {`Discard all ${items.length.toLocaleString('en-US')} untagged screenshot${
+            items.length === 1 ? '' : 's'
+          }? They will leave Transfer and will not be saved to your collection.`}
+        </p>
+        <div className="confirm-actions">
+          <button
+            type="button"
+            className="btn"
+            disabled={discardAllBusy}
+            onClick={() => setPendingDiscardAll(false)}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            disabled={discardAllBusy || items.length === 0}
+            onClick={() => void confirmDiscardAll()}
+          >
+            <span aria-hidden="true">🗑️</span>
+            {discardAllBusy ? 'Discarding…' : 'Discard all'}
           </button>
         </div>
       </BottomSheet>
@@ -495,10 +565,12 @@ function InboxItem({
   item,
   onTag,
   onDiscard,
+  disabled,
 }: {
   item: InboxRow
   onTag: () => void
   onDiscard: () => void
+  disabled?: boolean
 }) {
   const url = useImageUrl(item.imageId, 'thumb')
   return (
@@ -511,10 +583,10 @@ function InboxItem({
           {new Date(item.createdAt).toLocaleString()}
         </p>
         <div className={`row-actions ${styles.itemActions}`}>
-          <button type="button" className="btn btn-primary" onClick={onTag}>
+          <button type="button" className="btn btn-primary" disabled={disabled} onClick={onTag}>
             Tag
           </button>
-          <button type="button" className="btn btn-danger" onClick={onDiscard}>
+          <button type="button" className="btn btn-danger" disabled={disabled} onClick={onDiscard}>
             Discard
           </button>
         </div>
