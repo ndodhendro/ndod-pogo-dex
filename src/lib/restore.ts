@@ -6,7 +6,7 @@ import { extraTagList, cropTagsFromFields, isNotPure, isSilhouette } from './tag
 import { cropHeightForSpecimen } from '../data/tagCrops'
 import { hashBlob } from './hash'
 import { newId } from './id'
-import { screenshotFileName } from './screenshotFileName'
+import { restoredScreenshotFileName } from './screenshotFileName'
 import { isProbablyImageFile, makeImageVariants } from './images'
 import { planCloudPhotoRestore, planGalleryRestore } from './restorePlan'
 import { downloadSpecimenOriginal } from './specimenStorage'
@@ -150,9 +150,6 @@ export async function restoreFromGallery(
   await yieldUi()
   const cloud = await cloudPromise
   if (!cloud) throw new Error('Sign in with Google first')
-  if (cloud.specimens.length === 0) {
-    throw new Error('No cloud metadata yet. Save tagged specimens while signed in first.')
-  }
 
   await applyCloudCategories(cloud)
   await applyCloudCatalogs(cloud)
@@ -268,7 +265,7 @@ async function writeRestoredSpecimen(spec: CloudSpecimen, file: Blob, alreadyCro
       notPure: isNotPure(spec),
       imageId,
       fileHash: spec.fileHash,
-      fileName: screenshotFileName(file),
+      fileName: restoredScreenshotFileName(file, spec.fileName),
       createdAt: spec.createdAt,
       gallerySort: spec.gallerySort,
       cloudBackupPending: false,

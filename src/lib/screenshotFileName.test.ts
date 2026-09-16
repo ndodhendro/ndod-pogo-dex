@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { screenshotFileName } from './screenshotFileName'
+import { restoredScreenshotFileName, screenshotFileName } from './screenshotFileName'
 
 describe('screenshotFileName', () => {
   it('keeps the basename and extension', () => {
@@ -22,5 +22,22 @@ describe('screenshotFileName', () => {
     expect(screenshotFileName('')).toBeNull()
     expect(screenshotFileName('   ')).toBeNull()
     expect(screenshotFileName(null)).toBeNull()
+  })
+})
+
+describe('restoredScreenshotFileName', () => {
+  it('prefers the gallery filename over a stored name', () => {
+    expect(
+      restoredScreenshotFileName(
+        new File(['x'], 'Screenshot_20260916-103000.png', { type: 'image/png' }),
+        'old.jpg',
+      ),
+    ).toBe('Screenshot_20260916-103000.png')
+  })
+
+  it('uses the stored basename when the blob has no name', () => {
+    expect(
+      restoredScreenshotFileName(new Blob(['x'], { type: 'image/png' }), 'pika.webp'),
+    ).toBe('pika.webp')
   })
 })

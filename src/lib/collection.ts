@@ -305,7 +305,10 @@ async function saveExistingScreenshot(
   await db.transaction('rw', db.specimens, db.inbox, db.covers, db.images, db.transferLogs, async () => {
     if (!unchanged) await db.specimens.put(updated)
     else if ((updated.fileName ?? null) !== (existing.fileName ?? null)) {
-      await db.specimens.update(existing.id, { fileName: updated.fileName ?? null })
+      await db.specimens.update(existing.id, {
+        fileName: updated.fileName ?? null,
+        cloudBackupPending: true,
+      })
     }
     await db.inbox.delete(inbox.id)
     const imageStillUsed =

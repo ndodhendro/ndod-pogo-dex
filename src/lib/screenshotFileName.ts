@@ -8,3 +8,11 @@ export function screenshotFileName(
   const base = raw.replace(/\\/g, '/').split('/').pop()?.trim() ?? ''
   return base || null
 }
+
+/** Gallery File.name wins; fall back to a stored basename. */
+export function restoredScreenshotFileName(
+  file: File | Blob | string | null | undefined,
+  stored?: string | null,
+): string | null {
+  return screenshotFileName(file) ?? screenshotFileName(stored)
+}

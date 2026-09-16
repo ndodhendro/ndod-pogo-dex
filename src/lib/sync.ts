@@ -7,6 +7,7 @@ import {
 import { categoryUpsertRow, includeSortOrderOnUpsert, mapCloudCategory } from './categorySyncPlan'
 import { db, type CategoryRow, type SpecimenRow, type TagCatalogRow, type TagRosterRow } from './db'
 import { hashBlob } from './hash'
+import { screenshotFileName } from './screenshotFileName'
 import { normalizeVariant, type SlotMode } from './roster'
 import { getSupabase } from './supabase'
 import {
@@ -39,6 +40,7 @@ export type CloudSpecimen = {
   silhouette?: boolean
   notPure?: boolean
   fileHash: string
+  fileName?: string | null
   imagePath?: string | null
   createdAt: number
   gallerySort?: number
@@ -172,6 +174,7 @@ function specimenCloudRow(
     not_pure: isNotPure(specimen),
     image_path: imagePath,
     file_hash: fileHash,
+    file_name: screenshotFileName(specimen.fileName),
     created_at: new Date(specimen.createdAt).toISOString(),
     gallery_sort: specimen.gallerySort ?? null,
   }
@@ -664,6 +667,7 @@ export async function pullCloudCollection(): Promise<{
     silhouette?: boolean | null
     not_pure?: boolean | null
     file_hash: string | null
+    file_name?: string | null
     image_path?: string | null
     created_at: string
     gallery_sort?: number | null
@@ -721,6 +725,7 @@ export async function pullCloudCollection(): Promise<{
         silhouette: Boolean(row.silhouette),
         notPure: Boolean(row.not_pure),
         fileHash: row.file_hash as string,
+        fileName: row.file_name?.trim() ? row.file_name.trim() : null,
         imagePath: row.image_path ?? null,
         createdAt: new Date(row.created_at).getTime(),
         gallerySort: typeof row.gallery_sort === 'number' ? row.gallery_sort : undefined,

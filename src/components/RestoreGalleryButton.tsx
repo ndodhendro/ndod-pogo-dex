@@ -114,7 +114,8 @@ export function RestoreGalleryButton() {
     await yieldUi()
     try {
       const result = await restoreFromGallery([...list], setProgress)
-      const parts = [`Restored ${result.restored}`]
+      const parts: string[] = []
+      if (result.restored) parts.push(`Restored ${result.restored}`)
       if (result.alreadyLocal) parts.push(`${result.alreadyLocal} already on this device`)
       if (result.inbox) parts.push(`${result.inbox} sent to Transfer (no cloud match)`)
       if (result.cloudWithoutPhoto) {
@@ -124,6 +125,7 @@ export function RestoreGalleryButton() {
         const detail = result.downloadError ? ` (${result.downloadError})` : ''
         parts.push(`${result.failed} failed${detail}`)
       }
+      if (parts.length === 0) parts.push('Nothing to restore')
       showToast(parts.join('. ') + '.', result.failed ? 'warning' : 'success')
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not restore')
@@ -149,7 +151,7 @@ export function RestoreGalleryButton() {
       />
       <RestoreStatus
         progress={progress}
-        idle="Pick the Screenshots folder. Keep this page open until restore finishes."
+        idle="Pick the Screenshots folder. Photos without a cloud match go to Transfer. Keep this page open until restore finishes."
       />
     </div>
   )
