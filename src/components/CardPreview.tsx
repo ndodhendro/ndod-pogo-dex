@@ -72,7 +72,7 @@ export function CardPreview({
   const formLabel = formLabelForPreview(specimen.form)
   const title = specimenSlotName(specimen.speciesId, specimen.form)
   const showForm =
-    Boolean(formLabel) &&
+    formLabel != null &&
     !title.toLowerCase().endsWith(` ${formLabel.toLowerCase()}`) &&
     title.toLowerCase() !== formLabel.toLowerCase()
   const categories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
