@@ -33,3 +33,12 @@ export function coversForPendingSpecimens<T extends { speciesId: number }>(
   const speciesIds = new Set(pending.map((row) => row.speciesId))
   return covers.filter((row) => speciesIds.has(row.speciesId))
 }
+
+/** Cloud `covers.specimen_id` must already exist in `specimens`. */
+export function coversReadyToUpsert<T extends { specimenId: string }>(
+  covers: T[],
+  cloudSpecimenIds: Iterable<string>,
+): T[] {
+  const ids = cloudSpecimenIds instanceof Set ? cloudSpecimenIds : new Set(cloudSpecimenIds)
+  return covers.filter((row) => ids.has(row.specimenId))
+}

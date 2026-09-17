@@ -1,6 +1,6 @@
+import { useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
 import type { CoverPurity } from '../lib/covers'
 import { formatDexSpeciesId } from '../lib/dexGrid'
-import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react'
 import styles from './DexCard.module.css'
 
 type Props = {
@@ -36,32 +36,49 @@ export function DexCard({
   onPointerCancel,
   onContextMenu,
 }: Props) {
+  const [expanded, setExpanded] = useState(false)
+  const idLabel = formatDexSpeciesId(number, extraCount)
+
   return (
-    <button
-      type="button"
+    <div
       className={styles.card}
       data-purity={purity ?? ''}
       data-empty={filled ? 'false' : 'true'}
       data-fill={fill ? 'true' : undefined}
       data-grabbed={grabbed ? 'true' : undefined}
-      aria-grabbed={grabbed ? 'true' : undefined}
-      onClick={onClick}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerCancel}
-      onContextMenu={onContextMenu}
-      disabled={!onClick}
+      data-name-expanded={expanded ? 'true' : undefined}
     >
-      <div className={styles.frame}>
-        {thumbUrl ? (
-          <img src={thumbUrl} alt="" loading="lazy" draggable={false} width={128} height={278} />
-        ) : null}
-      </div>
+      <button
+        type="button"
+        className={styles.hit}
+        aria-label={`${idLabel} ${name}`}
+        aria-grabbed={grabbed ? 'true' : undefined}
+        onClick={onClick}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerCancel}
+        onContextMenu={onContextMenu}
+        disabled={!onClick}
+      >
+        <div className={styles.frame}>
+          {thumbUrl ? (
+            <img src={thumbUrl} alt="" loading="lazy" draggable={false} width={128} height={278} />
+          ) : null}
+        </div>
+      </button>
       <div className={styles.caption}>
-        <span className={styles.num}>{formatDexSpeciesId(number, extraCount)}</span>
-        <span className={styles.label}>{name}</span>
+        <span className={styles.num}>{idLabel}</span>
+        <button
+          type="button"
+          className={styles.label}
+          title={name}
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {name}
+        </button>
       </div>
-    </button>
+    </div>
   )
 }

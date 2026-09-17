@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   coversForPendingSpecimens,
+  coversReadyToUpsert,
   specimenNeedsCloudBackup,
   specimenNeedsCloudPush,
   backupProgressLabel,
@@ -56,5 +57,15 @@ describe('coversForPendingSpecimens', () => {
       { speciesId: 1, specimenId: 'a' },
       { speciesId: 1, specimenId: 'c' },
     ])
+  })
+})
+
+describe('coversReadyToUpsert', () => {
+  it('drops covers whose specimen is not in the cloud yet', () => {
+    const covers = [
+      { speciesId: 1, specimenId: 'saved' },
+      { speciesId: 1, specimenId: 'local-only' },
+    ]
+    expect(coversReadyToUpsert(covers, ['saved'])).toEqual([{ speciesId: 1, specimenId: 'saved' }])
   })
 })

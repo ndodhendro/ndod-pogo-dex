@@ -69,6 +69,51 @@ export function labelForTag(tag: TagId): string {
   return formNameForTag(tag) ?? EXTRA_TAG_LABELS[tag] ?? tag
 }
 
+export const MALE_GENDER_ICON = '♂️'
+export const FEMALE_GENDER_ICON = '♀️'
+
+export function genderRole(gender: string | null | undefined): 'male' | 'female' | null {
+  const key = (gender ?? '').trim().toLowerCase()
+  if (!key) return null
+  if (key === 'male' || key.endsWith(' male')) return 'male'
+  if (key === 'female' || key.endsWith(' female')) return 'female'
+  return null
+}
+
+export function genderChipLabel(gender: string | null | undefined): string {
+  const role = genderRole(gender)
+  if (role === 'male') return 'Male'
+  if (role === 'female') return 'Female'
+  const trimmed = (gender ?? '').trim()
+  return trimmed || labelForTag('gender')
+}
+
+export function genderChipIcon(gender: string | null | undefined): string | undefined {
+  const role = genderRole(gender)
+  if (role === 'male') return MALE_GENDER_ICON
+  if (role === 'female') return FEMALE_GENDER_ICON
+  return undefined
+}
+
+export function specimenChipLabel(
+  tag: TagId,
+  specimen: Pick<SpecimenFields, 'costume' | 'background' | 'gender'>,
+  categoryName?: string | null,
+): string {
+  if (tag === 'costume') return specimen.costume || categoryName || labelForTag(tag)
+  if (tag === 'background') return specimen.background || categoryName || labelForTag(tag)
+  if (tag === 'gender') return genderChipLabel(specimen.gender)
+  return categoryName || labelForTag(tag)
+}
+
+export function specimenChipIcon(
+  tag: TagId,
+  specimen: Pick<SpecimenFields, 'gender'>,
+  fallback: string,
+): string {
+  return (tag === 'gender' ? genderChipIcon(specimen.gender) : undefined) ?? fallback
+}
+
 export function extraTagList(s: { extraTags?: TagId[] }): TagId[] {
   const seen = new Set<TagId>()
   const tags: TagId[] = []
@@ -115,6 +160,7 @@ const FORM_BY_TAG: Record<FormTagId, string> = {
   paldean: 'Paldean',
   mega: 'Mega',
 }
+const FORM_TAG_LABELS = new Set<string>(Object.values(FORM_BY_TAG))
 
 export function formNameForTag(tag: string): string | undefined {
   return FORM_BY_TAG[tag.toLowerCase() as FormTagId]
@@ -127,6 +173,17 @@ export function isFormTag(tag: string): tag is FormTagId {
 function formLabelFromExtra(extra: TagId[]): string | null {
   const names = FORM_TAGS.filter((tag) => extra.includes(tag)).map((tag) => FORM_BY_TAG[tag])
   return names.length ? names.join(' · ') : null
+}
+
+/** Drop Alolan / region / Mega text already shown as tag chips. Keep Mega X, Unown letters, etc. */
+export function formLabelForPreview(form: string | null | undefined): string | null {
+  if (!form) return null
+  const parts = form
+    .split(' · ')
+    .map((part) => part.trim())
+    .filter(Boolean)
+  const distinctive = parts.filter((part) => !FORM_TAG_LABELS.has(part))
+  return distinctive.length ? distinctive.join(' · ') : null
 }
 
 export function clearVisualTags(fields: SpecimenFields): SpecimenFields {

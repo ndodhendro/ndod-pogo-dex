@@ -47,7 +47,7 @@ import {
   TRANSFER_LOG_ACTIONS,
   TRANSFER_LOG_LIMIT,
 } from '../lib/transferLogs'
-import { labelForTag, specimenTags, type SpecimenFields, type TagId } from '../lib/tags'
+import { specimenChipIcon, specimenChipLabel, specimenTags, type SpecimenFields, type TagId } from '../lib/tags'
 import styles from './Inbox.module.css'
 
 const PROGRESS_META: Record<DexProgressKind, { icon: string; label: string }> = {
@@ -514,10 +514,7 @@ function DuplicateShot({
 }
 
 function transferTagLabel(tag: TagId, specimen: SpecimenFields, categories: CategoryRow[]) {
-  const named = categoryForTag(categories, tag)?.name
-  if (tag === 'costume') return specimen.costume || named || labelForTag(tag)
-  if (tag === 'background') return specimen.background || named || labelForTag(tag)
-  return named || labelForTag(tag)
+  return specimenChipLabel(tag, specimen, categoryForTag(categories, tag)?.name)
 }
 
 function useBlobUrl(blob?: Blob) {
@@ -597,7 +594,7 @@ function TransferLogItem({
                   tag={tag}
                   selected
                   size="sm"
-                  icon={look.emoji}
+                  icon={specimenChipIcon(tag, specimen, look.emoji)}
                   label={transferTagLabel(tag, specimen, categories)}
                   labelColor={look.labelColor}
                 />

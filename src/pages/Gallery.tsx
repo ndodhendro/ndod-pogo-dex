@@ -24,7 +24,7 @@ import { coverPurity } from '../lib/covers'
 import { deleteSpecimen, reorderGallerySpecimens, setAsCover } from '../lib/collection'
 import { categoryChromeStyle } from '../lib/categoryStyle'
 import { sameCategoryOrder } from '../lib/categoryOrder'
-import { db, type CategoryRow, type SpecimenRow } from '../lib/db'
+import { db, type CategoryRow, type SpecimenRow, type TagCatalogRow, type TagRosterRow } from '../lib/db'
 import {
   applyVisibleGalleryOrder,
   galleryItemShift,
@@ -35,12 +35,14 @@ import {
   type GallerySlot,
 } from '../lib/galleryOrder'
 import { listNeighbor } from '../lib/previewSwipe'
+import { specimenSlotName, slotsForTrack } from '../lib/roster'
 import { toastAfterWrite, useToast } from '../lib/toast'
 import {
   hasAllRequired,
   isNotPure,
   isSilhouette,
-  labelForTag,
+  specimenChipIcon,
+  specimenChipLabel,
   specimenTags,
   toggleRequiredTags,
   type TagId,
@@ -49,6 +51,8 @@ import { specimenMatchesDexFilters } from '../lib/dexGrid'
 import styles from './Gallery.module.css'
 
 const EMPTY_CATEGORIES: CategoryRow[] = []
+const EMPTY_CATALOGS: TagCatalogRow[] = []
+const EMPTY_ROSTER: TagRosterRow[] = []
 const HOLD_MS = 500
 const HOLD_LOCK = 10
 
@@ -62,6 +66,8 @@ export function GalleryPage() {
   )
   const categories =
     useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? EMPTY_CATEGORIES
+  const catalogs = useLiveQuery(() => db.tagCatalogs.toArray(), []) ?? EMPTY_CATALOGS
+  const roster = useLiveQuery(() => db.tagRoster.toArray(), []) ?? EMPTY_ROSTER
   const specimens =
     useLiveQuery(
       () => db.specimens.where('speciesId').equals(Number(speciesId)).toArray(),
@@ -115,6 +121,14 @@ export function GalleryPage() {
     () => sortGallerySpecimens(specimens, categories),
     [specimens, categories],
   )
+  const pageTitle = useMemo(() => {
+    if (!species) return ''
+    const required = category?.requiredTags ?? []
+    const trackSlots = slotsForTrack(required, catalogs, roster).filter(
+      (slot) => slot.speciesId === species.id,
+    )
+    return trackSlots.length === 1 ? trackSlots[0].name : species.name
+  }, [species, category, catalogs, roster])
   const liveIds = useMemo(() => liveSorted.map((row) => row.id), [liveSorted])
   const orderedIds = draftIds ?? liveIds
   const ordered = useMemo(() => {
@@ -333,7 +347,7 @@ export function GalleryPage() {
           )}
         </Link>
       </p>
-      <h1 className="page-title">{species.name}</h1>
+      <h1 className="page-title">{pageTitle}</h1>
       <p className="page-sub">
         {filtering
           ? `${visible.length} of ${specimens.length} specimen${specimens.length === 1 ? '' : 's'}`
@@ -375,7 +389,6 @@ export function GalleryPage() {
                 key={specimen.id}
                 specimen={specimen}
                 categories={categories}
-                isCover={coverRows.some((row) => row.specimenId === specimen.id)}
                 purity={
                   coverRows.some((row) => row.specimenId === specimen.id) && category
                     ? coverPurity(
@@ -496,16 +509,12 @@ export function GalleryPage() {
 }
 
 function galleryTagLabel(tag: TagId, specimen: SpecimenRow, categories: CategoryRow[]) {
-  const named = categoryForTag(categories, tag)?.name
-  if (tag === 'costume') return specimen.costume || named || labelForTag(tag)
-  if (tag === 'background') return specimen.background || named || labelForTag(tag)
-  return named || labelForTag(tag)
+  return specimenChipLabel(tag, specimen, categoryForTag(categories, tag)?.name)
 }
 
 function GalleryCard({
   specimen,
   categories,
-  isCover,
   purity,
   dragging,
   shift,
@@ -516,7 +525,6 @@ function GalleryCard({
 }: {
   specimen: SpecimenRow
   categories: CategoryRow[]
-  isCover: boolean
   purity: ReturnType<typeof coverPurity>
   dragging: boolean
   shift: { x: number; y: number }
@@ -526,7 +534,7 @@ function GalleryCard({
   onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => void
 }) {
   const url = useImageUrl(specimen.imageId, 'thumb')
-  const species = SPECIES_BY_ID.get(specimen.speciesId)
+  const name = specimenSlotName(specimen.speciesId, specimen.form)
   const [expandedTag, setExpandedTag] = useState<string | null>(null)
   const tags = sortSpecimenTags(specimenTags(specimen), categories)
   const items = [
@@ -534,7 +542,7 @@ function GalleryCard({
       const look = lookForTag(tag, categories)
       return {
         tag,
-        icon: look.emoji,
+        icon: specimenChipIcon(tag, specimen, look.emoji),
         label: galleryTagLabel(tag, specimen, categories),
         labelColor: look.labelColor,
       }
@@ -560,7 +568,7 @@ function GalleryCard({
       }
     >
       <DexCard
-        name={isCover ? 'Cover' : species?.name ?? 'Specimen'}
+        name={name}
         number={specimen.speciesId}
         thumbUrl={url}
         purity={purity}
@@ -593,7 +601,7 @@ function GalleryCard({
           ))}
         </div>
       ) : null}
-      <FileNameCopy fileName={specimen.fileName} className={styles.fileName} />
+      <FileNameCopy fileName={specimen.fileName} size="compact" className={styles.fileName} />
     </div>
   )
 }

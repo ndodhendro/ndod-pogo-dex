@@ -14,6 +14,9 @@ export function cloudBackupErrorMessage(message: string): string {
   if (message.includes('specimens_user_file_hash')) {
     return 'Screenshot already in the collection'
   }
+  if (message.includes('covers_specimen_id_fkey')) {
+    return 'Could not backup the dex cover. Try Backup collection.'
+  }
   return storageErrorMessage(message)
 }
 

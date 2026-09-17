@@ -65,6 +65,21 @@ const emptyFields = (): SpecimenFields => ({
   notPure: false,
 })
 
+function scrollOverflowParentToTop(start: HTMLElement | null) {
+  let el: HTMLElement | null = start
+  while (el) {
+    const { overflowY } = getComputedStyle(el)
+    if (overflowY === 'auto' || overflowY === 'scroll') {
+      el.scrollTo({
+        top: 0,
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      })
+      return
+    }
+    el = el.parentElement
+  }
+}
+
 function rosterVariantNames(
   roster: readonly { tag: string; speciesId: number; variant: string }[],
   tag: TagId,
@@ -146,6 +161,7 @@ export function TagSheet({
   const [lightbox, setLightbox] = useState(false)
   const [heightDraft, setHeightDraft] = useState('710')
   const [storedCrop, setStoredCrop] = useState<number | null>(null)
+  const sheetTopRef = useRef<HTMLDivElement>(null)
   const openedKey = useRef<string | null>(null)
   const keepStoredCrop = useRef(true)
   const initialFieldsRef = useRef(initialFields)
@@ -269,6 +285,11 @@ export function TagSheet({
     setHeightDraft(String(suggestedHeight))
   }, [open, resetKey, suggestedHeight, storedCrop])
 
+  useEffect(() => {
+    if (!busy) return
+    scrollOverflowParentToTop(sheetTopRef.current)
+  }, [busy])
+
   async function runOcr() {
     if (!imageId || ocrBusy || busy) return
     setOcrBusy(true)
@@ -352,7 +373,7 @@ export function TagSheet({
   return (
     <>
     <BottomSheet open={open} title={title} nested={nested} showClose={false} onClose={onClose}>
-      <div className={styles.tabs} role="tablist" aria-label={title} data-tone={tone}>
+      <div ref={sheetTopRef} className={styles.tabs} role="tablist" aria-label={title} data-tone={tone}>
         <button
           type="button"
           role="tab"

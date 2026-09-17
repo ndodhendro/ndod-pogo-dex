@@ -16,6 +16,7 @@ import { BASIC_CROP_TAG } from '../data/tagCrops'
 import { isGreenCover } from './covers'
 import {
   extraTagList,
+  formLabelForPreview,
   formNameForTag,
   hasAllRequired,
   isFormTag,
@@ -147,7 +148,27 @@ export function slotId(speciesId: number, variant: string) {
 export function slotDisplayName(speciesId: number, variant: string) {
   const species = SPECIES_BY_ID.get(speciesId)?.name ?? `#${String(speciesId).padStart(4, '0')}`
   const label = normalizeVariant(variant) || basicDefaultForme(speciesId)
-  return label ? `${species} ${label}` : species
+  if (!label) return species
+  return appendFormeLabel(species, label)
+}
+
+/** Grid/preview/gallery title: distinctive forme or the Basic default, not Alolan/Mega chip text. */
+export function specimenSlotName(speciesId: number, form: string | null | undefined): string {
+  return slotDisplayName(speciesId, formLabelForPreview(form) ?? '')
+}
+
+function appendFormeLabel(species: string, label: string) {
+  const speciesKey = species.toLowerCase()
+  const labelKey = label.toLowerCase()
+  if (labelKey === speciesKey) return species
+  if (
+    labelKey.startsWith(`${speciesKey} `) ||
+    labelKey.endsWith(` ${speciesKey}`) ||
+    labelKey.includes(` ${speciesKey} `)
+  ) {
+    return label
+  }
+  return `${species} ${label}`
 }
 
 export function slotBoxLabel(slot: Pick<DexSlotDef, 'speciesId' | 'variant' | 'name'>) {

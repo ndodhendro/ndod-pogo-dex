@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   GO_ALTERNATE_FORME,
+  GO_ALTERNATE_FORME_FAMILIES,
   GO_BACKGROUND,
   GO_COSTUME,
   GO_FORM_SPECIES_IDS,
   GO_GENDER,
   GO_MEGA,
   MEGA_EVOLVE_BACKGROUND,
+  basicDefaultForme,
   goFormSpeciesIds,
   isGoFormReleased,
 } from './goFormReleased'
@@ -163,6 +165,12 @@ describe('GO regional and alternate forme lists', () => {
     expect(GO_ALTERNATE_FORME.some((row) => row.speciesId === 493)).toBe(false)
     expect(isGoFormReleased('alternate-forme', 201, 'A')).toBe(true)
     expect(isGoFormReleased('alternate-forme', 201, 'F')).toBe(false)
+    expect(GO_ALTERNATE_FORME.some((row) => row.speciesId === 849 && row.variant === 'Low Key Form')).toBe(
+      true,
+    )
+    expect(GO_ALTERNATE_FORME.some((row) => row.speciesId === 849 && row.variant === 'Amped Form')).toBe(
+      false,
+    )
     expect(goFormSpeciesIds('costume')).toBeNull()
   })
 
@@ -230,5 +238,43 @@ describe('GO regional and alternate forme lists', () => {
     expect(isGoFormReleased('background', 150, MEGA_EVOLVE_BACKGROUND)).toBe(true)
     expect(isGoFormReleased('background', 719, MEGA_EVOLVE_BACKGROUND)).toBe(true)
     expect(isGoFormReleased('background', 1, MEGA_EVOLVE_BACKGROUND)).toBe(false)
+  })
+})
+
+const UNNAMED_BASIC_FORME = new Set([128, 479, 646, 649, 666, 800, 845])
+
+describe('Basic default forme labels', () => {
+  it('uses the omitted wiki forme as the Basic label', () => {
+    expect(basicDefaultForme(201)).toBe('F')
+    expect(basicDefaultForme(327)).toBe('Pattern 1')
+    expect(basicDefaultForme(351)).toBe('Normal')
+    expect(basicDefaultForme(412)).toBe('Plant Cloak')
+    expect(basicDefaultForme(422)).toBe('West Sea')
+    expect(basicDefaultForme(550)).toBe('Red-Striped')
+    expect(basicDefaultForme(585)).toBe('Spring Form')
+    expect(basicDefaultForme(669)).toBe('Red Flower')
+    expect(basicDefaultForme(710)).toBe('Medium Variety')
+    expect(basicDefaultForme(741)).toBe('Baile Style')
+    expect(basicDefaultForme(849)).toBe('Amped Form')
+    expect(basicDefaultForme(892)).toBe('Single Strike Style')
+    expect(basicDefaultForme(925)).toBe('Family of Four')
+    expect(basicDefaultForme(1)).toBe('')
+  })
+
+  it('does not invent a Basic forme when every named extra is already listed', () => {
+    for (const speciesId of UNNAMED_BASIC_FORME) {
+      expect(GO_ALTERNATE_FORME_FAMILIES[speciesId]).toBeUndefined()
+      expect(basicDefaultForme(speciesId)).toBe('')
+    }
+  })
+
+  it('covers every Alternate forme species with a family or an unnamed Basic slot', () => {
+    const ids = [...new Set(GO_ALTERNATE_FORME.map((row) => row.speciesId))]
+    for (const speciesId of ids) {
+      const named = Boolean(basicDefaultForme(speciesId))
+      const unnamed = UNNAMED_BASIC_FORME.has(speciesId)
+      expect(named || unnamed).toBe(true)
+      expect(named && unnamed).toBe(false)
+    }
   })
 })

@@ -224,7 +224,7 @@
 }
 
 .meta h2 {
-  margin: 0 0 var(--space-1);
+  margin: 0 0 var(--space-3);
   font-weight: var(--font-weight-bold);
   letter-spacing: var(--letter-ui);
 }

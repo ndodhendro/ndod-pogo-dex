@@ -5,7 +5,7 @@ import {
   toCloudCategoryId,
 } from '../data/seedCategories'
 import { categoryUpsertRow, includeSortOrderOnUpsert, mapCloudCategory } from './categorySyncPlan'
-import { db, type CategoryRow, type SpecimenRow, type TagCatalogRow, type TagRosterRow } from './db'
+import { db, type CategoryRow, type CoverRow, type SpecimenRow, type TagCatalogRow, type TagRosterRow } from './db'
 import { hashBlob } from './hash'
 import { screenshotFileName } from './screenshotFileName'
 import { normalizeVariant, type SlotMode } from './roster'
@@ -23,7 +23,12 @@ import {
   uploadSpecimenOriginal,
 } from './specimenStorage'
 import { extraTagList, isNotPure, isSilhouette, type ShadowStatus, type TagId } from './tags'
-import { coversForPendingSpecimens, specimenNeedsCloudPush, type BackupProgress } from './syncBackup'
+import {
+  coversForPendingSpecimens,
+  coversReadyToUpsert,
+  specimenNeedsCloudPush,
+  type BackupProgress,
+} from './syncBackup'
 
 export type CloudSpecimen = {
   id: string
@@ -252,6 +257,83 @@ export async function pushSpecimenGallerySort(
   await markSpecimensBackedUp(backedUp)
 }
 
+async function existingCloudSpecimenIds(
+  userId: string,
+  ids: string[],
+): Promise<Set<string> | string> {
+  const supabase = getSupabase()
+  if (!supabase || ids.length === 0) return new Set()
+  const found = new Set<string>()
+  for (let i = 0; i < ids.length; i += UPSERT_PAGE) {
+    const chunk = ids.slice(i, i + UPSERT_PAGE)
+    const { data, error } = await supabase
+      .from('specimens')
+      .select('id')
+      .eq('user_id', userId)
+      .in('id', chunk)
+    if (error) return error.message
+    for (const row of data ?? []) found.add(row.id as string)
+  }
+  return found
+}
+
+function coverCloudRow(row: CoverRow, userId: string, ownedLegacy: Set<string>) {
+  return {
+    user_id: userId,
+    category_id: toCloudCategoryId(row.categoryId, userId, ownedLegacy),
+    species_id: row.speciesId,
+    variant: row.variant ?? '',
+    specimen_id: row.specimenId,
+  }
+}
+
+/** Push cover specimens that exist locally but not in cloud, so covers_specimen_id_fkey holds. */
+async function ensureCoverSpecimensPushed(covers: { specimenId: string }[]): Promise<string | undefined> {
+  const supabase = getSupabase()
+  const userId = await signedInUserId()
+  if (!supabase || !userId || covers.length === 0) return
+
+  const wanted = [...new Set(covers.map((row) => row.specimenId))]
+  const specimens = (await db.specimens.bulkGet(wanted)).filter((row): row is SpecimenRow => Boolean(row))
+  if (specimens.length === 0) return
+
+  const inCloud = await existingCloudSpecimenIds(
+    userId,
+    specimens.map((row) => row.id),
+  )
+  if (typeof inCloud === 'string') return inCloud
+
+  const backedUp: string[] = []
+  for (const specimen of specimens) {
+    if (inCloud.has(specimen.id)) continue
+    const hash = await ensureFileHash(specimen)
+    const err = await pushSpecimen(specimen)
+    if (err) return err
+    const live =
+      (hash ? await db.specimens.where('fileHash').equals(hash).first() : null) ??
+      (await db.specimens.get(specimen.id))
+    if (live) backedUp.push(live.id)
+  }
+  await markSpecimensBackedUp(backedUp)
+}
+
+async function cloudCoverUpserts(
+  covers: CoverRow[],
+  userId: string,
+  ownedLegacy: Set<string>,
+): Promise<{ rows: ReturnType<typeof coverCloudRow>[]; error?: string }> {
+  const localIds = new Set((await db.specimens.toArray()).map((row) => row.id))
+  const live = covers.filter((row) => localIds.has(row.specimenId))
+  const inCloud = await existingCloudSpecimenIds(
+    userId,
+    [...new Set(live.map((row) => row.specimenId))],
+  )
+  if (typeof inCloud === 'string') return { rows: [], error: inCloud }
+  return {
+    rows: coversReadyToUpsert(live, inCloud).map((row) => coverCloudRow(row, userId, ownedLegacy)),
+  }
+}
+
 export async function pushCoversForSpecies(speciesId: number): Promise<string | undefined> {
   const supabase = getSupabase()
   const userId = await signedInUserId()
@@ -260,24 +342,23 @@ export async function pushCoversForSpecies(speciesId: number): Promise<string | 
   const ownedLegacy = await ownedLegacySeedIds(userId)
   if (typeof ownedLegacy === 'string') return ownedLegacy
 
+  const ensureErr = await ensureCoverSpecimensPushed(
+    (await db.covers.toArray()).filter((row) => row.speciesId === speciesId),
+  )
+  if (ensureErr) return ensureErr
+
+  const covers = (await db.covers.toArray()).filter((row) => row.speciesId === speciesId)
+  const mapped = await cloudCoverUpserts(covers, userId, ownedLegacy)
+  if (mapped.error) return mapped.error
+
   const { error: delErr } = await supabase
     .from('covers')
     .delete()
     .eq('user_id', userId)
     .eq('species_id', speciesId)
   if (delErr) return delErr.message
-
-  const covers = (await db.covers.toArray()).filter((row) => row.speciesId === speciesId)
-  if (covers.length === 0) return
-  const { error } = await supabase.from('covers').upsert(
-    covers.map((row) => ({
-      user_id: userId,
-      category_id: toCloudCategoryId(row.categoryId, userId, ownedLegacy),
-      species_id: row.speciesId,
-      variant: row.variant ?? '',
-      specimen_id: row.specimenId,
-    })),
-  )
+  if (mapped.rows.length === 0) return
+  const { error } = await supabase.from('covers').upsert(mapped.rows)
   if (error) return error.message
 }
 
@@ -314,13 +395,18 @@ export async function pushCover(
   if (!supabase || !userId) return
   const ownedLegacy = await ownedLegacySeedIds(userId)
   if (typeof ownedLegacy === 'string') return ownedLegacy
-  const { error } = await supabase.from('covers').upsert({
-    user_id: userId,
-    category_id: toCloudCategoryId(categoryId, userId, ownedLegacy),
-    species_id: speciesId,
+  const ensureErr = await ensureCoverSpecimensPushed([{ specimenId }])
+  if (ensureErr) return ensureErr
+  const cover = (await db.covers.get([categoryId, speciesId, variant])) ?? {
+    categoryId,
+    speciesId,
     variant,
-    specimen_id: specimenId,
-  })
+    specimenId,
+  }
+  const mapped = await cloudCoverUpserts([cover], userId, ownedLegacy)
+  if (mapped.error) return mapped.error
+  if (mapped.rows.length === 0) return
+  const { error } = await supabase.from('covers').upsert(mapped.rows[0])
   if (error) return error.message
 }
 
@@ -330,6 +416,13 @@ export async function pushCoversForCategory(categoryId: string): Promise<string 
   if (!supabase || !userId) return
   const ownedLegacy = await ownedLegacySeedIds(userId)
   if (typeof ownedLegacy === 'string') return ownedLegacy
+  const ensureErr = await ensureCoverSpecimensPushed(
+    (await db.covers.toArray()).filter((row) => row.categoryId === categoryId),
+  )
+  if (ensureErr) return ensureErr
+  const covers = (await db.covers.toArray()).filter((row) => row.categoryId === categoryId)
+  const mapped = await cloudCoverUpserts(covers, userId, ownedLegacy)
+  if (mapped.error) return mapped.error
   const cloudCategoryId = toCloudCategoryId(categoryId, userId, ownedLegacy)
   const { error: delErr } = await supabase
     .from('covers')
@@ -337,17 +430,8 @@ export async function pushCoversForCategory(categoryId: string): Promise<string 
     .eq('user_id', userId)
     .eq('category_id', cloudCategoryId)
   if (delErr) return delErr.message
-  const covers = (await db.covers.toArray()).filter((row) => row.categoryId === categoryId)
-  if (covers.length === 0) return
-  const { error } = await supabase.from('covers').upsert(
-    covers.map((row) => ({
-      user_id: userId,
-      category_id: cloudCategoryId,
-      species_id: row.speciesId,
-      variant: row.variant ?? '',
-      specimen_id: row.specimenId,
-    })),
-  )
+  if (mapped.rows.length === 0) return
+  const { error } = await supabase.from('covers').upsert(mapped.rows)
   if (error) return error.message
 }
 
@@ -627,15 +711,17 @@ export async function backupAllMetadata(
 
   const ownedLegacy = await ownedLegacySeedIds(userId)
   if (typeof ownedLegacy === 'string') return ownedLegacy
-  const coverRows = coversForPendingSpecimens(await db.covers.toArray(), liveRows).map((row) => ({
-    user_id: userId,
-    category_id: toCloudCategoryId(row.categoryId, userId, ownedLegacy),
-    species_id: row.speciesId,
-    variant: row.variant ?? '',
-    specimen_id: row.specimenId,
-  }))
-  for (let i = 0; i < coverRows.length; i += UPSERT_PAGE) {
-    const { error } = await supabase.from('covers').upsert(coverRows.slice(i, i + UPSERT_PAGE))
+  const pendingCovers = coversForPendingSpecimens(await db.covers.toArray(), liveRows)
+  const coverPushErr = await ensureCoverSpecimensPushed(pendingCovers)
+  if (coverPushErr) return coverPushErr
+  const mapped = await cloudCoverUpserts(
+    coversForPendingSpecimens(await db.covers.toArray(), liveRows),
+    userId,
+    ownedLegacy,
+  )
+  if (mapped.error) return mapped.error
+  for (let i = 0; i < mapped.rows.length; i += UPSERT_PAGE) {
+    const { error } = await supabase.from('covers').upsert(mapped.rows.slice(i, i + UPSERT_PAGE))
     if (error) return error.message
   }
 

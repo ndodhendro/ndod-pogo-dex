@@ -16,6 +16,7 @@ import {
   searchSlots,
   searchVariantNames,
   slotDisplayName,
+  specimenSlotName,
   slotsForSelectedTags,
   slotsForTrack,
   specimenFillsSlot,
@@ -620,6 +621,22 @@ describe('slotDisplayName', () => {
     expect(slotDisplayName(1, '')).toBe('Bulbasaur')
     expect(slotDisplayName(201, '')).toBe('Unown F')
     expect(slotDisplayName(201, 'A')).toBe('Unown A')
+    expect(slotDisplayName(849, '')).toBe('Toxtricity Amped Form')
+    expect(slotDisplayName(849, 'Low Key Form')).toBe('Toxtricity Low Key Form')
+    expect(slotDisplayName(128, '')).toBe('Tauros')
+    expect(slotDisplayName(479, 'Fan Rotom')).toBe('Fan Rotom')
+    expect(slotDisplayName(720, 'Hoopa Unbound')).toBe('Hoopa Unbound')
+    expect(slotDisplayName(646, 'Black Kyurem')).toBe('Black Kyurem')
+  })
+
+  it('labels a specimen with its distinctive forme or the Basic default', () => {
+    expect(specimenSlotName(849, null)).toBe('Toxtricity Amped Form')
+    expect(specimenSlotName(849, 'Low Key Form')).toBe('Toxtricity Low Key Form')
+    expect(specimenSlotName(6, 'Mega X')).toBe('Charizard Mega X')
+    expect(specimenSlotName(3, 'Mega')).toBe('Venusaur')
+    expect(specimenSlotName(26, 'Alolan')).toBe('Raichu')
+    expect(specimenSlotName(201, null)).toBe('Unown F')
+    expect(specimenSlotName(201, 'A')).toBe('Unown A')
   })
 })
 
@@ -643,6 +660,23 @@ describe('Basic Pokédex limit', () => {
   it('labels Basic Unown as Unown F without an Alternate forme slot', () => {
     const unown = slotsForTrack([], [basic], []).find((slot) => slot.speciesId === 201)
     expect(unown).toMatchObject({ speciesId: 201, variant: '', name: 'Unown F' })
+  })
+
+  it('labels Basic default formes that the Alternate forme list omitted', () => {
+    const slots = slotsForTrack([], [basic], [])
+    expect(slots.find((slot) => slot.speciesId === 849)).toMatchObject({
+      variant: '',
+      name: 'Toxtricity Amped Form',
+    })
+    expect(slots.find((slot) => slot.speciesId === 327)).toMatchObject({
+      variant: '',
+      name: 'Spinda Pattern 1',
+    })
+    expect(slots.find((slot) => slot.speciesId === 128)).toMatchObject({
+      variant: '',
+      name: 'Tauros',
+    })
+    expect(slots.find((slot) => slot.speciesId === 666)?.name).toBe('Vivillon')
   })
 
   it('uses the Pokémon GO released list when Limit is on', () => {

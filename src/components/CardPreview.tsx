@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { categoryForTag, lookForTag, NOT_PURE_ICON, SEEN_ICON } from '../data/navIcons'
-import { SPECIES_BY_ID } from '../data/species'
 import { db, type SpecimenRow } from '../lib/db'
 import {
   previewCarouselSettleX,
@@ -14,7 +13,16 @@ import {
   type PreviewSwipeAxis,
 } from '../lib/previewSwipe'
 import { coverPurity } from '../lib/covers'
-import { isNotPure, isSilhouette, specimenTags, labelForTag, type TagId } from '../lib/tags'
+import { specimenSlotName } from '../lib/roster'
+import {
+  formLabelForPreview,
+  isNotPure,
+  isSilhouette,
+  specimenChipIcon,
+  specimenChipLabel,
+  specimenTags,
+  type TagId,
+} from '../lib/tags'
 import { usePreviewAnimations } from '../lib/previewPrefs'
 import { BottomSheet } from './BottomSheet'
 import { FileNameCopy } from './FileNameCopy'
@@ -60,8 +68,13 @@ export function CardPreview({
   onOpenGallery,
   onDelete,
 }: Props) {
-  const species = SPECIES_BY_ID.get(specimen.speciesId)
   const tags = specimenTags(specimen)
+  const formLabel = formLabelForPreview(specimen.form)
+  const title = specimenSlotName(specimen.speciesId, specimen.form)
+  const showForm =
+    Boolean(formLabel) &&
+    !title.toLowerCase().endsWith(` ${formLabel.toLowerCase()}`) &&
+    title.toLowerCase() !== formLabel.toLowerCase()
   const categories = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? []
   const previewAnimations = usePreviewAnimations()
   const photoRef = useRef<HTMLDivElement>(null)
@@ -377,25 +390,19 @@ export function CardPreview({
         </div>
         <div className={styles.meta} data-purity={showFx ? undefined : (purity ?? '')}>
           <p className={styles.number}>#{String(specimen.speciesId).padStart(4, '0')}</p>
-          <h2>{species?.name ?? 'Unknown'}</h2>
-          {specimen.form ? <p className={styles.form}>{specimen.form}</p> : null}
+          <h2>{title}</h2>
+          {showForm ? <p className={styles.form}>{formLabel}</p> : null}
           <div className="chip-row">
             {tags.map((tag) => {
               const look = lookForTag(tag, categories)
               const named = categoryForTag(categories, tag)?.name
-              const extra =
-                tag === 'costume'
-                  ? specimen.costume || named || labelForTag(tag)
-                  : tag === 'background'
-                    ? specimen.background || named || labelForTag(tag)
-                    : named || labelForTag(tag)
               return (
                 <TagChip
                   key={tag}
                   tag={tag}
                   selected
-                  icon={look.emoji}
-                  label={extra}
+                  icon={specimenChipIcon(tag, specimen, look.emoji)}
+                  label={specimenChipLabel(tag, specimen, named)}
                   labelColor={look.labelColor}
                 />
               )
@@ -432,7 +439,7 @@ export function CardPreview({
         </div>
       </div>
       {lightbox && imageUrl ? (
-        <OriginalLightbox src={imageUrl} alt={species?.name ?? ''} onClose={() => setLightbox(false)} />
+        <OriginalLightbox src={imageUrl} alt={title} onClose={() => setLightbox(false)} />
       ) : null}
     </div>
     <BottomSheet
@@ -622,7 +629,7 @@ function PreviewPhoto({
   showFx: boolean
 }) {
   const tags = slide ? specimenTags(slide.specimen) : []
-  const name = slide ? SPECIES_BY_ID.get(slide.specimen.speciesId)?.name : undefined
+  const name = slide ? specimenSlotName(slide.specimen.speciesId, slide.specimen.form) : undefined
   const purity = slide
     ? coverPurity(
         tags,

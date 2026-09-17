@@ -34,6 +34,14 @@ describe('cloudBackupErrorMessage', () => {
       cloudBackupErrorMessage('duplicate key value violates unique constraint "specimens_user_file_hash"'),
     ).toBe('Screenshot already in the collection')
   })
+
+  it('hides the raw covers foreign-key text', () => {
+    expect(
+      cloudBackupErrorMessage(
+        'insert or update on table "covers" violates foreign key constraint "covers_specimen_id_fkey"',
+      ),
+    ).toBe('Could not backup the dex cover. Try Backup collection.')
+  })
 })
 
 describe('sameSpecimenMetadata', () => {

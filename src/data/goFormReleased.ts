@@ -63,13 +63,94 @@ export const GO_FORM_SPECIES_IDS = {
 
 export type GoFormSpeciesTag = keyof typeof GO_FORM_SPECIES_IDS
 
-/** Display name on empty-variant (Basic) slots. Not an Alternate forme row. */
-export const GO_BASIC_DEFAULT_FORME: Readonly<Record<number, string>> = {
-  201: 'F',
+const UNOWN_LETTERS = ['!', '?', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')] as const
+const SPINDA_PATTERNS = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `Pattern ${n}`)
+const BURMY_CLOAKS = ['Plant Cloak', 'Sandy Cloak', 'Trash Cloak'] as const
+const SEAS = ['West Sea', 'East Sea'] as const
+const SEASONS = ['Spring Form', 'Summer Form', 'Autumn Form', 'Winter Form'] as const
+const INCARNATE = ['Incarnate Forme', 'Therian Forme'] as const
+const FLOWERS = ['Red Flower', 'Blue Flower', 'Orange Flower', 'White Flower', 'Yellow Flower'] as const
+const PUMPKABOO_SIZES = ['Small Variety', 'Medium Variety', 'Large Variety', 'Jumbo Variety'] as const
+const TEA_FORMS = ['Phony Form', 'Antique Form'] as const
+const HERO = ['Hero of Many Battles'] as const
+
+/**
+ * Full named-forme family per species. The name that is not on the wiki extra list
+ * is the Basic slot label (Unown F, Toxtricity Amped Form). Families whose extras
+ * are all listed (Tauros breeds, Rotom appliances) have no Basic forme suffix.
+ */
+export const GO_ALTERNATE_FORME_FAMILIES: Readonly<Record<number, readonly string[]>> = {
+  201: UNOWN_LETTERS,
+  327: SPINDA_PATTERNS,
+  351: ['Normal', 'Rainy', 'Snowy', 'Sunny'],
+  386: ['Normal Forme', 'Attack Forme', 'Defense Forme', 'Speed Forme'],
+  412: BURMY_CLOAKS,
+  413: BURMY_CLOAKS,
+  421: ['Overcast Form', 'Sunshine Form'],
+  422: SEAS,
+  423: SEAS,
+  483: ['Altered Forme', 'Origin Forme'],
+  484: ['Altered Forme', 'Origin Forme'],
+  487: ['Altered Forme', 'Origin Forme'],
+  492: ['Land Forme', 'Sky Forme'],
+  550: ['Red-Striped', 'Blue-Striped', 'White-Striped'],
+  585: SEASONS,
+  586: SEASONS,
+  641: INCARNATE,
+  642: INCARNATE,
+  645: INCARNATE,
+  647: ['Ordinary Form', 'Resolute Form'],
+  669: FLOWERS,
+  670: FLOWERS,
+  671: FLOWERS,
+  676: [
+    'Natural Form',
+    'Dandy Trim',
+    'Debutante Trim',
+    'Diamond Trim',
+    'Heart Trim',
+    'Kabuki Trim',
+    'La Reine Trim',
+    'Matron Trim',
+    'Pharaoh Trim',
+    'Star Trim',
+  ],
+  681: ['Shield Forme', 'Blade Forme'],
+  710: PUMPKABOO_SIZES,
+  711: PUMPKABOO_SIZES,
+  716: ['Neutral Mode', 'Active Mode'],
+  718: ['10% Forme', '50% Forme', 'Complete Forme'],
+  720: ['Hoopa Confined', 'Hoopa Unbound'],
+  741: ['Baile Style', "Pa'u Style", 'Pom-Pom Style', 'Sensu Style'],
+  745: ['Midday Form', 'Midnight Form', 'Dusk Form'],
+  778: ['Disguised Form', 'Busted Form'],
+  849: ['Amped Form', 'Low Key Form'],
+  854: TEA_FORMS,
+  855: TEA_FORMS,
+  877: ['Full Belly Mode', 'Hangry Mode'],
+  888: [...HERO, 'Crowned Sword'],
+  889: [...HERO, 'Crowned Shield'],
+  892: ['Single Strike Style', 'Rapid Strike Style'],
+  905: INCARNATE,
+  925: ['Family of Four', 'Family of Three'],
+  931: ['Green Plumage', 'Blue Plumage', 'White Plumage', 'Yellow Plumage'],
+  978: ['Curly Form', 'Droopy Form', 'Stretchy Form'],
+  982: ['Two-Segment Form', 'Three-Segment Form'],
+  1012: ['Counterfeit Form', 'Artisan Form'],
+  1013: ['Unremarkable Form', 'Masterpiece Form'],
 }
 
+/** Display name on empty-variant (Basic) slots. Not an Alternate forme row. */
 export function basicDefaultForme(speciesId: number): string {
-  return GO_BASIC_DEFAULT_FORME[speciesId] ?? ''
+  const family = GO_ALTERNATE_FORME_FAMILIES[speciesId]
+  if (!family) return ''
+  const extras = new Set(
+    GO_ALTERNATE_FORME.filter((row) => row.speciesId === speciesId).map((row) =>
+      row.variant.trim().toLowerCase(),
+    ),
+  )
+  const missing = family.filter((name) => !extras.has(name.trim().toLowerCase()))
+  return missing.length === 1 ? missing[0] : ''
 }
 
 const GO_ALTERNATE_SPECIES_IDS: ReadonlySet<number> = new Set(

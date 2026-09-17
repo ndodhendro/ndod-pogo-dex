@@ -7,9 +7,14 @@ import {
   toggleRequiredTags,
   toggleTag,
   allocateCategoryTag,
+  formLabelForPreview,
+  genderChipIcon,
+  genderChipLabel,
   labelForTag,
   pickDuplicateLook,
   resolveRequiredTags,
+  specimenChipIcon,
+  specimenChipLabel,
   type SpecimenFields,
 } from './tags'
 
@@ -126,6 +131,25 @@ describe('toggleTag', () => {
     expect(toggleTag(galarian, 'galarian').form).toBe('Alolan')
   })
 
+  it('hides region and Mega form text already shown as chips', () => {
+    expect(formLabelForPreview(null)).toBeNull()
+    expect(formLabelForPreview('Alolan')).toBeNull()
+    expect(formLabelForPreview('Galarian')).toBeNull()
+    expect(formLabelForPreview('Hisuian')).toBeNull()
+    expect(formLabelForPreview('Paldean')).toBeNull()
+    expect(formLabelForPreview('Mega')).toBeNull()
+    expect(formLabelForPreview('Alolan · Mega')).toBeNull()
+    expect(formLabelForPreview('Alolan · Galarian')).toBeNull()
+  })
+
+  it('keeps distinctive forme names on preview', () => {
+    expect(formLabelForPreview('Mega X')).toBe('Mega X')
+    expect(formLabelForPreview('Mega Y')).toBe('Mega Y')
+    expect(formLabelForPreview('A')).toBe('A')
+    expect(formLabelForPreview('Large Variety')).toBe('Large Variety')
+    expect(formLabelForPreview('Alolan · Mega X')).toBe('Mega X')
+  })
+
   it('clears every visual tag and keeps the species', () => {
     const tagged = toggleTag({ ...toggleTag(base(), 'shiny'), costume: 'Hat' }, 'alolan')
     expect(clearVisualTags(tagged)).toEqual({
@@ -164,6 +188,22 @@ describe('resolveRequiredTags', () => {
 
   it('labels the empty-look catalog as Basic', () => {
     expect(labelForTag('basic')).toBe('Basic')
+  })
+
+  it('labels the Gender chip as Male or Female with the matching emoji', () => {
+    expect(genderChipLabel('Male')).toBe('Male')
+    expect(genderChipLabel('Female')).toBe('Female')
+    expect(genderChipLabel('Hisuian Male')).toBe('Male')
+    expect(genderChipLabel('Hisuian Female')).toBe('Female')
+    expect(genderChipLabel('')).toBe('Gender')
+    expect(genderChipIcon('Male')).toBe('♂️')
+    expect(genderChipIcon('Female')).toBe('♀️')
+    expect(genderChipIcon('Hisuian Male')).toBe('♂️')
+    expect(genderChipIcon('Hisuian Female')).toBe('♀️')
+    expect(genderChipIcon('')).toBeUndefined()
+    expect(specimenChipLabel('gender', { ...base(), gender: 'Female' }, 'Gender')).toBe('Female')
+    expect(specimenChipIcon('gender', { gender: 'Male' }, '⚥')).toBe('♂️')
+    expect(specimenChipLabel('costume', { ...base(), costume: 'Kurta' }, 'Costume')).toBe('Kurta')
   })
 
   it('does not invent a combo tag when existing tags are picked', () => {
