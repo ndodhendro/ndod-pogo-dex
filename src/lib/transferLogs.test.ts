@@ -5,6 +5,8 @@ import {
   sortTransferLogs,
   specimenFromTransferLog,
   transferLogHasSnapshot,
+  TRANSFER_LOG_ACTIONS,
+  TRANSFER_LOG_LIMIT,
 } from './transferLogs'
 
 describe('sortTransferLogs', () => {
@@ -25,6 +27,18 @@ describe('sortTransferLogs', () => {
         { id: 'b', createdAt: 4, updatedAt: 5 },
       ]).map((row) => row.id),
     ).toEqual(['b', 'a'])
+  })
+})
+
+describe('TRANSFER_LOG_LIMIT', () => {
+  it('keeps one hundred history rows', () => {
+    expect(TRANSFER_LOG_LIMIT).toBe(100)
+  })
+})
+
+describe('TRANSFER_LOG_ACTIONS', () => {
+  it('labels cloud restore separately from save', () => {
+    expect(TRANSFER_LOG_ACTIONS.restore).toEqual({ icon: '☁️', label: 'Restored' })
   })
 })
 

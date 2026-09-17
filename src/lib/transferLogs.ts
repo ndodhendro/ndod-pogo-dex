@@ -2,14 +2,15 @@ import { db, type SpecimenRow, type TransferLogRow } from './db'
 import { newId } from './id'
 import { extraTagList, fieldsFromSpecimen, isNotPure, isSilhouette, type SpecimenFields } from './tags'
 
-export type TransferLogAction = 'save' | 'edit' | 'delete'
+export type TransferLogAction = 'save' | 'edit' | 'delete' | 'restore'
 
-export const TRANSFER_LOG_LIMIT = 30
+export const TRANSFER_LOG_LIMIT = 100
 
 export const TRANSFER_LOG_ACTIONS: Record<TransferLogAction, { icon: string; label: string }> = {
   save: { icon: '📥', label: 'Saved' },
   edit: { icon: '🏷️', label: 'Edited' },
   delete: { icon: '🗑️', label: 'Deleted' },
+  restore: { icon: '☁️', label: 'Restored' },
 }
 
 export function sortTransferLogs<T extends { createdAt: number; updatedAt: number }>(
@@ -109,11 +110,12 @@ function snapshotFromSpecimen(
   }
 }
 
-/** Always insert so save, edit, and delete stay as separate history rows. */
+/** Always insert so save, edit, delete, and restore stay as separate history rows. */
 export async function appendTransferLog(
   specimen: SpecimenRow,
   action: TransferLogAction,
   now = Date.now(),
+  options: { prune?: boolean } = {},
 ) {
   const image = await db.images.get(specimen.imageId)
   const snapshot = snapshotFromSpecimen(specimen, action, image?.thumb)
@@ -123,5 +125,5 @@ export async function appendTransferLog(
     createdAt: now,
     updatedAt: now,
   })
-  await pruneTransferLogs()
+  if (options.prune !== false) await pruneTransferLogs()
 }

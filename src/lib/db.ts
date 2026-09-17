@@ -87,7 +87,7 @@ export type TagCropRow = {
 export type TransferLogRow = {
   id: string
   specimenId: string
-  action?: 'save' | 'edit' | 'delete'
+  action?: 'save' | 'edit' | 'delete' | 'restore'
   speciesId?: number
   form?: string | null
   shiny?: boolean

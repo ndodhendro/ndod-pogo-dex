@@ -12,6 +12,7 @@ import { planCloudPhotoRestore, planGalleryRestore } from './restorePlan'
 import { downloadSpecimenOriginal } from './specimenStorage'
 import { getSupabase } from './supabase'
 import { applyCloudCatalogs, pullCloudCollection, type CloudSpecimen } from './sync'
+import { appendTransferLog, pruneTransferLogs } from './transferLogs'
 import { yieldUi } from './yieldUi'
 
 export type { RestoreProgress } from './restoreProgress'
@@ -117,6 +118,7 @@ export async function restoreFromCloud(
   }
 
   await applyCloudCovers(cloud)
+  await pruneTransferLogs()
 
   return {
     restored,
@@ -224,6 +226,7 @@ export async function restoreFromGallery(
   }
 
   await applyCloudCovers(cloud)
+  await pruneTransferLogs()
 
   return {
     restored,
@@ -247,28 +250,30 @@ async function writeRestoredSpecimen(spec: CloudSpecimen, file: Blob, alreadyCro
         cropHeightForSpecimen(cropTagsFromFields(spec), heightMap, isSilhouette(spec)),
       )
   const imageId = newId()
-  await db.transaction('rw', db.images, db.specimens, async () => {
+  const specimen = {
+    id: spec.id,
+    speciesId: spec.speciesId,
+    form: spec.form,
+    shiny: spec.shiny,
+    shadowStatus: spec.shadowStatus,
+    costume: spec.costume,
+    background: spec.background,
+    gender: spec.gender ?? null,
+    hundo: spec.hundo,
+    nundo: spec.nundo,
+    extraTags: extraTagList(spec),
+    silhouette: isSilhouette(spec),
+    notPure: isNotPure(spec),
+    imageId,
+    fileHash: spec.fileHash,
+    fileName: restoredScreenshotFileName(file, spec.fileName),
+    createdAt: spec.createdAt,
+    gallerySort: spec.gallerySort,
+    cloudBackupPending: false,
+  }
+  await db.transaction('rw', db.images, db.specimens, db.transferLogs, async () => {
     await db.images.add({ id: imageId, ...variants })
-    await db.specimens.add({
-      id: spec.id,
-      speciesId: spec.speciesId,
-      form: spec.form,
-      shiny: spec.shiny,
-      shadowStatus: spec.shadowStatus,
-      costume: spec.costume,
-      background: spec.background,
-      gender: spec.gender ?? null,
-      hundo: spec.hundo,
-      nundo: spec.nundo,
-      extraTags: extraTagList(spec),
-      silhouette: isSilhouette(spec),
-      notPure: isNotPure(spec),
-      imageId,
-      fileHash: spec.fileHash,
-      fileName: restoredScreenshotFileName(file, spec.fileName),
-      createdAt: spec.createdAt,
-      gallerySort: spec.gallerySort,
-      cloudBackupPending: false,
-    })
+    await db.specimens.add(specimen)
+    await appendTransferLog(specimen, 'restore', Date.now(), { prune: false })
   })
 }
