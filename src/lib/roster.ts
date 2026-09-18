@@ -10,6 +10,7 @@ import {
   isGoFormReleased,
   staticFormSlotCount,
 } from '../data/goFormReleased'
+import { compareByEvolutionLine, evolutionLine } from '../data/evolutions'
 import { GO_RELEASED_IDS, isGoReleased } from '../data/goReleased'
 import { SPECIES, SPECIES_BY_ID, searchSpecies } from '../data/species'
 import { BASIC_CROP_TAG } from '../data/tagCrops'
@@ -636,6 +637,21 @@ export function searchSlots(slots: readonly DexSlotDef[], query: string): DexSlo
       normalizeVariant(slot.variant).toLowerCase().includes(q)
     )
   })
+}
+
+/** Species search that hits exactly one species, otherwise null. */
+export function uniqueSearchSpeciesId(slots: readonly DexSlotDef[], query: string): number | null {
+  const q = query.trim()
+  if (!q) return null
+  const catalogIds = new Set(slots.map((slot) => slot.speciesId))
+  const hits = searchSpecies(q).filter((species) => catalogIds.has(species.id))
+  if (hits.length !== 1) return null
+  return hits[0].id
+}
+
+export function slotsForEvolutionLine(slots: readonly DexSlotDef[], speciesId: number): DexSlotDef[] {
+  const line = new Set(evolutionLine(speciesId))
+  return slots.filter((slot) => line.has(slot.speciesId)).sort(compareByEvolutionLine)
 }
 
 export function searchSpeciesOptions(query: string) {

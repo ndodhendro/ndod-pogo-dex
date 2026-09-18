@@ -82,18 +82,22 @@ export function buildDexVirtualRows<T extends { speciesId: number }>(
   columns: number,
   collapsed: ReadonlySet<number>,
   open?: { amounts: ReadonlyMap<number, number>; rowHeight: number },
+  options?: { hideHeaders?: boolean },
 ): DexVirtualRow<T>[] {
   const cols = Math.max(1, columns)
   const amounts = open?.amounts ?? new Map<number, number>()
+  const hideHeaders = Boolean(options?.hideHeaders)
   const rows: DexVirtualRow<T>[] = []
   for (const group of groups) {
-    rows.push({
-      kind: 'header',
-      key: `h-${group.generation.id}`,
-      generation: group.generation,
-      lead: rows.length === 0,
-    })
-    const amount = dexOpenAmount(group.generation.id, collapsed, amounts)
+    if (!hideHeaders) {
+      rows.push({
+        kind: 'header',
+        key: `h-${group.generation.id}`,
+        generation: group.generation,
+        lead: rows.length === 0,
+      })
+    }
+    const amount = hideHeaders ? 1 : dexOpenAmount(group.generation.id, collapsed, amounts)
     if (amount <= 0) continue
     const rowCount = Math.ceil(group.items.length / cols)
     let rowIndex = 0

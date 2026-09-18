@@ -283,6 +283,12 @@ describe('buildDexVirtualRows', () => {
     ])
   })
 
+  it('can drop generation headers for a flat evolutionary-line grid', () => {
+    const rows = buildDexVirtualRows(groups, 3, new Set([kanto.id]), undefined, { hideHeaders: true })
+    expect(rows.every((row) => row.kind === 'cards')).toBe(true)
+    expect(rows).toHaveLength(3)
+  })
+
   it('omits card rows below the slide clip', () => {
     const rows = buildDexVirtualRows(groups, 3, new Set(), {
       amounts: new Map([[kanto.id, 0.4]]),

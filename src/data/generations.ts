@@ -31,6 +31,15 @@ export const GENERATIONS: readonly Generation[] = [
 
 export const GENERATION_IDS = GENERATIONS.map((generation) => generation.id)
 
+/** One section for the evolutionary-line sort; headers stay hidden in the grid. */
+export const EVOLUTION_LINE_GENERATION: Generation = {
+  id: 0,
+  name: 'Evolutionary Line',
+  start: 0,
+  end: 0,
+  color: '#ff6b6b',
+}
+
 export function generationForSpeciesId(id: number): Generation | undefined {
   if (!Number.isInteger(id) || id < 1) return undefined
   return GENERATIONS.find((generation) => id >= generation.start && id <= generation.end)

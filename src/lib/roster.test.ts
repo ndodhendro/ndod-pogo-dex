@@ -15,6 +15,8 @@ import {
   nationalDexSlots,
   searchSlots,
   searchVariantNames,
+  slotsForEvolutionLine,
+  uniqueSearchSpeciesId,
   slotDisplayName,
   specimenSlotName,
   slotsForSelectedTags,
@@ -572,6 +574,32 @@ describe('searchSlots', () => {
     expect(party.length).toBeGreaterThan(2)
     expect(searchSlots(slots, '0001').every((slot) => slot.speciesId === 1)).toBe(true)
     expect(searchSlots(slots, '0001').length).toBeGreaterThanOrEqual(3)
+  })
+})
+
+describe('uniqueSearchSpeciesId', () => {
+  const slots = slotsForTrack([], [], [])
+
+  it('is only set when the query points at one species', () => {
+    expect(uniqueSearchSpeciesId(slots, 'pikachu')).toBe(25)
+    expect(uniqueSearchSpeciesId(slots, '0025')).toBe(25)
+    expect(uniqueSearchSpeciesId(slots, 'chu')).toBeNull()
+    expect(uniqueSearchSpeciesId(slots, 'nidoran')).toBeNull()
+    expect(uniqueSearchSpeciesId(slots, '')).toBeNull()
+  })
+
+  it('still counts many looks of the same species as one species', () => {
+    const costumes = slotsForTrack(['costume'], [costume], roster)
+    expect(uniqueSearchSpeciesId(costumes, 'pikachu')).toBe(25)
+    expect(uniqueSearchSpeciesId(costumes, 'party')).toBeNull()
+    expect(uniqueSearchSpeciesId(costumes, 'pikachu visor')).toBeNull()
+  })
+})
+
+describe('slotsForEvolutionLine', () => {
+  it('includes previous and next stages in evolutionary order', () => {
+    const slots = slotsForTrack([], [], [])
+    expect(slotsForEvolutionLine(slots, 25).map((slot) => slot.speciesId)).toEqual([172, 25, 26])
   })
 })
 

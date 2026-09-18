@@ -49,6 +49,32 @@
   min-width: 0;
 }
 
+.evoLine {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--tap-min);
+  margin: 0 0 var(--space-1);
+  color: var(--tone, var(--color-dex-text));
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-ui);
+  cursor: pointer;
+}
+
+.evoLineCopy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.evoLine input {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
+}
+
 .iconBtn {
   position: relative;
   z-index: 2;

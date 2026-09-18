@@ -10,7 +10,13 @@ import { SearchField } from '../components/SearchField'
 import { SearchableSelect } from '../components/SearchableSelect'
 import { SpecimenTagSheet } from '../components/TagSheet'
 import { TagChip } from '../components/TagChip'
-import { GENERATION_IDS, GENERATIONS, groupByGeneration, type Generation } from '../data/generations'
+import {
+  EVOLUTION_LINE_GENERATION,
+  GENERATION_IDS,
+  GENERATIONS,
+  groupByGeneration,
+  type Generation,
+} from '../data/generations'
 import {
   colorForCategory,
   dexFilterTagChoices,
@@ -51,10 +57,12 @@ import { listNeighbor } from '../lib/previewSwipe'
 import {
   countFilledSlots,
   searchSlots,
+  slotsForEvolutionLine,
   slotsForTrack,
   specimenFillsSlot,
   slotVariantForTrack,
   trackIsLimited,
+  uniqueSearchSpeciesId,
   type SlotProgress,
 } from '../lib/roster'
 import { toastAfterWrite, useToast } from '../lib/toast'
@@ -82,6 +90,7 @@ export function DexPage() {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const [query, setQuery] = useState('')
+  const [showEvolutionLine, setShowEvolutionLine] = useState(false)
   const [progressFilter, setProgressFilter] = useState<DexProgressKind | null>(null)
   const [filterTags, setFilterTags] = useState<TagId[]>([])
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -149,14 +158,53 @@ export function DexPage() {
     () => buildSlots(category, specimens, covers, catalogs, roster, '', progressFilter, filterTags),
     [category, specimens, covers, catalogs, roster, progressFilter, filterTags],
   )
+  const catalog = useMemo(
+    () => slotsForTrack(category?.requiredTags ?? [], catalogs, roster),
+    [category, catalogs, roster],
+  )
+  const searchedSpeciesId = useMemo(
+    () => uniqueSearchSpeciesId(catalog, query),
+    [catalog, query],
+  )
+  useEffect(() => {
+    if (searchedSpeciesId == null) setShowEvolutionLine(false)
+  }, [searchedSpeciesId])
   const slots = useMemo(
     () =>
       query.trim()
-        ? buildSlots(category, specimens, covers, catalogs, roster, query, progressFilter, filterTags)
+        ? buildSlots(
+            category,
+            specimens,
+            covers,
+            catalogs,
+            roster,
+            query,
+            progressFilter,
+            filterTags,
+            showEvolutionLine ? searchedSpeciesId : null,
+          )
         : allSlots,
-    [allSlots, category, specimens, covers, catalogs, roster, query, progressFilter, filterTags],
+    [
+      allSlots,
+      category,
+      specimens,
+      covers,
+      catalogs,
+      roster,
+      query,
+      progressFilter,
+      filterTags,
+      showEvolutionLine,
+      searchedSpeciesId,
+    ],
   )
-  const groups = useMemo(() => groupByGeneration(slots), [slots])
+  const groups = useMemo(
+    () =>
+      showEvolutionLine
+        ? [{ generation: EVOLUTION_LINE_GENERATION, items: slots }]
+        : groupByGeneration(slots),
+    [slots, showEvolutionLine],
+  )
 
   const { seen, caught, pure, total: catalogSize } = useMemo(
     () => countFilledSlots(specimens, category?.requiredTags ?? [], catalogs, roster),
@@ -186,12 +234,18 @@ export function DexPage() {
   const frameHeight = useTrackFrameHeight(requiredTags)
   const { columns, rowHeight } = dexGridLayout(width, frameHeight)
   const rows = useMemo(
-    () => buildDexVirtualRows(groups, columns, collapsed, { amounts, rowHeight }),
-    [groups, columns, collapsed, amounts, rowHeight],
+    () =>
+      buildDexVirtualRows(groups, columns, collapsed, { amounts, rowHeight }, {
+        hideHeaders: showEvolutionLine,
+      }),
+    [groups, columns, collapsed, amounts, rowHeight, showEvolutionLine],
   )
   const visibleSlots = useMemo(
-    () => groups.flatMap((group) => (collapsed.has(group.generation.id) ? [] : group.items)),
-    [groups, collapsed],
+    () =>
+      showEvolutionLine
+        ? slots
+        : groups.flatMap((group) => (collapsed.has(group.generation.id) ? [] : group.items)),
+    [groups, collapsed, showEvolutionLine, slots],
   )
   const previewQueue = useMemo(
     () => visibleSlots.flatMap((slot) => (slot.cover ? [slot.cover] : [])),
@@ -271,6 +325,7 @@ export function DexPage() {
           className={`btn ${styles.iconBtn}`}
           data-tone={category ? toneForCategory(category) : 'dex'}
           disabled={visibleIds.length === 0}
+          hidden={showEvolutionLine}
           aria-label={allExpanded ? 'Collapse All' : 'Expand All'}
           onClick={() => {
             if (allExpanded) setCollapsedTo(visibleIds, new Set(GENERATION_IDS))
@@ -282,6 +337,22 @@ export function DexPage() {
           </span>
         </button>
       </div>
+      {searchedSpeciesId != null ? (
+        <label
+          className={styles.evoLine}
+          data-tone={category ? toneForCategory(category) : 'dex'}
+        >
+          <span className={styles.evoLineCopy}>
+            <span aria-hidden="true">🧬</span>
+            Show Evolutionary Line
+          </span>
+          <input
+            type="checkbox"
+            checked={showEvolutionLine}
+            onChange={(e) => setShowEvolutionLine(e.target.checked)}
+          />
+        </label>
+      ) : null}
       <DexProgress
         compact
         seen={seen}
@@ -452,6 +523,7 @@ export function DexPage() {
             onClick={() => {
               setFilterTags([])
               setQuery('')
+              setShowEvolutionLine(false)
             }}
           >
             <span aria-hidden="true">✖️</span>
@@ -552,10 +624,16 @@ function buildSlots(
   query: string,
   progressFilter: DexProgressKind | null = null,
   filterTags: readonly TagId[] = [],
+  evolutionSpeciesId: number | null = null,
 ): Slot[] {
   const required = category?.requiredTags ?? []
   const catalog = slotsForTrack(required, catalogs, roster)
-  const defs = query.trim() ? searchSlots(catalog, query) : catalog
+  const defs =
+    evolutionSpeciesId != null
+      ? slotsForEvolutionLine(catalog, evolutionSpeciesId)
+      : query.trim()
+        ? searchSlots(catalog, query)
+        : catalog
   const variantCounts = countBySpeciesId(catalog)
   const galleryCounts = countBySpeciesId(specimens)
   const categoryCovers = category ? covers.filter((row) => row.categoryId === category.id) : []
