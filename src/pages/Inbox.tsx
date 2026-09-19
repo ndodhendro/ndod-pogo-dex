@@ -186,7 +186,7 @@ export function InboxPage() {
     ) {
       return true
     }
-    showToast('Copy both screenshot filenames first', 'warning')
+    showToast('Copy a screenshot filename first', 'warning')
     return false
   }
 

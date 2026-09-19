@@ -50,18 +50,24 @@ describe('sameLookFilenamesCopied', () => {
   const oldName = 'current.png'
   const newName = 'incoming.png'
 
-  it('is false until both filenames are copied', () => {
+  it('is false until at least one filename is copied', () => {
     expect(sameLookFilenamesCopied({ current: false, next: false }, oldName, newName)).toBe(false)
-    expect(sameLookFilenamesCopied({ current: true, next: false }, oldName, newName)).toBe(false)
-    expect(sameLookFilenamesCopied({ current: false, next: true }, oldName, newName)).toBe(false)
   })
 
-  it('is true after both filenames are copied', () => {
+  it('is true after either filename is copied', () => {
+    expect(sameLookFilenamesCopied({ current: true, next: false }, oldName, newName)).toBe(true)
+    expect(sameLookFilenamesCopied({ current: false, next: true }, oldName, newName)).toBe(true)
     expect(sameLookFilenamesCopied({ current: true, next: true }, oldName, newName)).toBe(true)
   })
 
-  it('skips a side that has no filename to copy', () => {
+  it('requires the only copyable filename when the other side has none', () => {
+    expect(sameLookFilenamesCopied({ current: false, next: false }, null, newName)).toBe(false)
     expect(sameLookFilenamesCopied({ current: false, next: true }, null, newName)).toBe(true)
+    expect(sameLookFilenamesCopied({ current: false, next: false }, oldName, '')).toBe(false)
     expect(sameLookFilenamesCopied({ current: true, next: false }, oldName, '')).toBe(true)
+  })
+
+  it('is true when neither side has a filename to copy', () => {
+    expect(sameLookFilenamesCopied({ current: false, next: false }, null, '')).toBe(true)
   })
 })
