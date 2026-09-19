@@ -2,9 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { extraTagList } from './tags'
 import {
   idsToPrune,
+  inboxDiscardLogSnapshot,
+  replaceTransferLogTimes,
   sortTransferLogs,
   specimenFromTransferLog,
   transferLogHasSnapshot,
+  transferLogIsListed,
+  transferLogIsUntaggedDiscard,
+  transferLogLiveImageId,
   TRANSFER_LOG_ACTIONS,
   TRANSFER_LOG_LIMIT,
 } from './transferLogs'
@@ -39,6 +44,10 @@ describe('TRANSFER_LOG_LIMIT', () => {
 describe('TRANSFER_LOG_ACTIONS', () => {
   it('labels cloud restore separately from save', () => {
     expect(TRANSFER_LOG_ACTIONS.restore).toEqual({ icon: '☁️', label: 'Restored' })
+  })
+
+  it('labels discarded untagged screenshots separately from deleted specimens', () => {
+    expect(TRANSFER_LOG_ACTIONS.discard).toEqual({ icon: '🗑️', label: 'Discarded' })
   })
 })
 
@@ -84,5 +93,62 @@ describe('specimenFromTransferLog', () => {
     expect(transferLogHasSnapshot({ id: 'old', specimenId: 'x', createdAt: 1, updatedAt: 1 })).toBe(
       false,
     )
+  })
+})
+
+describe('untagged discard logs', () => {
+  it('keeps a filename and thumb without inventing a species', () => {
+    const snapshot = inboxDiscardLogSnapshot(
+      { id: 'inbox-1', imageId: 'img-1', fileName: 'IMG_0001.png' },
+      new Blob(['thumb']),
+    )
+    expect(snapshot).toMatchObject({
+      specimenId: 'inbox-1',
+      action: 'discard',
+      imageId: 'img-1',
+      fileName: 'IMG_0001.png',
+    })
+    expect(snapshot.speciesId).toBeUndefined()
+    expect(transferLogIsUntaggedDiscard({ ...snapshot, id: 'log', createdAt: 1, updatedAt: 1 })).toBe(
+      true,
+    )
+  })
+
+  it('lists discard rows even when the inbox item is gone', () => {
+    const log = {
+      id: 'log',
+      specimenId: 'inbox-1',
+      action: 'discard' as const,
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    expect(transferLogIsListed(log)).toBe(true)
+    expect(transferLogIsListed({ id: 'old', specimenId: 'gone', createdAt: 1, updatedAt: 1 })).toBe(
+      false,
+    )
+  })
+})
+
+describe('replaceTransferLogTimes', () => {
+  it('writes deleted before saved so newest-first logs stay in sequence', () => {
+    const { deletedAt, savedAt } = replaceTransferLogTimes(10)
+    expect(deletedAt).toBe(10)
+    expect(savedAt).toBe(11)
+    expect(
+      sortTransferLogs([
+        { id: 'deleted', createdAt: deletedAt, updatedAt: deletedAt },
+        { id: 'saved', createdAt: savedAt, updatedAt: savedAt },
+      ]).map((row) => row.id),
+    ).toEqual(['saved', 'deleted'])
+  })
+})
+
+describe('transferLogLiveImageId', () => {
+  it('hides the live photo when replace left a deleted log pointing at the old file', () => {
+    expect(
+      transferLogLiveImageId({ imageId: 'old-img' }, { imageId: 'new-img' }),
+    ).toBeUndefined()
+    expect(transferLogLiveImageId({ imageId: 'new-img' }, { imageId: 'new-img' })).toBe('new-img')
+    expect(transferLogLiveImageId({}, { imageId: 'live-img' })).toBe('live-img')
   })
 })

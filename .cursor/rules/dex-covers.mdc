@@ -12,6 +12,7 @@ Each category shows one cover photo per species. Purity is relative to that cate
 - Any category except Gender: required tags plus `gender` only is still green. Basic (`[]`) also treats a stored `basic` extra tag as the empty look, so `{basic}` and `{basic, gender}` are green there.
 - Gender `[gender]`: green only for `{gender}` or `{gender, basic}`.
 - Gender, Hisuian Sneasel only (variant Hisuian Male / Hisuian Female): green only for `{gender, hisuian}`. Johto Sneasel Male/Female follow the normal Gender rule.
+- Paldean, Tauros only: required tags plus `alternate-forme` is still green (Combat / Blaze / Aqua Breed). Paldean Wooper and other extras stay on the normal rule.
 
 **Gray border:** species is in the category (has all required tags) but the cover is not green.
 

@@ -34,7 +34,7 @@ import styles from './Settings.module.css'
 
 function pokedexEditorHelp(tag: TagId): string | null {
   if (tag === 'paldean') {
-    return 'Uses the Pokémon GO released list, one slot per species. Tauros Combat, Blaze, and Aqua Breed belong on Alternate forme.'
+    return 'Uses the Pokémon GO released list, one slot per species. Tauros Combat, Blaze, and Aqua Breed belong on Alternate forme, and still count as a pure Paldean Tauros cover.'
   }
   if (tag === 'gender') {
     return 'Uses the Pokémon GO gender-difference list as Variant slots: Male and Female per species (Venusaur Male, Venusaur Female). Basic stays one Venusaur slot. Hisuian Sneasel has four gender slots. Indeedee is cry-only and is not listed.'

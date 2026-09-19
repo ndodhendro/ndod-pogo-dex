@@ -47,6 +47,19 @@ describe('sortInboxByFileName', () => {
       ).map((item) => item.id),
     ).toEqual(['new', 'old'])
   })
+
+  it('places a newly added row in the current filename order', () => {
+    const n = row('n', 'm.png', 4)
+    const c = row('c', 'c.png', 3)
+    const b = row('b', 'b.png', 2)
+    const a = row('a', 'a.png', 1)
+    expect(sortInboxByFileName([n, c, b, a], 'asc').map((item) => item.id)).toEqual([
+      'a',
+      'b',
+      'c',
+      'n',
+    ])
+  })
 })
 
 describe('mergeInboxDisplay', () => {

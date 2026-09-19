@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState, type AnimationEvent as ReactAnimationEvent, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type TransitionEvent as ReactTransitionEvent, type WheelEvent as ReactWheelEvent } from 'react'
+import { lockBodyScroll, unlockBodyScroll } from '../lib/scrollLock'
 import { sheetBackdropDim, sheetCloseY, sheetDragY, sheetShouldClose, SHEET_SWIPE_LOCK } from '../lib/sheetSwipe'
 import styles from './BottomSheet.module.css'
 
@@ -130,23 +131,7 @@ export function BottomSheet({
 
   useEffect(() => {
     if (!shown) return
-    const { body, documentElement } = document
-    const scrollY = window.scrollY
-    const prev = {
-      htmlOverflow: documentElement.style.overflow,
-      overflow: body.style.overflow,
-      position: body.style.position,
-      top: body.style.top,
-      width: body.style.width,
-      paddingRight: body.style.paddingRight,
-    }
-    const gap = window.innerWidth - documentElement.clientWidth
-    documentElement.style.overflow = 'hidden'
-    body.style.overflow = 'hidden'
-    body.style.position = 'fixed'
-    body.style.top = `-${scrollY}px`
-    body.style.width = '100%'
-    if (gap > 0) body.style.paddingRight = `${gap}px`
+    lockBodyScroll()
 
     const onWheel = (event: WheelEvent) => {
       const scroller = scrollableAncestor(event.target, sheetRef.current)
@@ -166,15 +151,9 @@ export function BottomSheet({
     window.addEventListener('touchmove', onTouchMove, { passive: false })
 
     return () => {
-      documentElement.style.overflow = prev.htmlOverflow
-      body.style.overflow = prev.overflow
-      body.style.position = prev.position
-      body.style.top = prev.top
-      body.style.width = prev.width
-      body.style.paddingRight = prev.paddingRight
+      unlockBodyScroll()
       window.removeEventListener('wheel', onWheel)
       window.removeEventListener('touchmove', onTouchMove)
-      window.scrollTo(0, scrollY)
     }
   }, [shown])
 

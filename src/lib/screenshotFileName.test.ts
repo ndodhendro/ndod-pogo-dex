@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { restoredScreenshotFileName, screenshotFileName } from './screenshotFileName'
+import {
+  restoredScreenshotFileName,
+  sameLookFilenamesCopied,
+  screenshotFileName,
+} from './screenshotFileName'
 
 describe('screenshotFileName', () => {
   it('keeps the basename and extension', () => {
@@ -39,5 +43,25 @@ describe('restoredScreenshotFileName', () => {
     expect(
       restoredScreenshotFileName(new Blob(['x'], { type: 'image/png' }), 'pika.webp'),
     ).toBe('pika.webp')
+  })
+})
+
+describe('sameLookFilenamesCopied', () => {
+  const oldName = 'current.png'
+  const newName = 'incoming.png'
+
+  it('is false until both filenames are copied', () => {
+    expect(sameLookFilenamesCopied({ current: false, next: false }, oldName, newName)).toBe(false)
+    expect(sameLookFilenamesCopied({ current: true, next: false }, oldName, newName)).toBe(false)
+    expect(sameLookFilenamesCopied({ current: false, next: true }, oldName, newName)).toBe(false)
+  })
+
+  it('is true after both filenames are copied', () => {
+    expect(sameLookFilenamesCopied({ current: true, next: true }, oldName, newName)).toBe(true)
+  })
+
+  it('skips a side that has no filename to copy', () => {
+    expect(sameLookFilenamesCopied({ current: false, next: true }, null, newName)).toBe(true)
+    expect(sameLookFilenamesCopied({ current: true, next: false }, oldName, '')).toBe(true)
   })
 })

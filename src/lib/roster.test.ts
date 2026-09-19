@@ -18,6 +18,8 @@ import {
   slotsForEvolutionLine,
   uniqueSearchSpeciesId,
   slotDisplayName,
+  specimenSlotBoxLabel,
+  specimenSlotDisplayName,
   specimenSlotName,
   slotsForSelectedTags,
   slotsForTrack,
@@ -434,6 +436,34 @@ describe('countFilledSlots', () => {
       filled: 2,
     })
   })
+
+  it('counts Paldean Tauros with an Alternate forme breed as pure', () => {
+    const paldean: TagCatalog = { tag: 'paldean', limitPokedex: true, slotMode: 'species' }
+    const combat = specimen({
+      speciesId: 128,
+      form: 'Combat Breed',
+      extraTags: ['paldean', 'alternate-forme'],
+    })
+    const shinyCombat = specimen({
+      speciesId: 128,
+      form: 'Blaze Breed',
+      shiny: true,
+      extraTags: ['paldean', 'alternate-forme'],
+    })
+    const wooper = specimen({ speciesId: 194, extraTags: ['paldean'] })
+    expect(countFilledSlots([combat, wooper], ['paldean'], [paldean], [])).toMatchObject({
+      seen: 2,
+      caught: 2,
+      pure: 2,
+      filled: 2,
+    })
+    expect(countFilledSlots([shinyCombat], ['paldean'], [paldean], [])).toMatchObject({
+      seen: 1,
+      caught: 1,
+      pure: 0,
+      filled: 1,
+    })
+  })
 })
 
 describe('specimenFillsSlot', () => {
@@ -651,15 +681,35 @@ describe('slotDisplayName', () => {
     expect(slotDisplayName(201, 'A')).toBe('Unown A')
     expect(slotDisplayName(849, '')).toBe('Toxtricity Amped Form')
     expect(slotDisplayName(849, 'Low Key Form')).toBe('Toxtricity Low Key Form')
+    expect(slotDisplayName(718, '')).toBe('Zygarde 10% Forme')
+    expect(slotDisplayName(718, '50% Forme')).toBe('Zygarde 50% Forme')
+    expect(slotDisplayName(718, 'Complete Forme')).toBe('Zygarde Complete Forme')
     expect(slotDisplayName(128, '')).toBe('Tauros')
     expect(slotDisplayName(479, 'Fan Rotom')).toBe('Fan Rotom')
     expect(slotDisplayName(720, 'Hoopa Unbound')).toBe('Hoopa Unbound')
     expect(slotDisplayName(646, 'Black Kyurem')).toBe('Black Kyurem')
   })
 
+  it('builds the Transfer species field label from costume, gender, and background', () => {
+    expect(specimenSlotBoxLabel(specimen())).toBe('#0001 Bulbasaur')
+    expect(specimenSlotBoxLabel(specimen({ costume: 'Party Hat' }))).toBe('#0001 Bulbasaur Party Hat')
+    expect(
+      specimenSlotBoxLabel(specimen({ extraTags: ['gender'], gender: 'Female' })),
+    ).toBe('#0001 Bulbasaur Female')
+    expect(specimenSlotBoxLabel(specimen({ background: 'Tokyo' }))).toBe('#0001 Bulbasaur Tokyo')
+    expect(
+      specimenSlotBoxLabel(
+        specimen({ costume: 'Kurta', extraTags: ['gender'], gender: 'Male' }),
+      ),
+    ).toBe('#0001 Bulbasaur Kurta Male')
+    expect(specimenSlotDisplayName(specimen({ costume: 'Party Hat' }))).toBe('Bulbasaur Party Hat')
+  })
+
   it('labels a specimen with its distinctive forme or the Basic default', () => {
     expect(specimenSlotName(849, null)).toBe('Toxtricity Amped Form')
     expect(specimenSlotName(849, 'Low Key Form')).toBe('Toxtricity Low Key Form')
+    expect(specimenSlotName(718, null)).toBe('Zygarde 10% Forme')
+    expect(specimenSlotName(718, '50% Forme')).toBe('Zygarde 50% Forme')
     expect(specimenSlotName(6, 'Mega X')).toBe('Charizard Mega X')
     expect(specimenSlotName(3, 'Mega')).toBe('Venusaur')
     expect(specimenSlotName(26, 'Alolan')).toBe('Raichu')
@@ -695,6 +745,10 @@ describe('Basic Pokédex limit', () => {
     expect(slots.find((slot) => slot.speciesId === 849)).toMatchObject({
       variant: '',
       name: 'Toxtricity Amped Form',
+    })
+    expect(slots.find((slot) => slot.speciesId === 718)).toMatchObject({
+      variant: '',
+      name: 'Zygarde 10% Forme',
     })
     expect(slots.find((slot) => slot.speciesId === 327)).toMatchObject({
       variant: '',

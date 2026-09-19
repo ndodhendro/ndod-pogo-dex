@@ -5,6 +5,7 @@ import { BottomSheet } from '../components/BottomSheet'
 import { CardPreview } from '../components/CardPreview'
 import { DexCard } from '../components/DexCard'
 import { FileNameCopy } from '../components/FileNameCopy'
+import { SearchField } from '../components/SearchField'
 import { SpecimenTagSheet } from '../components/TagSheet'
 import { TagChip } from '../components/TagChip'
 import {
@@ -35,7 +36,7 @@ import {
   type GallerySlot,
 } from '../lib/galleryOrder'
 import { listNeighbor } from '../lib/previewSwipe'
-import { specimenSlotName, slotsForTrack } from '../lib/roster'
+import { specimenSlotDisplayName, slotsForTrack } from '../lib/roster'
 import { toastAfterWrite, useToast } from '../lib/toast'
 import {
   hasAllRequired,
@@ -48,6 +49,7 @@ import {
   type TagId,
 } from '../lib/tags'
 import { specimenMatchesDexFilters } from '../lib/dexGrid'
+import { specimenMatchesGalleryQuery } from '../lib/gallerySearch'
 import styles from './Gallery.module.css'
 
 const EMPTY_CATEGORIES: CategoryRow[] = []
@@ -84,6 +86,7 @@ export function GalleryPage() {
   const [preview, setPreview] = useState<SpecimenRow | null>(null)
   const [editingTags, setEditingTags] = useState(false)
   const [filterTags, setFilterTags] = useState<TagId[]>([])
+  const [query, setQuery] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [draftIds, setDraftIds] = useState<string[] | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -118,8 +121,8 @@ export function GalleryPage() {
   const visibleIdsRef = useRef<string[]>([])
 
   const liveSorted = useMemo(
-    () => sortGallerySpecimens(specimens, categories),
-    [specimens, categories],
+    () => sortGallerySpecimens(specimens, categories, catalogs),
+    [specimens, categories, catalogs],
   )
   const pageTitle = useMemo(() => {
     if (!species) return ''
@@ -139,8 +142,13 @@ export function GalleryPage() {
     })
   }, [orderedIds, liveSorted])
   const visible = useMemo(
-    () => ordered.filter((row) => specimenMatchesDexFilters(row, filterTags)),
-    [ordered, filterTags],
+    () =>
+      ordered.filter(
+        (row) =>
+          specimenMatchesDexFilters(row, filterTags) &&
+          specimenMatchesGalleryQuery(row, query, categories, catalogs),
+      ),
+    [ordered, filterTags, query, categories, catalogs],
   )
   const visibleIds = useMemo(() => visible.map((row) => row.id), [visible])
   orderedIdsRef.current = orderedIds
@@ -159,7 +167,8 @@ export function GalleryPage() {
     dragId && dragRef.current
       ? moveVisibleGalleryId(dragRef.current.originVisible, dragId, targetIndex)
       : visibleIds
-  const filtering = filterTags.length > 0
+  const searching = Boolean(query.trim())
+  const filtering = filterTags.length > 0 || searching
   const tagFilters = useMemo(() => specimenTagChoices(categories).filter((choice) => choice.tag != null), [categories])
   const previewIndex = preview ? visible.findIndex((row) => row.id === preview.id) : -1
   const previewNext = listNeighbor(visible, previewIndex, 1)
@@ -354,24 +363,31 @@ export function GalleryPage() {
           : `${specimens.length} specimen${specimens.length === 1 ? '' : 's'}`}
       </p>
       <div className={styles.toolbar}>
+        <SearchField
+          className={styles.search}
+          value={query}
+          onChange={setQuery}
+          placeholder="Search"
+          aria-label="Search names"
+        />
         <button
           type="button"
           className={`btn ${styles.toolBtn}`}
           data-tone={category ? toneForCategory(category) : 'dex'}
-          data-on={filtering ? 'true' : 'false'}
+          data-on={filterTags.length > 0 ? 'true' : 'false'}
           aria-haspopup="dialog"
           aria-expanded={filtersOpen}
           onClick={() => setFiltersOpen(true)}
         >
           <span aria-hidden="true">🏷️</span>
           Filters
-          {filtering ? <span className={styles.badge}>{filterTags.length}</span> : null}
+          {filterTags.length > 0 ? <span className={styles.badge}>{filterTags.length}</span> : null}
         </button>
       </div>
       {specimens.length === 0 ? (
         <p className="empty-state">No screenshots for this species yet.</p>
       ) : visible.length === 0 ? (
-        <p className="empty-state">No matching tags.</p>
+        <p className="empty-state">{searching ? 'No matching names.' : 'No matching tags.'}</p>
       ) : (
         <div ref={gridRef} className={styles.grid} data-reordering={dragId ? 'true' : 'false'}>
           {display.map((specimen, originIndex) => {
@@ -389,6 +405,7 @@ export function GalleryPage() {
                 key={specimen.id}
                 specimen={specimen}
                 categories={categories}
+                catalogs={catalogs}
                 purity={
                   coverRows.some((row) => row.specimenId === specimen.id) && category
                     ? coverPurity(
@@ -515,6 +532,7 @@ function galleryTagLabel(tag: TagId, specimen: SpecimenRow, categories: Category
 function GalleryCard({
   specimen,
   categories,
+  catalogs,
   purity,
   dragging,
   shift,
@@ -525,6 +543,7 @@ function GalleryCard({
 }: {
   specimen: SpecimenRow
   categories: CategoryRow[]
+  catalogs: TagCatalogRow[]
   purity: ReturnType<typeof coverPurity>
   dragging: boolean
   shift: { x: number; y: number }
@@ -534,7 +553,7 @@ function GalleryCard({
   onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => void
 }) {
   const url = useImageUrl(specimen.imageId, 'thumb')
-  const name = specimenSlotName(specimen.speciesId, specimen.form)
+  const name = specimenSlotDisplayName(specimen, catalogs)
   const [expandedTag, setExpandedTag] = useState<string | null>(null)
   const tags = sortSpecimenTags(specimenTags(specimen), categories)
   const items = [

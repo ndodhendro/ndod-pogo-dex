@@ -28,6 +28,8 @@ export type CoverSilhouetteOpts = {
 }
 
 const SNEASEL_ID = 215
+const TAUROS_ID = 128
+const ALTERNATE_FORME_TAG = 'alternate-forme'
 
 function tagsAreExactly(tags: readonly TagId[], wanted: readonly TagId[]) {
   if (tags.length !== wanted.length) return false
@@ -45,9 +47,20 @@ function isHisuianSneaselGender(speciesId: number | undefined, gender: string | 
   return label === 'hisuian male' || label === 'hisuian female'
 }
 
-function tagsForOtherCategoryPurity(tags: readonly TagId[], required: readonly TagId[]): TagId[] {
+function isPaldeanTauros(speciesId: number | undefined, required: readonly TagId[]) {
+  return speciesId === TAUROS_ID && required.includes('paldean')
+}
+
+function tagsForOtherCategoryPurity(
+  tags: readonly TagId[],
+  required: readonly TagId[],
+  speciesId?: number,
+): TagId[] {
   let next = required.includes('gender') ? [...tags] : tags.filter((tag) => tag !== 'gender')
   if (required.length === 0) next = next.filter((tag) => tag !== BASIC_CROP_TAG)
+  if (isPaldeanTauros(speciesId, required) && !required.includes(ALTERNATE_FORME_TAG)) {
+    next = next.filter((tag) => tag !== ALTERNATE_FORME_TAG)
+  }
   return next
 }
 
@@ -66,7 +79,7 @@ export function isGreenCover(
     }
     return tagsAreExactly(tags, ['gender']) || tagsAreExactly(tags, ['gender', BASIC_CROP_TAG])
   }
-  return isExactMatch(tagsForOtherCategoryPurity(tags, required), required)
+  return isExactMatch(tagsForOtherCategoryPurity(tags, required, speciesId), required)
 }
 
 export function coverPurity(

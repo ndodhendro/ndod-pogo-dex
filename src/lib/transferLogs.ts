@@ -1,8 +1,8 @@
-import { db, type SpecimenRow, type TransferLogRow } from './db'
+import { db, type InboxRow, type SpecimenRow, type TransferLogRow } from './db'
 import { newId } from './id'
 import { extraTagList, fieldsFromSpecimen, isNotPure, isSilhouette, type SpecimenFields } from './tags'
 
-export type TransferLogAction = 'save' | 'edit' | 'delete' | 'restore'
+export type TransferLogAction = 'save' | 'edit' | 'delete' | 'restore' | 'discard'
 
 export const TRANSFER_LOG_LIMIT = 100
 
@@ -11,6 +11,7 @@ export const TRANSFER_LOG_ACTIONS: Record<TransferLogAction, { icon: string; lab
   edit: { icon: '🏷️', label: 'Edited' },
   delete: { icon: '🗑️', label: 'Deleted' },
   restore: { icon: '☁️', label: 'Restored' },
+  discard: { icon: '🗑️', label: 'Discarded' },
 }
 
 export function sortTransferLogs<T extends { createdAt: number; updatedAt: number }>(
@@ -39,6 +40,41 @@ export function transferLogHasSnapshot(
   log: TransferLogRow,
 ): log is TransferLogRow & { speciesId: number } {
   return typeof log.speciesId === 'number' && log.speciesId > 0
+}
+
+export function transferLogIsUntaggedDiscard(log: TransferLogRow): boolean {
+  return log.action === 'discard' && !transferLogHasSnapshot(log)
+}
+
+export function transferLogIsListed(log: TransferLogRow, live?: SpecimenRow): boolean {
+  return transferLogIsUntaggedDiscard(log) || transferLogHasSnapshot(log) || Boolean(live)
+}
+
+export function inboxDiscardLogSnapshot(
+  inbox: Pick<InboxRow, 'id' | 'imageId' | 'fileName'>,
+  thumb?: Blob,
+): Omit<TransferLogRow, 'id' | 'createdAt' | 'updatedAt'> {
+  return {
+    specimenId: inbox.id,
+    action: 'discard',
+    imageId: inbox.imageId,
+    fileName: inbox.fileName ?? null,
+    thumb,
+  }
+}
+
+/** Live photo only when it is still the same file the log row captured. */
+export function transferLogLiveImageId(
+  log: Pick<TransferLogRow, 'imageId'>,
+  live?: Pick<SpecimenRow, 'imageId'>,
+): string | undefined {
+  if (!live?.imageId) return undefined
+  if (log.imageId && log.imageId !== live.imageId) return undefined
+  return live.imageId
+}
+
+export function replaceTransferLogTimes(now = Date.now()) {
+  return { deletedAt: now, savedAt: now + 1 }
 }
 
 export function specimenFromTransferLog(
@@ -110,7 +146,7 @@ function snapshotFromSpecimen(
   }
 }
 
-/** Always insert so save, edit, delete, and restore stay as separate history rows. */
+/** Always insert so save, edit, delete, restore, and discard stay as separate history rows. */
 export async function appendTransferLog(
   specimen: SpecimenRow,
   action: TransferLogAction,
@@ -118,10 +154,25 @@ export async function appendTransferLog(
   options: { prune?: boolean } = {},
 ) {
   const image = await db.images.get(specimen.imageId)
-  const snapshot = snapshotFromSpecimen(specimen, action, image?.thumb)
+  const snapshot = snapshotFromSpecimen(specimen, action, image?.thumb?.slice())
   await db.transferLogs.add({
     id: newId(),
     ...snapshot,
+    createdAt: now,
+    updatedAt: now,
+  })
+  if (options.prune !== false) await pruneTransferLogs()
+}
+
+export async function appendInboxDiscardLog(
+  inbox: InboxRow,
+  now = Date.now(),
+  options: { prune?: boolean } = {},
+) {
+  const image = await db.images.get(inbox.imageId)
+  await db.transferLogs.add({
+    id: newId(),
+    ...inboxDiscardLogSnapshot(inbox, image?.thumb?.slice()),
     createdAt: now,
     updatedAt: now,
   })

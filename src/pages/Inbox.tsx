@@ -32,18 +32,19 @@ import {
 import {
   INBOX_SORT_EMOJI,
   INBOX_SORT_LABEL,
-  mergeInboxDisplay,
-  nextInboxSort,
-  sameInboxOrder,
+  sortInboxByFileName,
   type InboxSortDir,
 } from '../lib/inboxOrder'
 import { isProbablyImageFile } from '../lib/images'
+import { sameLookFilenamesCopied } from '../lib/screenshotFileName'
 import { useToast } from '../lib/toast'
 import {
   pruneTransferLogs,
   sortTransferLogs,
   specimenFromTransferLog,
-  transferLogHasSnapshot,
+  transferLogIsListed,
+  transferLogIsUntaggedDiscard,
+  transferLogLiveImageId,
   TRANSFER_LOG_ACTIONS,
   TRANSFER_LOG_LIMIT,
 } from '../lib/transferLogs'
@@ -82,7 +83,7 @@ export function InboxPage() {
       .slice(0, TRANSFER_LOG_LIMIT)
       .flatMap((log) => {
       const live = byId.get(log.specimenId)
-      if (!transferLogHasSnapshot(log) && !live) return []
+      if (!transferLogIsListed(log, live)) return []
       return [{ log, specimen: specimenFromTransferLog(log, live), live }]
     })
   }, [logRows, specimens])
@@ -93,19 +94,14 @@ export function InboxPage() {
   const [discardBusy, setDiscardBusy] = useState(false)
   const [discardAllBusy, setDiscardAllBusy] = useState(false)
   const [duplicateBusy, setDuplicateBusy] = useState(false)
+  const [duplicateCopied, setDuplicateCopied] = useState({ current: false, next: false })
   const [adding, setAdding] = useState(false)
   const [view, setView] = useState<TransferView>('untagged')
   const [sortDir, setSortDir] = useState<InboxSortDir>('asc')
-  const [orderIds, setOrderIds] = useState<string[]>([])
   const showingLogs = view === 'logs'
   const canDiscardAll = !showingLogs && items.length > 0
-  const displayed = useMemo(() => mergeInboxDisplay(items, orderIds), [items, orderIds])
+  const displayed = useMemo(() => sortInboxByFileName(items, sortDir), [items, sortDir])
   const showSort = canDiscardAll
-
-  useEffect(() => {
-    const next = displayed.map((row) => row.id)
-    setOrderIds((prev) => (sameInboxOrder(prev, next) ? prev : next))
-  }, [displayed])
 
   useEffect(() => {
     importPendingShares().catch(() => {
@@ -116,6 +112,10 @@ export function InboxPage() {
   useEffect(() => {
     void pruneTransferLogs()
   }, [])
+
+  useEffect(() => {
+    setDuplicateCopied({ current: false, next: false })
+  }, [pendingDuplicate?.item.id, pendingDuplicate?.existing.id])
 
   async function onFiles(list: File[]) {
     if (list.length === 0) return
@@ -174,9 +174,26 @@ export function InboxPage() {
     }
   }
 
+  function requireDuplicateCopies() {
+    const pending = pendingDuplicate
+    if (!pending) return false
+    if (
+      sameLookFilenamesCopied(
+        duplicateCopied,
+        pending.existing.fileName,
+        pending.item.fileName,
+      )
+    ) {
+      return true
+    }
+    showToast('Copy both screenshot filenames first', 'warning')
+    return false
+  }
+
   async function confirmDuplicateReplace() {
     const pending = pendingDuplicate
     if (!pending || duplicateBusy) return
+    if (!requireDuplicateCopies()) return
     setDuplicateBusy(true)
     try {
       const result = await replaceSpecimenFromInbox(
@@ -199,6 +216,7 @@ export function InboxPage() {
   async function confirmDuplicateDiscard() {
     const pending = pendingDuplicate
     if (!pending || duplicateBusy) return
+    if (!requireDuplicateCopies()) return
     setDuplicateBusy(true)
     try {
       await discardInbox(pending.item.id)
@@ -241,11 +259,7 @@ export function InboxPage() {
               aria-label={
                 sortDir === 'asc' ? 'Sort filename A to Z' : 'Sort filename Z to A'
               }
-              onClick={() => {
-                const next = nextInboxSort(displayed, sortDir)
-                setSortDir(next.dir)
-                setOrderIds(next.ids)
-              }}
+              onClick={() => setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'))}
             >
               <span aria-hidden="true">{INBOX_SORT_EMOJI[sortDir]}</span>
               {INBOX_SORT_LABEL[sortDir]}
@@ -308,16 +322,19 @@ export function InboxPage() {
             <p className="empty-state">No logs yet.</p>
           ) : (
             <div className={styles.logList}>
-              {logs.map(({ log, specimen, live }) => (
-                <TransferLogItem
-                  key={log.id}
-                  log={log}
-                  specimen={specimen}
-                  liveImageId={live?.imageId}
-                  liveFileName={live?.fileName}
-                  categories={categories}
-                />
-              ))}
+              {logs.map(({ log, specimen, live }) => {
+                const liveImageId = transferLogLiveImageId(log, live)
+                return (
+                  <TransferLogItem
+                    key={log.id}
+                    log={log}
+                    specimen={specimen}
+                    liveImageId={liveImageId}
+                    liveFileName={liveImageId ? live?.fileName : undefined}
+                    categories={categories}
+                  />
+                )
+              })}
             </div>
           )}
         </section>
@@ -389,12 +406,14 @@ export function InboxPage() {
               imageId={pendingDuplicate.existing.imageId}
               fileName={pendingDuplicate.existing.fileName}
               label="Current"
+              onCopied={() => setDuplicateCopied((prev) => ({ ...prev, current: true }))}
             />
             <DuplicateShot
               imageId={pendingDuplicate.item.imageId}
               fileName={pendingDuplicate.item.fileName}
               label="New"
               tone="inbox"
+              onCopied={() => setDuplicateCopied((prev) => ({ ...prev, next: true }))}
             />
           </div>
         ) : null}
@@ -493,11 +512,13 @@ function DuplicateShot({
   fileName,
   label,
   tone,
+  onCopied,
 }: {
   imageId: string
   fileName?: string | null
   label: string
   tone?: string
+  onCopied?: () => void
 }) {
   const url = useImageUrl(imageId, 'medium')
   return (
@@ -508,7 +529,12 @@ function DuplicateShot({
       <div className={styles.shotFrame}>
         {url ? <img src={url} alt={label} /> : <span />}
       </div>
-      <FileNameCopy fileName={fileName} size="sm" className={styles.shotFileName} />
+      <FileNameCopy
+        fileName={fileName}
+        size="sm"
+        className={styles.shotFileName}
+        onCopied={onCopied}
+      />
     </figure>
   )
 }
@@ -547,9 +573,10 @@ function TransferLogItem({
   const liveUrl = useImageUrl(liveImageId, 'thumb')
   const blobUrl = useBlobUrl(log.thumb)
   const url = liveUrl ?? blobUrl
+  const untagged = transferLogIsUntaggedDiscard(log)
   const species = SPECIES_BY_ID.get(specimen.speciesId)
-  const tags = sortSpecimenTags(specimenTags(specimen), categories)
-  const progress = specimenProgressFlags(specimen, categories)
+  const tags = untagged ? [] : sortSpecimenTags(specimenTags(specimen), categories)
+  const progress = untagged ? { seen: false, caught: false, pure: false } : specimenProgressFlags(specimen, categories)
   const action = TRANSFER_LOG_ACTIONS[log.action ?? 'save']
   return (
     <article className={styles.item}>
@@ -567,10 +594,14 @@ function TransferLogItem({
         <p className={`page-sub ${styles.itemTime}`}>
           {new Date(log.updatedAt).toLocaleString()}
         </p>
-        <p className={styles.logSpecies}>
-          <span className={styles.logId}>#{String(specimen.speciesId).padStart(4, '0')}</span>
-          {species?.name ?? 'Unknown'}
-        </p>
+        {untagged ? (
+          <strong data-tone="inbox">Untagged</strong>
+        ) : (
+          <p className={styles.logSpecies}>
+            <span className={styles.logId}>#{String(specimen.speciesId).padStart(4, '0')}</span>
+            {species?.name ?? 'Unknown'}
+          </p>
+        )}
         {DEX_PROGRESS_KINDS.some((kind) => progress[kind]) ? (
           <div className={styles.logStatus}>
             {DEX_PROGRESS_KINDS.filter((kind) => progress[kind]).map((kind) => {

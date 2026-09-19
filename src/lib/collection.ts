@@ -33,7 +33,7 @@ import {
   specimenFillsSlot,
   type SlotMode,
 } from './roster'
-import { appendTransferLog } from './transferLogs'
+import { appendInboxDiscardLog, appendTransferLog, replaceTransferLogTimes } from './transferLogs'
 import {
   extraTagList,
   isNotPure,
@@ -70,7 +70,8 @@ export async function discardInbox(id: string) {
   const row = await db.inbox.get(id)
   if (!row) return
   let droppedImage = false
-  await db.transaction('rw', db.inbox, db.images, db.specimens, async () => {
+  await db.transaction('rw', db.inbox, db.images, db.specimens, db.transferLogs, async () => {
+    await appendInboxDiscardLog(row)
     await db.inbox.delete(id)
     const used = await db.specimens.where('imageId').equals(row.imageId).count()
     if (used === 0) {
@@ -229,6 +230,8 @@ export async function replaceSpecimenFromInbox(
     'rw',
     [db.specimens, db.inbox, db.covers, db.images, db.categories, db.transferLogs],
     async () => {
+    const { deletedAt, savedAt } = replaceTransferLogTimes()
+    await appendTransferLog(existing, 'delete', deletedAt, { prune: false })
     await db.specimens.put(updated)
     await db.inbox.delete(inboxId)
     const imageStillUsed =
@@ -259,7 +262,7 @@ export async function replaceSpecimenFromInbox(
         await db.covers.delete([mutation.categoryId, mutation.speciesId, mutation.variant])
       }
     }
-    await appendTransferLog(updated, 'save')
+    await appendTransferLog(updated, 'save', savedAt)
   })
 
   if (oldImageId !== inbox.imageId) forgetImageUrls(oldImageId)

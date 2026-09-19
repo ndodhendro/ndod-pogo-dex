@@ -53,6 +53,7 @@ import {
   type TagCatalogRow,
   type TagRosterRow,
 } from '../lib/db'
+import { readDexViewState, writeDexViewState } from '../lib/dexViewState'
 import { listNeighbor } from '../lib/previewSwipe'
 import {
   countFilledSlots,
@@ -89,10 +90,12 @@ export function DexPage() {
   const { categoryId } = useParams()
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const [query, setQuery] = useState('')
-  const [showEvolutionLine, setShowEvolutionLine] = useState(false)
-  const [progressFilter, setProgressFilter] = useState<DexProgressKind | null>(null)
-  const [filterTags, setFilterTags] = useState<TagId[]>([])
+  const [query, setQuery] = useState(() => readDexViewState(categoryId).query)
+  const [showEvolutionLine, setShowEvolutionLine] = useState(() => readDexViewState(categoryId).showEvolutionLine)
+  const [progressFilter, setProgressFilter] = useState<DexProgressKind | null>(
+    () => readDexViewState(categoryId).progressFilter,
+  )
+  const [filterTags, setFilterTags] = useState<TagId[]>(() => readDexViewState(categoryId).filterTags)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [preview, setPreview] = useState<SpecimenRow | null>(null)
   const [editingTags, setEditingTags] = useState(false)
@@ -103,6 +106,15 @@ export function DexPage() {
   useEffect(() => {
     void ensureSeedCategories()
   }, [])
+
+  useEffect(() => {
+    writeDexViewState(categoryId, {
+      query,
+      filterTags,
+      progressFilter,
+      showEvolutionLine,
+    })
+  }, [categoryId, query, filterTags, progressFilter, showEvolutionLine])
 
   useLayoutEffect(() => {
     if (!host) return

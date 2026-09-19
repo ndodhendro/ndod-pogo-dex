@@ -171,6 +171,15 @@ describe('GO regional and alternate forme lists', () => {
     expect(GO_ALTERNATE_FORME.some((row) => row.speciesId === 849 && row.variant === 'Amped Form')).toBe(
       false,
     )
+    expect(GO_ALTERNATE_FORME.some((row) => row.speciesId === 718 && row.variant === '50% Forme')).toBe(
+      true,
+    )
+    expect(
+      GO_ALTERNATE_FORME.some((row) => row.speciesId === 718 && row.variant === 'Complete Forme'),
+    ).toBe(true)
+    expect(GO_ALTERNATE_FORME.some((row) => row.speciesId === 718 && row.variant === '10% Forme')).toBe(
+      false,
+    )
     expect(goFormSpeciesIds('costume')).toBeNull()
   })
 
@@ -256,6 +265,7 @@ describe('Basic default forme labels', () => {
     expect(basicDefaultForme(710)).toBe('Medium Variety')
     expect(basicDefaultForme(741)).toBe('Baile Style')
     expect(basicDefaultForme(849)).toBe('Amped Form')
+    expect(basicDefaultForme(718)).toBe('10% Forme')
     expect(basicDefaultForme(892)).toBe('Single Strike Style')
     expect(basicDefaultForme(925)).toBe('Family of Four')
     expect(basicDefaultForme(1)).toBe('')

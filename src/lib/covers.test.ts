@@ -274,6 +274,38 @@ describe('covers', () => {
       ),
     ).toBe('pair')
   })
+
+  it('treats Paldean Tauros plus any Alternate forme as green', () => {
+    expect(coverPurity(['paldean', 'alternate-forme'], ['paldean'], false, 128)).toBe('green')
+    expect(coverPurity(['paldean', 'alternate-forme', 'gender'], ['paldean'], false, 128)).toBe('green')
+    expect(coverPurity(['paldean'], ['paldean'], false, 128)).toBe('green')
+    expect(coverPurity(['paldean', 'shiny', 'alternate-forme'], ['paldean', 'shiny'], false, 128)).toBe(
+      'green',
+    )
+    expect(coverPurity(['paldean', 'alternate-forme', 'shiny'], ['paldean'], false, 128)).toBe('gray')
+    expect(coverPurity(['paldean', 'alternate-forme'], ['paldean'], false, 194)).toBe('gray')
+    expect(coverPurity(['paldean', 'alternate-forme'], ['alternate-forme'], false, 128)).toBe('gray')
+    expect(
+      shouldAutoReplaceCover(['paldean'], ['paldean', 'shiny'], ['paldean', 'alternate-forme'], {
+        speciesId: 128,
+      }),
+    ).toBe(true)
+    expect(
+      shouldAutoReplaceCover(['paldean'], ['paldean'], ['paldean', 'alternate-forme'], {
+        speciesId: 128,
+      }),
+    ).toBe(false)
+    expect(
+      pickCoverAfterDelete(
+        ['paldean'],
+        [
+          { id: 'shiny', tags: ['paldean', 'shiny'], createdAt: 3 },
+          { id: 'breed', tags: ['paldean', 'alternate-forme'], createdAt: 1 },
+        ],
+        128,
+      ),
+    ).toBe('breed')
+  })
 })
 
 type CoverSpecimen = SpecimenFields & { id: string; createdAt: number }
@@ -396,6 +428,34 @@ describe('coverMutationsAfterEdit', () => {
         [marked, incoming],
       ),
     ).toEqual([{ op: 'put', categoryId: 'shadow', speciesId: 1, variant: '', specimenId: 'incoming' }])
+  })
+
+  it('does not auto-replace a green Paldean Tauros cover with another breed', () => {
+    const paldeanCat = { id: 'paldean', requiredTags: ['paldean'] as TagId[] }
+    const catalogs = [{ tag: 'paldean' as TagId, limitPokedex: true, slotMode: 'species' as const }]
+    const combat = spec({
+      id: 'combat',
+      speciesId: 128,
+      form: 'Combat Breed',
+      extraTags: ['paldean', 'alternate-forme'],
+    })
+    const blaze = spec({
+      id: 'blaze',
+      speciesId: 128,
+      form: 'Blaze Breed',
+      extraTags: ['paldean', 'alternate-forme'],
+      createdAt: 2,
+    })
+    expect(
+      coverMutationsAfterEdit(
+        blaze,
+        blaze,
+        [paldeanCat],
+        [{ categoryId: 'paldean', speciesId: 128, specimenId: 'combat' }],
+        [combat, blaze],
+        catalogs,
+      ),
+    ).toEqual([])
   })
 
   it('auto-replaces a gray Hisuian Sneasel Gender cover with gender+hisuian', () => {

@@ -1,5 +1,6 @@
 import { insertCategoryIdAt } from './categoryOrder'
 import { isGreenCover } from './covers'
+import { specimenSlotBoxLabel, type TagCatalog } from './roster'
 import { hasAllRequired, isNotPure, isSilhouette, specimenTags, type SpecimenFields, type TagId } from './tags'
 
 export type GalleryCategory = {
@@ -50,10 +51,17 @@ export function galleryDefaultRank(specimen: SpecimenFields, categories: readonl
 export function sortGallerySpecimens<T extends SpecimenFields & { id: string; gallerySort?: number | null }>(
   rows: readonly T[],
   categories: readonly GalleryCategory[] = [],
+  catalogs: readonly TagCatalog[] = [],
 ): T[] {
   return rows
     .map((row, index) => ({ row, index }))
     .sort((a, b) => {
+      const name = specimenSlotBoxLabel(a.row, catalogs).localeCompare(
+        specimenSlotBoxLabel(b.row, catalogs),
+        undefined,
+        { sensitivity: 'base' },
+      )
+      if (name !== 0) return name
       const aCustom = a.row.gallerySort
       const bCustom = b.row.gallerySort
       const aHas = typeof aCustom === 'number'

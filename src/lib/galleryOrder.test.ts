@@ -119,6 +119,21 @@ describe('sortGallerySpecimens', () => {
       ).map((row) => row.id),
     ).toEqual(['fresh', 'a', 'b'])
   })
+
+  it('groups by the Transfer species label before the current tag order', () => {
+    expect(
+      sortGallerySpecimens(
+        [
+          spec('shadow-hat', { costume: 'Party Hat', shadowStatus: 'shadow' }),
+          spec('shiny', { shiny: true }),
+          spec('female', { extraTags: ['gender'], gender: 'Female' }),
+          spec('hat', { costume: 'Party Hat' }),
+          spec('basic'),
+        ],
+        categories,
+      ).map((row) => row.id),
+    ).toEqual(['basic', 'shiny', 'female', 'hat', 'shadow-hat'])
+  })
 })
 
 describe('applyVisibleGalleryOrder', () => {

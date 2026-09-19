@@ -23,6 +23,6 @@ The preview shows the specimen photo at original size (not the grid thumb) and *
 
 Example: Shadow Dex cover that is shiny+shadow+Tokyo → purple aura **and** sparkles, Tokyo photo, chips for all tags.
 
-Keep VFX on preview only (one card). CSS/Canvas, pause when closed, respect `prefers-reduced-motion` (static glow). Preview actions: `Set as cover`, open species gallery, `Edit tags`, delete specimen. No pin.
+Keep VFX on preview only (one card). CSS/Canvas, pause when closed, respect `prefers-reduced-motion` (static glow). Preview actions: `Set as cover`, open Galleries, `Edit tags`, delete specimen. No pin.
 
 `Edit tags` opens the same tagging sheet as Transfer (species, tags, crop), pre-filled. After save, preview VFX and chips update. If the specimen no longer belongs on the current dex track, close preview and return to the grid. Do not toggle chips on the preview photo itself.

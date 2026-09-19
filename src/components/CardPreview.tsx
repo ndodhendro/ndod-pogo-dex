@@ -426,7 +426,7 @@ export function CardPreview({
             Set as cover
           </button>
           <button type="button" className="btn" onClick={onOpenGallery}>
-            Species gallery
+            Galleries
           </button>
           <button type="button" className="btn" onClick={onEditTags}>
             <span aria-hidden="true">🏷️</span>

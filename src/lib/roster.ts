@@ -177,6 +177,28 @@ export function slotBoxLabel(slot: Pick<DexSlotDef, 'speciesId' | 'variant' | 'n
   return `${number} ${slot.name}`
 }
 
+/** Same label as the Transfer species field: number plus forme, costume, gender, background. */
+export function specimenSlotBoxLabel(
+  fields: SpecimenFields,
+  catalogs: readonly TagCatalog[] = [],
+): string {
+  if (!fields.speciesId || !SPECIES_BY_ID.has(fields.speciesId)) return ''
+  const variant = slotVariantForTrack(fields, specimenTags(fields), catalogs)
+  return slotBoxLabel({
+    speciesId: fields.speciesId,
+    variant,
+    name: slotDisplayName(fields.speciesId, variant),
+  })
+}
+
+export function specimenSlotDisplayName(
+  fields: SpecimenFields,
+  catalogs: readonly TagCatalog[] = [],
+): string {
+  const variant = slotVariantForTrack(fields, specimenTags(fields), catalogs)
+  return slotDisplayName(fields.speciesId, variant)
+}
+
 export function nationalDexSlots(): DexSlotDef[] {
   return SPECIES.map((species) => ({
     speciesId: species.id,

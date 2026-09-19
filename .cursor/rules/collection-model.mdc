@@ -14,6 +14,7 @@ A **category** is a name plus a set of required tags the user picks. Seed defaul
 - Basic = no required tags. Transfer stores a `basic` extra tag for that look. Basic may be paired only with Gender (`{basic}` or `{basic, gender}`). Other tags turn Basic off.
 - On any category except Gender, adding `gender` on top of an otherwise exact match stays green.
 - Gender is green for `{gender}` or `{gender, basic}`. Hisuian Sneasel (Hisuian Male / Hisuian Female) is green only for `{gender, hisuian}`.
+- Paldean Tauros is green for `{paldean}` or `{paldean, alternate-forme}` (any Combat / Blaze / Aqua Breed). Extra `gender` still stays green. Paldean Wooper needs `{paldean}` with no Alternate forme tag.
 - A custom category saved with **no picked tags** (Lucky, etc.) defines one new atomic tag from its name. That tag shows in required tags and on Transfer.
 - Picking existing tags makes a combo track (`[shadow, hundo]`). Do not store a combo name as a tag (`shadow_shiny_polos`).
 - Shadow polos = category tags `[shadow]` only. Do not add an IV tag unless the category is meant to be Shadow Hundo / Shadow Nundo.

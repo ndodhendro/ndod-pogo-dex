@@ -119,6 +119,7 @@ export const GO_ALTERNATE_FORME_FAMILIES: Readonly<Record<number, readonly strin
   710: PUMPKABOO_SIZES,
   711: PUMPKABOO_SIZES,
   716: ['Neutral Mode', 'Active Mode'],
+  // Zygarde Basic is 10% Forme; 50% and Complete stay on Alternate forme.
   718: ['10% Forme', '50% Forme', 'Complete Forme'],
   720: ['Hoopa Confined', 'Hoopa Unbound'],
   741: ['Baile Style', "Pa'u Style", 'Pom-Pom Style', 'Sensu Style'],

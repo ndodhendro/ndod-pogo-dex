@@ -15,11 +15,10 @@ import {
   searchSlots,
   slotBoxLabel,
   slotDisplayName,
+  specimenSlotBoxLabel,
   slotsForSelectedTags,
-  slotVariantForTrack,
   variantFieldComesFromSlot,
   type DexSlotDef,
-  type TagCatalog,
 } from '../lib/roster'
 import { parseCropBottom } from '../lib/screenshotCrop'
 import { readPokemonName } from '../lib/screenshotOcr'
@@ -95,21 +94,6 @@ function rosterVariantNames(
   return [...names].sort((a, b) => a.localeCompare(b))
 }
 
-function selectedSlotLabel(
-  fields: SpecimenFields,
-  tags: TagId[],
-  catalogs: readonly TagCatalog[],
-) {
-  const species = fields.speciesId ? SPECIES_BY_ID.get(fields.speciesId) : undefined
-  if (!species) return ''
-  const variant = slotVariantForTrack(fields, tags, catalogs)
-  return slotBoxLabel({
-    speciesId: species.id,
-    variant,
-    name: slotDisplayName(species.id, variant),
-  })
-}
-
 function baseSpeciesBoxLabel(speciesId: number) {
   return slotBoxLabel({
     speciesId,
@@ -180,7 +164,7 @@ export function TagSheet({
     Boolean(fields.silhouette),
   )
   const cropBottom = parseCropBottom(heightDraft, suggestedHeight)
-  const selectedLabel = selectedSlotLabel(fields, tags, catalogs)
+  const selectedLabel = specimenSlotBoxLabel(fields, catalogs)
   const availableSlots = useMemo(
     () => slotsForSelectedTags(tags, catalogs, roster),
     [tags, catalogs, roster],
@@ -245,7 +229,7 @@ export function TagSheet({
     const next = seed ? fieldsFromSpecimen(seed) : emptyFields()
     setFields(next)
     const species = next.speciesId ? SPECIES_BY_ID.get(next.speciesId) : undefined
-    setQuery(species ? selectedSlotLabel(next, specimenTags(next), []) : '')
+    setQuery(species ? specimenSlotBoxLabel(next) : '')
   }, [open, resetKey])
 
   useEffect(() => {
@@ -444,7 +428,7 @@ export function TagSheet({
                   const costume = e.target.value
                   setFields((current) => {
                     const next = { ...current, costume }
-                    const label = selectedSlotLabel(next, specimenTags(next), catalogs)
+                    const label = specimenSlotBoxLabel(next, catalogs)
                     if (label) setQuery(label)
                     return next
                   })
@@ -470,7 +454,7 @@ export function TagSheet({
                   const background = e.target.value
                   setFields((current) => {
                     const next = { ...current, background }
-                    const label = selectedSlotLabel(next, specimenTags(next), catalogs)
+                    const label = specimenSlotBoxLabel(next, catalogs)
                     if (label) setQuery(label)
                     return next
                   })
@@ -504,7 +488,7 @@ export function TagSheet({
               if (value !== selectedLabel) setSpeciesMenuOpen(false)
               setFields((f) => {
                 if (!f.speciesId) return f
-                if (value === selectedSlotLabel(f, specimenTags(f), catalogs)) return f
+                if (value === specimenSlotBoxLabel(f, catalogs)) return f
                 return { ...f, speciesId: 0 }
               })
             }}

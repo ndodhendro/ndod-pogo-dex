@@ -16,3 +16,14 @@ export function restoredScreenshotFileName(
 ): string | null {
   return screenshotFileName(file) ?? screenshotFileName(stored)
 }
+
+/** Same look: Discard/Replace wait until both visible filenames have been copied. */
+export function sameLookFilenamesCopied(
+  copied: { current: boolean; next: boolean },
+  currentFileName?: string | null,
+  newFileName?: string | null,
+): boolean {
+  const needCurrent = Boolean(screenshotFileName(currentFileName))
+  const needNew = Boolean(screenshotFileName(newFileName))
+  return (!needCurrent || copied.current) && (!needNew || copied.next)
+}

@@ -219,7 +219,8 @@
   color: var(--color-settings-text);
 }
 
-.logAction[data-action='delete'] {
+.logAction[data-action='delete'],
+.logAction[data-action='discard'] {
   color: var(--color-danger);
 }
 

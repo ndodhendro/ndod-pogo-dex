@@ -8,9 +8,10 @@ type Props = {
   fileName?: string | null
   size?: 'sm' | 'md' | 'compact'
   className?: string
+  onCopied?: () => void
 }
 
-export function FileNameCopy({ fileName, size = 'sm', className }: Props) {
+export function FileNameCopy({ fileName, size = 'sm', className, onCopied }: Props) {
   const { showToast } = useToast()
   const name = screenshotFileName(fileName)
   if (!name) return null
@@ -21,6 +22,7 @@ export function FileNameCopy({ fileName, size = 'sm', className }: Props) {
     event.preventDefault()
     try {
       await copyText(label)
+      onCopied?.()
       showToast('Filename copied', 'success')
     } catch {
       showToast('Could not copy filename')
