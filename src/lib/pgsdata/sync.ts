@@ -1,21 +1,15 @@
-import {
-  countAdded,
-  countRemoved,
-  dumpFeedsJson,
-  parseFeedsJson,
-  syncFeeds,
-  type FeedSyncChange,
-  type PgsFeed,
-} from './feeds'
+import { rebuildFeeds, dumpFeedsJson, parseFeedsJson, type FeedRebuildStats, type PgsFeed } from './feeds'
 import { HLFEEDS_KEY, packJavaHashMap, parseJavaHashMap, type HashMapPayload } from './javaHashMap'
 import type { CategoryRow, SpecimenRow, TagCatalogRow, TagRosterRow } from '../db'
 
-export type PgsDataSyncResult = {
+export type PgsDataFile = {
+  payload: HashMapPayload
+  feeds: PgsFeed[]
+}
+
+export type PgsDataPackResult = {
   bytes: Uint8Array
   feeds: PgsFeed[]
-  changes: FeedSyncChange[]
-  removed: number
-  added: number
 }
 
 export function extractFeeds(payload: HashMapPayload): PgsFeed[] {
@@ -34,28 +28,28 @@ export function setFeeds(payload: HashMapPayload, feeds: PgsFeed[]): HashMapPayl
   }
 }
 
-export function syncPgsData(
-  data: Uint8Array,
+export function openPgsData(data: Uint8Array): PgsDataFile {
+  const payload = parseJavaHashMap(data)
+  return { payload, feeds: extractFeeds(payload) }
+}
+
+export function fillPgsFeeds(
+  feeds: PgsFeed[],
   specimens: readonly SpecimenRow[],
   categories: readonly CategoryRow[],
   catalogs: readonly TagCatalogRow[] = [],
   roster: readonly TagRosterRow[] = [],
-): PgsDataSyncResult {
-  const payload = parseJavaHashMap(data)
-  const feeds = extractFeeds(payload)
-  const synced = syncFeeds(feeds, specimens, categories, catalogs, roster)
-  const packed = packJavaHashMap(setFeeds(payload, synced.feeds))
+): { feeds: PgsFeed[]; stats: FeedRebuildStats } {
+  return rebuildFeeds(feeds, specimens, categories, catalogs, roster)
+}
+
+export function packPgsData(payload: HashMapPayload, feeds: PgsFeed[]): PgsDataPackResult {
+  const packed = packJavaHashMap(setFeeds(payload, feeds))
   const verify = extractFeeds(parseJavaHashMap(packed))
-  if (JSON.stringify(verify) !== JSON.stringify(synced.feeds)) {
-    throw new Error('Could not repack PGSData.dat')
+  if (JSON.stringify(verify) !== JSON.stringify(feeds)) {
+    throw new Error('Could not pack PGSData.dat')
   }
-  return {
-    bytes: packed,
-    feeds: synced.feeds,
-    changes: synced.changes,
-    removed: countRemoved(synced.changes),
-    added: countAdded(synced.changes),
-  }
+  return { bytes: packed, feeds }
 }
 
 export function downloadBytes(filename: string, bytes: Uint8Array) {

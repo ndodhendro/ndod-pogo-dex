@@ -6,6 +6,7 @@ import { TagSheet } from '../components/TagSheet'
 import { TagChip } from '../components/TagChip'
 import { AppFooter } from '../components/AppFooter'
 import { FileNameCopy } from '../components/FileNameCopy'
+import { SameLookSheet } from '../components/SameLookSheet'
 import {
   categoryForTag,
   lookForTag,
@@ -36,7 +37,6 @@ import {
   type InboxSortDir,
 } from '../lib/inboxOrder'
 import { isProbablyImageFile } from '../lib/images'
-import { sameLookFilenamesCopied } from '../lib/screenshotFileName'
 import { useToast } from '../lib/toast'
 import {
   pruneTransferLogs,
@@ -94,7 +94,6 @@ export function InboxPage() {
   const [discardBusy, setDiscardBusy] = useState(false)
   const [discardAllBusy, setDiscardAllBusy] = useState(false)
   const [duplicateBusy, setDuplicateBusy] = useState(false)
-  const [duplicateCopied, setDuplicateCopied] = useState({ current: false, next: false })
   const [adding, setAdding] = useState(false)
   const [view, setView] = useState<TransferView>('untagged')
   const [sortDir, setSortDir] = useState<InboxSortDir>('asc')
@@ -112,10 +111,6 @@ export function InboxPage() {
   useEffect(() => {
     void pruneTransferLogs()
   }, [])
-
-  useEffect(() => {
-    setDuplicateCopied({ current: false, next: false })
-  }, [pendingDuplicate?.item.id, pendingDuplicate?.existing.id])
 
   async function onFiles(list: File[]) {
     if (list.length === 0) return
@@ -174,26 +169,9 @@ export function InboxPage() {
     }
   }
 
-  function requireDuplicateCopies() {
-    const pending = pendingDuplicate
-    if (!pending) return false
-    if (
-      sameLookFilenamesCopied(
-        duplicateCopied,
-        pending.existing.fileName,
-        pending.item.fileName,
-      )
-    ) {
-      return true
-    }
-    showToast('Copy a screenshot filename first', 'warning')
-    return false
-  }
-
   async function confirmDuplicateReplace() {
     const pending = pendingDuplicate
     if (!pending || duplicateBusy) return
-    if (!requireDuplicateCopies()) return
     setDuplicateBusy(true)
     try {
       const result = await replaceSpecimenFromInbox(
@@ -216,7 +194,6 @@ export function InboxPage() {
   async function confirmDuplicateDiscard() {
     const pending = pendingDuplicate
     if (!pending || duplicateBusy) return
-    if (!requireDuplicateCopies()) return
     setDuplicateBusy(true)
     try {
       await discardInbox(pending.item.id)
@@ -229,10 +206,6 @@ export function InboxPage() {
       setDuplicateBusy(false)
     }
   }
-
-  const duplicateSpecies = pendingDuplicate
-    ? SPECIES_BY_ID.get(pendingDuplicate.existing.speciesId)?.name
-    : undefined
 
   return (
     <section className={styles.page}>
@@ -386,58 +359,24 @@ export function InboxPage() {
         onWarning={(message) => showToast(message, 'warning')}
         onError={(message) => showToast(message)}
       />
-      <BottomSheet
+      <SameLookSheet
         open={Boolean(pendingDuplicate)}
-        title="Same look"
-        showClose={false}
+        current={pendingDuplicate?.existing}
+        next={
+          pendingDuplicate
+            ? { imageId: pendingDuplicate.item.imageId, fileName: pendingDuplicate.item.fileName }
+            : null
+        }
+        speciesId={pendingDuplicate?.existing.speciesId}
+        nextTone="inbox"
+        busy={duplicateBusy}
         onClose={() => {
           if (duplicateBusy) return
           setPendingDuplicate(null)
         }}
-      >
-        <p className={`page-sub ${styles.confirmCopy}`}>
-          {duplicateSpecies
-            ? `${duplicateSpecies} with this look is already in your collection. Replace the current screenshot or discard the new one.`
-            : 'This look is already in your collection. Replace the current screenshot or discard the new one.'}
-        </p>
-        {pendingDuplicate ? (
-          <div className={styles.compare}>
-            <DuplicateShot
-              imageId={pendingDuplicate.existing.imageId}
-              fileName={pendingDuplicate.existing.fileName}
-              label="Current"
-              onCopied={() => setDuplicateCopied((prev) => ({ ...prev, current: true }))}
-            />
-            <DuplicateShot
-              imageId={pendingDuplicate.item.imageId}
-              fileName={pendingDuplicate.item.fileName}
-              label="New"
-              tone="inbox"
-              onCopied={() => setDuplicateCopied((prev) => ({ ...prev, next: true }))}
-            />
-          </div>
-        ) : null}
-        <div className="confirm-actions">
-          <button
-            type="button"
-            className="btn btn-danger"
-            disabled={duplicateBusy}
-            onClick={() => void confirmDuplicateDiscard()}
-          >
-            <span aria-hidden="true">🗑️</span>
-            {duplicateBusy ? 'Working…' : 'Discard'}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={duplicateBusy}
-            onClick={() => void confirmDuplicateReplace()}
-          >
-            <span aria-hidden="true">🔁</span>
-            {duplicateBusy ? 'Working…' : 'Replace'}
-          </button>
-        </div>
-      </BottomSheet>
+        onDiscard={() => void confirmDuplicateDiscard()}
+        onReplace={() => void confirmDuplicateReplace()}
+      />
       <BottomSheet
         open={Boolean(pendingDiscard)}
         title="Discard screenshot"
@@ -504,38 +443,6 @@ export function InboxPage() {
         </div>
       </BottomSheet>
     </section>
-  )
-}
-
-function DuplicateShot({
-  imageId,
-  fileName,
-  label,
-  tone,
-  onCopied,
-}: {
-  imageId: string
-  fileName?: string | null
-  label: string
-  tone?: string
-  onCopied?: () => void
-}) {
-  const url = useImageUrl(imageId, 'medium')
-  return (
-    <figure className={styles.shot}>
-      <figcaption className={styles.shotLabel} data-tone={tone}>
-        {label}
-      </figcaption>
-      <div className={styles.shotFrame}>
-        {url ? <img src={url} alt={label} /> : <span />}
-      </div>
-      <FileNameCopy
-        fileName={fileName}
-        size="sm"
-        className={styles.shotFileName}
-        onCopied={onCopied}
-      />
-    </figure>
   )
 }
 

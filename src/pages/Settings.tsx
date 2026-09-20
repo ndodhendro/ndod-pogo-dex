@@ -5,7 +5,7 @@ import { ColorPicker } from '../components/ColorPicker'
 import { AppFooter } from '../components/AppFooter'
 import { RosterSheet } from '../components/RosterSheet'
 import { TrackChip } from '../components/TrackChip'
-import { PgsDataSyncButton } from '../components/PgsDataSyncButton'
+import { PgsDataPanel } from '../components/PgsDataPanel'
 import { RestoreCloudButton, RestoreGalleryButton } from '../components/RestoreGalleryButton'
 import { colorForCategory, iconForCategory, lookForTag, categoryForTag, requiredTagChoices, TAB_ICONS, toneForCategory } from '../data/navIcons'
 import { insertCategoryIdAt, moveCategoryId, sameCategoryOrder } from '../lib/categoryOrder'
@@ -324,7 +324,7 @@ export function SettingsPage() {
       </div>
       <div className="group">
         <h2>PGSharp</h2>
-        <PgsDataSyncButton />
+        <PgsDataPanel />
       </div>
       <AppFooter />
       <BottomSheet

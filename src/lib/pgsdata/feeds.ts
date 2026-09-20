@@ -9,12 +9,32 @@ export type PgsFeed = {
   [key: string]: unknown
 }
 
-export type FeedSyncChange = {
-  name: string
-  removed: number[]
-  added: number[]
+export type FeedRebuildStats = {
+  skipped: number
+  rebuilt: number
+  created: number
+  dropped: number
 }
 
+export const FEED_POKEMON_LIMIT = 300
+
+const ROMAN_GLYPHS: readonly [string, number][] = [
+  ['M', 1000],
+  ['CM', 900],
+  ['D', 500],
+  ['CD', 400],
+  ['C', 100],
+  ['XC', 90],
+  ['L', 50],
+  ['XL', 40],
+  ['X', 10],
+  ['IX', 9],
+  ['V', 5],
+  ['IV', 4],
+  ['I', 1],
+]
+
+const ROMAN_FEED = /^(.+?)\s+([ivxlcdm]+)$/i
 const NUMBERED_FEED = /^(.+?)\s+(\d{3,4})$/
 
 export function dumpFeedsJson(feeds: PgsFeed[]) {
@@ -36,6 +56,58 @@ export function normalizeFeedLabel(value: string) {
     .replace(/\s+/g, ' ')
 }
 
+export function formatRoman(value: number) {
+  if (!Number.isInteger(value) || value < 1 || value > 3999) {
+    throw new Error('Roman numeral out of range')
+  }
+  let rest = value
+  let out = ''
+  for (const [glyph, amount] of ROMAN_GLYPHS) {
+    while (rest >= amount) {
+      out += glyph
+      rest -= amount
+    }
+  }
+  return out
+}
+
+export function parseRoman(raw: string): number | null {
+  const value = raw.trim().toUpperCase()
+  if (!value || !/^[IVXLCDM]+$/.test(value)) return null
+  let i = 0
+  let total = 0
+  for (const [glyph, amount] of ROMAN_GLYPHS) {
+    while (value.startsWith(glyph, i)) {
+      total += amount
+      i += glyph.length
+    }
+  }
+  if (i !== value.length) return null
+  if (formatRoman(total) !== value) return null
+  return total
+}
+
+export function feedStem(name: string) {
+  const trimmed = name.trim()
+  const roman = trimmed.match(ROMAN_FEED)
+  if (roman && parseRoman(roman[2]) != null) return roman[1]
+  const numbered = trimmed.match(NUMBERED_FEED)
+  return numbered ? numbered[1] : trimmed
+}
+
+export function numberedFeedName(stem: string, index: number) {
+  return `${stem.trim()} ${formatRoman(index)}`
+}
+
+export function chunkSpeciesIds(ids: readonly number[], size = FEED_POKEMON_LIMIT): number[][] {
+  if (ids.length === 0) return [[]]
+  const chunks: number[][] = []
+  for (let i = 0; i < ids.length; i += size) {
+    chunks.push(ids.slice(i, i + size))
+  }
+  return chunks
+}
+
 function genderRoleFromName(name: string): 'male' | 'female' | null {
   const key = normalizeFeedLabel(name)
   if (key === 'male') return 'male'
@@ -52,42 +124,6 @@ function genderRoleFromSpecimen(gender: string | null | undefined): 'male' | 'fe
 
 function isGenderCategory(required: readonly TagId[]) {
   return required.length === 1 && required[0] === 'gender'
-}
-
-export function feedStem(name: string) {
-  const numbered = name.trim().match(NUMBERED_FEED)
-  return numbered ? numbered[1] : name.trim()
-}
-
-export function numberedFeedStart(name: string): number | null {
-  const numbered = name.trim().match(NUMBERED_FEED)
-  return numbered ? Number(numbered[2]) : null
-}
-
-export function feedDexRange(
-  name: string,
-  feeds: readonly PgsFeed[],
-): { min: number; max: number } | null {
-  const start = numberedFeedStart(name)
-  if (start == null) return null
-  const stem = normalizeFeedLabel(feedStem(name))
-  const starts = [
-    ...new Set(
-      feeds
-        .map((feed) => String(feed.name ?? ''))
-        .filter((feedName) => normalizeFeedLabel(feedStem(feedName)) === stem)
-        .map((feedName) => numberedFeedStart(feedName))
-        .filter((value): value is number => value != null),
-    ),
-  ].sort((a, b) => a - b)
-  const index = starts.indexOf(start)
-  const max = index >= 0 && index < starts.length - 1 ? starts[index + 1] - 1 : Number.POSITIVE_INFINITY
-  return { min: start, max }
-}
-
-function inRange(id: number, range: { min: number; max: number } | null) {
-  if (!range) return true
-  return id >= range.min && id <= range.max
 }
 
 export function matchFeedCategory(feedName: string, categories: readonly CategoryRow[]): CategoryRow | null {
@@ -142,77 +178,83 @@ export function catalogSpeciesIds(
   category: CategoryRow,
   catalogs: readonly TagCatalogRow[],
   roster: readonly TagRosterRow[],
-): Set<number> {
+): number[] {
   const ids = new Set<number>()
   for (const slot of slotsForTrack(category.requiredTags, catalogs, roster)) {
     ids.add(slot.speciesId)
   }
-  return ids
+  return [...ids].sort((a, b) => a - b)
 }
 
-function desiredIds(
-  universe: Set<number>,
-  range: { min: number; max: number } | null,
-  pure: Set<number>,
+function remainingSpeciesIds(
+  category: CategoryRow,
+  stem: string,
+  catalogs: readonly TagCatalogRow[],
+  roster: readonly TagRosterRow[],
+  pure: Map<string, Set<number>>,
 ) {
-  const desired = new Set<number>()
-  for (const id of universe) {
-    if (!inRange(id, range)) continue
-    if (pure.has(id)) continue
-    desired.add(id)
-  }
-  return desired
+  const gender = genderRoleFromName(stem)
+  const drop = gender
+    ? (pure.get(gender) ?? new Set())
+    : (pure.get(normalizeFeedLabel(category.name)) ?? new Set())
+  return catalogSpeciesIds(category, catalogs, roster).filter((id) => !drop.has(id))
 }
 
-function syncPokemonList(current: number[], desired: Set<number>) {
-  const seen = new Set<number>()
-  const kept: number[] = []
-  const removed: number[] = []
-  for (const id of current) {
-    if (!desired.has(id)) {
-      removed.push(id)
-      continue
-    }
-    if (seen.has(id)) continue
-    seen.add(id)
-    kept.push(id)
-  }
-  const added = [...desired].filter((id) => !seen.has(id)).sort((a, b) => a - b)
-  return { pokemons: [...kept, ...added], added, removed }
+function copyFeed(template: PgsFeed, name: string, pokemons: number[]): PgsFeed {
+  return { ...template, name, pokemons }
 }
 
-export function syncFeeds(
+export function rebuildFeeds(
   feeds: PgsFeed[],
   specimens: readonly SpecimenRow[],
   categories: readonly CategoryRow[],
   catalogs: readonly TagCatalogRow[] = [],
   roster: readonly TagRosterRow[] = [],
-): { feeds: PgsFeed[]; changes: FeedSyncChange[] } {
+): { feeds: PgsFeed[]; stats: FeedRebuildStats } {
   const pure = pureSpeciesByFeedKey(specimens, categories)
-  const changes: FeedSyncChange[] = []
-  const next = feeds.map((feed) => {
+  const seen = new Set<string>()
+  const next: PgsFeed[] = []
+  let skipped = 0
+  let rebuilt = 0
+  let created = 0
+  let dropped = 0
+
+  for (const feed of feeds) {
     const name = String(feed.name ?? '')
     const category = matchFeedCategory(name, categories)
-    if (!category || !Array.isArray(feed.pokemons)) return feed
+    if (!category) {
+      next.push(feed)
+      skipped += 1
+      continue
+    }
     const stem = feedStem(name)
-    const gender = genderRoleFromName(stem)
-    const drop = gender
-      ? (pure.get(gender) ?? new Set())
-      : (pure.get(normalizeFeedLabel(category.name)) ?? new Set())
-    const universe = catalogSpeciesIds(category, catalogs, roster)
-    const desired = desiredIds(universe, feedDexRange(name, feeds), drop)
-    const synced = syncPokemonList(feed.pokemons, desired)
-    if (synced.added.length === 0 && synced.removed.length === 0) return feed
-    changes.push({ name, removed: synced.removed, added: synced.added })
-    return { ...feed, pokemons: synced.pokemons }
-  })
-  return { feeds: next, changes }
+    const stemKey = normalizeFeedLabel(stem)
+    if (seen.has(stemKey)) continue
+    seen.add(stemKey)
+
+    const groupCount = feeds.filter((row) => {
+      const rowName = String(row.name ?? '')
+      return matchFeedCategory(rowName, categories) && normalizeFeedLabel(feedStem(rowName)) === stemKey
+    }).length
+    const remaining = remainingSpeciesIds(category, stem, catalogs, roster, pure)
+    const chunks = chunkSpeciesIds(remaining)
+    rebuilt += chunks.length
+    if (chunks.length > groupCount) created += chunks.length - groupCount
+    if (groupCount > chunks.length) dropped += groupCount - chunks.length
+    chunks.forEach((pokemons, index) => {
+      next.push(copyFeed(feed, numberedFeedName(stem, index + 1), pokemons))
+    })
+  }
+
+  return { feeds: next, stats: { skipped, rebuilt, created, dropped } }
 }
 
-export function countRemoved(changes: readonly FeedSyncChange[]) {
-  return changes.reduce((sum, row) => sum + row.removed.length, 0)
-}
-
-export function countAdded(changes: readonly FeedSyncChange[]) {
-  return changes.reduce((sum, row) => sum + row.added.length, 0)
+export function rebuildSummary(stats: FeedRebuildStats) {
+  const bits = [
+    stats.rebuilt ? `filled ${stats.rebuilt} feed${stats.rebuilt === 1 ? '' : 's'}` : null,
+    stats.created ? `added ${stats.created}` : null,
+    stats.dropped ? `removed ${stats.dropped} extra` : null,
+    stats.skipped ? `skipped ${stats.skipped}` : null,
+  ].filter(Boolean)
+  return bits.length > 0 ? bits.join(', ') : 'no matching feeds'
 }

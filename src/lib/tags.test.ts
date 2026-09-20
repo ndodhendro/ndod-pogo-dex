@@ -12,6 +12,7 @@ import {
   genderChipLabel,
   labelForTag,
   pickDuplicateLook,
+  pickDuplicateLookForEdit,
   resolveRequiredTags,
   specimenChipIcon,
   specimenChipLabel,
@@ -250,6 +251,50 @@ describe('pickDuplicateLook', () => {
     const incoming = base()
     expect(pickDuplicateLook([row('a', 1, { speciesId: 1 })], incoming)).toBeUndefined()
     expect(pickDuplicateLook([row('b', 1, { shiny: true })], incoming)).toBeUndefined()
+  })
+})
+
+describe('pickDuplicateLookForEdit', () => {
+  const row = (id: string, createdAt: number, patch: Partial<SpecimenFields> = {}) => ({
+    ...base(),
+    id,
+    createdAt,
+    ...patch,
+  })
+
+  it('does not treat an unchanged look as a conflict', () => {
+    const current = row('a', 1, { shiny: true })
+    const other = row('b', 2, { shiny: true })
+    expect(pickDuplicateLookForEdit(current, [current, other], current)).toBeUndefined()
+  })
+
+  it('returns the other specimen when tags change to that look', () => {
+    const current = row('a', 20)
+    const other = row('b', 10, { shiny: true })
+    expect(
+      pickDuplicateLookForEdit(current, [current, other], { ...current, shiny: true })?.id,
+    ).toBe('b')
+  })
+
+  it('ignores the specimen being edited even if it is in the list', () => {
+    const current = row('a', 1)
+    expect(pickDuplicateLookForEdit(current, [current], { ...current, shiny: true })).toBeUndefined()
+  })
+
+  it('does not match a different species or extra tag', () => {
+    const current = row('a', 1)
+    expect(
+      pickDuplicateLookForEdit(current, [row('b', 1, { speciesId: 1, shiny: true })], {
+        ...current,
+        shiny: true,
+      }),
+    ).toBeUndefined()
+    expect(
+      pickDuplicateLookForEdit(current, [row('c', 1, { extraTags: ['lucky'] })], {
+        ...current,
+        extraTags: ['costume-event'],
+      }),
+    ).toBeUndefined()
   })
 })
 

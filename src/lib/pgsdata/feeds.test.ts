@@ -3,8 +3,16 @@ import { GO_FORM_SPECIES_IDS } from '../../data/goFormReleased'
 import { GO_RELEASED_IDS } from '../../data/goReleased'
 import type { CategoryRow, SpecimenRow } from '../db'
 import { packJavaHashMap, type HashMapPayload } from './javaHashMap'
-import { feedDexRange, matchFeedCategory, normalizeFeedLabel, syncFeeds } from './feeds'
-import { syncPgsData } from './sync'
+import {
+  chunkSpeciesIds,
+  feedStem,
+  formatRoman,
+  matchFeedCategory,
+  normalizeFeedLabel,
+  parseRoman,
+  rebuildFeeds,
+} from './feeds'
+import { fillPgsFeeds, openPgsData, packPgsData } from './sync'
 
 const DEFAULT_SUIDS: Record<string, bigint> = {
   'java.util.HashMap': 0x0507dac1c31660d1n,
@@ -53,69 +61,109 @@ const categories = [
   category('Max CP', ['max-cp']),
 ]
 
-const alolanIds = [...GO_FORM_SPECIES_IDS.alolan]
-const basicLow = [...GO_RELEASED_IDS].filter((id) => id >= 1 && id <= 300)
-const genderIds = [...GO_FORM_SPECIES_IDS.gender]
+const alolanIds = [...GO_FORM_SPECIES_IDS.alolan].sort((a, b) => a - b)
+const basicIds = [...GO_RELEASED_IDS].sort((a, b) => a - b)
+const genderIds = [...GO_FORM_SPECIES_IDS.gender].sort((a, b) => a - b)
+
+describe('Roman feed names', () => {
+  it('parses and formats numerals', () => {
+    expect(formatRoman(1)).toBe('I')
+    expect(formatRoman(2)).toBe('II')
+    expect(formatRoman(4)).toBe('IV')
+    expect(formatRoman(9)).toBe('IX')
+    expect(parseRoman('iii')).toBe(3)
+    expect(parseRoman('IIII')).toBeNull()
+    expect(parseRoman('CP')).toBeNull()
+  })
+
+  it('strips a roman or old dex suffix for the stem', () => {
+    expect(feedStem('Basic I')).toBe('Basic')
+    expect(feedStem('Basic II')).toBe('Basic')
+    expect(feedStem('Max CP')).toBe('Max CP')
+    expect(feedStem('Basic 001')).toBe('Basic')
+    expect(feedStem('Alolan')).toBe('Alolan')
+  })
+})
 
 describe('PGSData feed matching', () => {
   it('maps numbered and special feed names onto app categories', () => {
-    expect(matchFeedCategory('Basic 001', categories)?.name).toBe('Basic')
-    expect(matchFeedCategory('Max CP 301', categories)?.name).toBe('Max CP')
+    expect(matchFeedCategory('Basic I', categories)?.name).toBe('Basic')
+    expect(matchFeedCategory('Max CP II', categories)?.name).toBe('Max CP')
     expect(matchFeedCategory('Alternate Form', categories)?.name).toBe('Alternate forme')
     expect(matchFeedCategory('Male', categories)?.name).toBe('Gender')
-    expect(matchFeedCategory('Female', categories)?.name).toBe('Gender')
+    expect(matchFeedCategory('Female III', categories)?.name).toBe('Gender')
     expect(matchFeedCategory('Focus', categories)).toBeNull()
     expect(normalizeFeedLabel('Alternate Forme')).toBe('alternate form')
   })
 
-  it('splits numbered feeds using sibling ranges', () => {
-    const feeds = [{ name: 'Basic 001' }, { name: 'Basic 301' }, { name: 'Basic 601' }, { name: 'Basic 901' }]
-    expect(feedDexRange('Basic 001', feeds)).toEqual({ min: 1, max: 300 })
-    expect(feedDexRange('Basic 301', feeds)).toEqual({ min: 301, max: 600 })
-    expect(feedDexRange('Basic 901', feeds)).toEqual({ min: 901, max: Number.POSITIVE_INFINITY })
-    expect(feedDexRange('Alolan', feeds)).toBeNull()
+  it('chunks leftover species by dex number', () => {
+    expect(chunkSpeciesIds([4, 1, 2], 2)).toEqual([[4, 1], [2]])
+    expect(chunkSpeciesIds([])).toEqual([[]])
   })
 
-  it('removes a pure Basic Bulbasaur only from Basic 001', () => {
+  it('rebuilds a matched stem and skips unknown feeds', () => {
     const feeds = [
-      { name: 'Focus' },
-      { name: 'Basic 001', pokemons: [1, 2, 3] },
-      { name: 'Basic 301', pokemons: [301, 302] },
-      { name: 'XXL 001', pokemons: [1, 2, 3] },
-      { name: 'Hundo 001', pokemons: [1] },
+      { name: 'Focus', pokemons: [99], size: 3 },
+      { name: 'Alolan', pokemons: [20], form: 1 },
     ]
-    const { feeds: next, changes } = syncFeeds(
+    const { feeds: next, stats } = rebuildFeeds(feeds, [], categories)
+    expect(next[0]).toEqual({ name: 'Focus', pokemons: [99], size: 3 })
+    expect(next[1]).toEqual({ name: 'Alolan I', pokemons: alolanIds, form: 1 })
+    expect(stats.skipped).toBe(1)
+    expect(stats.rebuilt).toBe(1)
+  })
+
+  it('deletes leftover pokemon and fills from species that are not yet pure', () => {
+    const feeds = [{ name: 'Alolan I', pokemons: [20, 9999], form: 1 }]
+    const { feeds: next } = rebuildFeeds(
       feeds,
-      [specimen({ speciesId: 1, extraTags: ['basic'] })],
+      [specimen({ speciesId: 19, extraTags: ['alolan'] })],
       categories,
     )
-    const basic001 = next.find((row) => row.name === 'Basic 001')?.pokemons ?? []
-    expect(basic001).not.toContain(1)
-    expect(basic001).toContain(2)
-    expect(basic001).toContain(3)
-    expect(basic001).toContain(4)
-    expect(next.find((row) => row.name === 'Basic 301')?.pokemons).not.toContain(1)
-    expect(next.find((row) => row.name === 'XXL 001')?.pokemons).toContain(1)
-    expect(next.find((row) => row.name === 'Hundo 001')?.pokemons).toContain(1)
-    expect(changes.find((row) => row.name === 'Basic 001')?.removed).toEqual([1])
+    expect(next[0].form).toBe(1)
+    expect(next[0].pokemons).toEqual(alolanIds.filter((id) => id !== 19))
+    expect(next[0].pokemons).not.toContain(9999)
   })
 
-  it('adds a missing Basic species that is not yet pure', () => {
+  it('splits overflow onto copied feeds with incrementing roman names', () => {
     const feeds = [
-      { name: 'Basic 001', pokemons: [2, 3] },
-      { name: 'Basic 301', pokemons: [301] },
+      { name: 'Focus' },
+      { name: 'Basic I', pokemons: [1], size: 0 },
+      { name: 'Alolan', pokemons: [] },
     ]
-    const { feeds: next, changes } = syncFeeds(feeds, [], categories)
-    const basic001 = next.find((row) => row.name === 'Basic 001')?.pokemons ?? []
-    expect(basic001).toContain(1)
-    expect(basic001).toEqual([...new Set([...[2, 3], ...basicLow.filter((id) => id !== 2 && id !== 3)])])
-    expect(changes.find((row) => row.name === 'Basic 001')?.added).toContain(1)
-    expect(next.find((row) => row.name === 'Basic 301')?.pokemons).not.toContain(1)
+    const { feeds: next, stats } = rebuildFeeds(feeds, [], categories)
+    const basicFeeds = next.filter((row) => String(row.name).startsWith('Basic '))
+    expect(basicFeeds.length).toBe(Math.ceil(basicIds.length / 300))
+    expect(basicFeeds[0]).toEqual({
+      name: 'Basic I',
+      pokemons: basicIds.slice(0, 300),
+      size: 0,
+    })
+    expect(basicFeeds[1]?.name).toBe('Basic II')
+    expect(basicFeeds[1]?.pokemons).toEqual(basicIds.slice(300, 600))
+    expect(basicFeeds[1]?.size).toBe(0)
+    expect(next.findIndex((row) => row.name === 'Basic II')).toBe(
+      next.findIndex((row) => row.name === 'Basic I') + 1,
+    )
+    expect(next[0].name).toBe('Focus')
+    expect(next.some((row) => row.name === 'Alolan I')).toBe(true)
+    expect(stats.created).toBeGreaterThan(0)
+  })
+
+  it('collapses extra same-stem feeds when fewer chunks are needed', () => {
+    const feeds = [
+      { name: 'Alolan I', pokemons: [19], size: 2 },
+      { name: 'Alolan II', pokemons: [26], size: 9 },
+      { name: 'Alolan III', pokemons: [50], size: 9 },
+    ]
+    const { feeds: next, stats } = rebuildFeeds(feeds, [], categories)
+    expect(next).toEqual([{ name: 'Alolan I', pokemons: alolanIds, size: 2 }])
+    expect(stats.dropped).toBe(2)
   })
 
   it('does not treat a pure Shadow as Basic', () => {
-    const feeds = [{ name: 'Basic 001', pokemons: [1, 2] }]
-    const { feeds: next } = syncFeeds(
+    const feeds = [{ name: 'Basic I', pokemons: [1, 2] }]
+    const { feeds: next } = rebuildFeeds(
       feeds,
       [specimen({ speciesId: 1, shadowStatus: 'shadow' })],
       categories,
@@ -124,31 +172,29 @@ describe('PGSData feed matching', () => {
   })
 
   it('removes XXL and Hundo from their own feeds', () => {
-    const feeds = [
-      { name: 'XXL 001', pokemons: [1, 4] },
-      { name: 'Hundo 001', pokemons: [1, 25] },
-    ]
-    const { feeds: next } = syncFeeds(
-      feeds,
+    const remainingXxl = basicIds.filter((id) => id !== 1)
+    const remainingHundo = basicIds.filter((id) => id !== 25)
+    const { feeds: next } = rebuildFeeds(
+      [
+        { name: 'XXL I', pokemons: [1, 4] },
+        { name: 'Hundo I', pokemons: [1, 25] },
+      ],
       [
         specimen({ speciesId: 1, extraTags: ['xxl'] }),
         specimen({ speciesId: 25, hundo: true }),
       ],
       categories,
     )
-    expect(next[0].pokemons).not.toContain(1)
-    expect(next[0].pokemons).toContain(4)
-    expect(next[1].pokemons).not.toContain(25)
-    expect(next[1].pokemons).toContain(1)
+    expect(next.find((row) => row.name === 'XXL I')?.pokemons).toEqual(remainingXxl.slice(0, 300))
+    expect(next.find((row) => row.name === 'Hundo I')?.pokemons).toEqual(remainingHundo.slice(0, 300))
   })
 
-  it('splits Gender pures into Male and Female feeds and restores the other', () => {
-    const feeds = [
-      { name: 'Male', pokemons: [25, 133] },
-      { name: 'Female', pokemons: [25, 133] },
-    ]
-    const { feeds: next } = syncFeeds(
-      feeds,
+  it('splits Gender pures into Male and Female feeds', () => {
+    const { feeds: next } = rebuildFeeds(
+      [
+        { name: 'Male', pokemons: [25, 133] },
+        { name: 'Female', pokemons: [25, 133] },
+      ],
       [
         specimen({ speciesId: 25, extraTags: ['gender'], gender: 'Male' }),
         specimen({
@@ -159,24 +205,15 @@ describe('PGSData feed matching', () => {
       ],
       categories,
     )
-    expect(next[0].pokemons).not.toContain(25)
-    expect(next[0].pokemons).toContain(133)
-    expect(next[0].pokemons).toContain(215)
-    expect(next[1].pokemons).toContain(25)
-    expect(next[1].pokemons).not.toContain(215)
-    expect(next[1].pokemons).toEqual(expect.arrayContaining(genderIds.filter((id) => id !== 215)))
+    expect(next[0].name).toBe('Male I')
+    expect(next[0].pokemons).toEqual(genderIds.filter((id) => id !== 25))
+    expect(next[1].name).toBe('Female I')
+    expect(next[1].pokemons).toEqual(genderIds.filter((id) => id !== 215))
   })
 
-  it('restores Alolan IDs that the app still needs', () => {
-    const feeds = [{ name: 'Alolan', pokemons: [20, 26] }]
-    const { feeds: next, changes } = syncFeeds(feeds, [], categories)
-    expect(next[0].pokemons).toEqual([20, 26, ...alolanIds.filter((id) => id !== 20 && id !== 26)])
-    expect(changes[0].added).toEqual(alolanIds.filter((id) => id !== 20 && id !== 26))
-  })
-
-  it('repacks a dat file after two-way sync', () => {
+  it('packs a dat file after filling feeds', () => {
     const feeds = [
-      { name: 'Basic 001', pokemons: [1, 2], size: 0 },
+      { name: 'Basic I', pokemons: [1, 2], size: 0 },
       { name: 'Alolan', pokemons: [19, 26], form: 1 },
     ]
     const map: HashMapPayload = {
@@ -190,19 +227,19 @@ describe('PGSData feed matching', () => {
       },
       suids: DEFAULT_SUIDS,
     }
-    const result = syncPgsData(
-      packJavaHashMap(map),
+    const opened = openPgsData(packJavaHashMap(map))
+    const filled = fillPgsFeeds(
+      opened.feeds,
       [
         specimen({ speciesId: 1, extraTags: ['basic'] }),
         specimen({ speciesId: 19, extraTags: ['alolan'] }),
       ],
       categories,
     )
-    expect(result.removed).toBeGreaterThan(0)
-    expect(result.added).toBeGreaterThan(0)
-    expect(result.feeds.find((row) => row.name === 'Basic 001')?.pokemons).not.toContain(1)
-    expect(result.feeds.find((row) => row.name === 'Alolan')?.pokemons).not.toContain(19)
-    expect(result.feeds.find((row) => row.name === 'Alolan')?.pokemons).toContain(26)
-    expect(result.feeds.find((row) => row.name === 'Alolan')?.pokemons).toContain(20)
+    const packed = packPgsData(opened.payload, filled.feeds)
+    expect(packed.feeds.find((row) => row.name === 'Basic I')?.pokemons).not.toContain(1)
+    expect(packed.feeds.find((row) => row.name === 'Alolan I')?.pokemons).not.toContain(19)
+    expect(packed.feeds.find((row) => row.name === 'Alolan I')?.pokemons).toContain(26)
+    expect(packed.feeds.find((row) => row.name === 'Alolan I')?.form).toBe(1)
   })
 })

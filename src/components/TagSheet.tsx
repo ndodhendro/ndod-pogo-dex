@@ -5,7 +5,7 @@ import { cropHeightForSpecimen } from '../data/tagCrops'
 import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { useTagCropHeights } from '../hooks/useCropSettings'
-import { updateSpecimen } from '../lib/collection'
+import { updateSpecimen, replaceSpecimenLook } from '../lib/collection'
 import { db, type SpecimenRow } from '../lib/db'
 import { cropBottomFromBlob, SCREENSHOT_WIDTH } from '../lib/images'
 import {
@@ -45,6 +45,7 @@ import {
 import { BottomSheet } from './BottomSheet'
 import { FileNameCopy } from './FileNameCopy'
 import { OriginalLightbox } from './OriginalLightbox'
+import { SameLookSheet } from './SameLookSheet'
 import { SearchField } from './SearchField'
 import { TagChip } from './TagChip'
 import styles from './TagSheet.module.css'
@@ -601,9 +602,44 @@ export function SpecimenTagSheet({
   onSaved: (specimen: SpecimenRow) => void
 }) {
   const { showToast } = useToast()
+  const [pendingDuplicate, setPendingDuplicate] = useState<{
+    existing: SpecimenRow
+    fields: SpecimenFields
+    cropBottom: number
+  } | null>(null)
+  const [duplicateBusy, setDuplicateBusy] = useState(false)
+
+  useEffect(() => {
+    setPendingDuplicate(null)
+    setDuplicateBusy(false)
+  }, [specimen?.id])
+
+  async function confirmDuplicateReplace() {
+    const pending = pendingDuplicate
+    if (!pending || !specimen || duplicateBusy) return
+    setDuplicateBusy(true)
+    try {
+      const result = await replaceSpecimenLook(
+        specimen.id,
+        pending.existing.id,
+        pending.fields,
+        pending.cropBottom,
+      )
+      setPendingDuplicate(null)
+      if (result.cloudError) showToast(result.cloudError, 'warning')
+      else showToast('Screenshot replaced', 'success')
+      onSaved(result.specimen)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not replace')
+    } finally {
+      setDuplicateBusy(false)
+    }
+  }
+
   return (
+    <>
     <TagSheet
-      open={Boolean(specimen)}
+      open={Boolean(specimen) && !pendingDuplicate}
       title="Edit tags"
       resetKey={specimen?.id ?? ''}
       imageId={specimen?.imageId}
@@ -612,17 +648,51 @@ export function SpecimenTagSheet({
       saveLabel="Save tags"
       tone="living"
       nested
-      onClose={onClose}
+      onClose={() => {
+        if (pendingDuplicate) return
+        onClose()
+      }}
       onSave={async (fields, cropBottom) => {
         if (!specimen) return
         const result = await updateSpecimen(specimen.id, fields, cropBottom)
-        if (result.duplicate) showToast('Same look already in the collection', 'warning')
+        if (result.duplicate && result.existing) {
+          setPendingDuplicate({
+            existing: result.existing,
+            fields,
+            cropBottom,
+          })
+          return
+        }
         if (result.cloudError) showToast(result.cloudError, 'warning')
-        else if (!result.duplicate) showToast('Tags saved', 'success')
+        else showToast('Tags saved', 'success')
         onSaved(result.specimen)
       }}
       onWarning={(message) => showToast(message, 'warning')}
       onError={(message) => showToast(message)}
     />
+    <SameLookSheet
+      open={Boolean(pendingDuplicate)}
+      nested
+      current={pendingDuplicate?.existing}
+      next={
+        specimen
+          ? { imageId: specimen.imageId, fileName: specimen.fileName }
+          : null
+      }
+      speciesId={pendingDuplicate?.existing.speciesId}
+      nextTone="living"
+      busy={duplicateBusy}
+      onClose={() => {
+        if (duplicateBusy) return
+        setPendingDuplicate(null)
+      }}
+      onDiscard={() => {
+        if (duplicateBusy) return
+        setPendingDuplicate(null)
+        onClose()
+      }}
+      onReplace={() => void confirmDuplicateReplace()}
+    />
+    </>
   )
 }

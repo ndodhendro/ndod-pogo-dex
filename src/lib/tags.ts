@@ -272,6 +272,19 @@ export function pickDuplicateLook<T extends SpecimenFields & { id: string; creat
   return chosen
 }
 
+/** Same look as another specimen after a tag edit. Unchanged looks are not a conflict. */
+export function pickDuplicateLookForEdit<T extends SpecimenFields & { id: string; createdAt: number }>(
+  current: T,
+  others: readonly T[],
+  incoming: SpecimenFields,
+): T | undefined {
+  if (visualKey(current) === visualKey(incoming)) return undefined
+  return pickDuplicateLook(
+    others.filter((row) => row.id !== current.id),
+    incoming,
+  )
+}
+
 export function toggleRequiredTags(picked: TagId[], tags: TagId[]): TagId[] {
   if (tags.length === 0) return picked
   const selected = tags.every((tag) => picked.includes(tag))

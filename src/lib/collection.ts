@@ -39,9 +39,9 @@ import {
   isNotPure,
   isSilhouette,
   pickDuplicateLook,
+  pickDuplicateLookForEdit,
   resolveRequiredTags,
   specimenTags,
-  visualKey,
   type SpecimenFields,
   type TagId,
 } from './tags'
@@ -334,7 +334,7 @@ export async function updateSpecimen(
   id: string,
   fields: SpecimenFields,
   cropBottom: number,
-): Promise<{ duplicate: boolean; cloudError?: string; specimen: SpecimenRow }> {
+): Promise<{ duplicate: boolean; existing?: SpecimenRow; cloudError?: string; specimen: SpecimenRow }> {
   const existing = await db.specimens.get(id)
   if (!existing) throw new Error('Specimen is gone')
   const image = await db.images.get(existing.imageId)
@@ -358,6 +358,10 @@ export async function updateSpecimen(
     notPure: isNotPure(fields),
     cloudBackupPending: true,
   }
+  const others = await db.specimens.toArray()
+  const match = pickDuplicateLookForEdit(existing, others, updated)
+  if (match) return { duplicate: true, existing: match, specimen: existing }
+
   const metaUnchanged = sameSpecimenMetadata(existing, updated)
   const currentCrop = await cropBottomFromBlob(image.original)
   const cropChanged = currentCrop !== cropBottom
@@ -373,8 +377,6 @@ export async function updateSpecimen(
     return { duplicate: false, specimen: existing }
   }
 
-  const others = await db.specimens.toArray()
-  const duplicate = others.some((row) => row.id !== id && visualKey(row) === visualKey(updated))
   const catalogs = await db.tagCatalogs.toArray()
 
   await db.transaction('rw', db.specimens, db.covers, db.categories, db.images, db.transferLogs, async () => {
@@ -406,7 +408,7 @@ export async function updateSpecimen(
   })
 
   const extraSpecies = existing.speciesId === updated.speciesId ? [] : [existing.speciesId]
-  const saved = await finishSave(updated, { duplicate }, extraSpecies)
+  const saved = await finishSave(updated, { duplicate: false }, extraSpecies)
   if (
     cropChanged &&
     existing.fileHash &&
@@ -416,6 +418,149 @@ export async function updateSpecimen(
     await removeSpecimenPhoto(existing.fileHash)
   }
   return saved
+}
+
+export async function replaceSpecimenLook(
+  editedId: string,
+  existingId: string,
+  fields: SpecimenFields,
+  cropBottom: number,
+): Promise<{ cloudError?: string; specimen: SpecimenRow }> {
+  const edited = await db.specimens.get(editedId)
+  if (!edited) throw new Error('Specimen is gone')
+  const current = await db.specimens.get(existingId)
+  if (!current) throw new Error('Specimen is gone')
+  const image = await db.images.get(edited.imageId)
+  if (!image?.original) throw new Error('Image is gone')
+
+  const form = fields.form?.trim() ? fields.form.trim() : null
+  const extraTags = extraTagList(fields)
+  const updated: SpecimenRow = {
+    ...edited,
+    speciesId: fields.speciesId,
+    form,
+    shiny: fields.shiny,
+    shadowStatus: fields.shadowStatus,
+    costume: fields.costume,
+    background: fields.background,
+    gender: fields.gender ?? null,
+    hundo: fields.hundo,
+    nundo: fields.nundo,
+    extraTags,
+    silhouette: isSilhouette(fields),
+    notPure: isNotPure(fields),
+    cloudBackupPending: true,
+  }
+  const currentCrop = await cropBottomFromBlob(image.original)
+  const cropChanged = currentCrop !== cropBottom
+  if (cropChanged) {
+    const variants = await makeImageVariants(image.original, cropBottom)
+    await db.images.update(edited.imageId, variants)
+    forgetImageUrls(edited.imageId)
+    updated.fileHash = await hashBlob(variants.original)
+  }
+
+  const catalogs = await db.tagCatalogs.toArray()
+  const currentImageId = current.imageId
+  const currentHash = current.fileHash
+  const currentSpeciesId = current.speciesId
+
+  await db.transaction(
+    'rw',
+    [db.specimens, db.covers, db.categories, db.images, db.inbox, db.transferLogs],
+    async () => {
+      const { deletedAt, savedAt } = replaceTransferLogTimes()
+      await appendTransferLog(current, 'delete', deletedAt, { prune: false })
+      await db.specimens.put(updated)
+      await db.specimens.delete(existingId)
+      const imageStillUsed =
+        (await db.specimens.where('imageId').equals(currentImageId).count()) +
+        (await db.inbox.where('imageId').equals(currentImageId).count())
+      if (imageStillUsed === 0) await db.images.delete(currentImageId)
+
+      const remaining = await db.specimens.where('speciesId').equals(currentSpeciesId).toArray()
+      const categories = await db.categories.toArray()
+      const affectedCovers = await db.covers.where('specimenId').equals(existingId).toArray()
+      for (const cover of affectedCovers) {
+        const category = categories.find((row) => row.id === cover.categoryId)
+        const variant = cover.variant ?? ''
+        const remainingForPick = remaining
+          .filter(
+            (row) =>
+              category &&
+              specimenFillsSlot(
+                row,
+                category.requiredTags,
+                { speciesId: cover.speciesId, variant, name: '' },
+                catalogs,
+              ),
+          )
+          .map((row) => ({
+            id: row.id,
+            tags: specimenTags(row),
+            createdAt: row.createdAt,
+            silhouette: isSilhouette(row),
+            notPure: isNotPure(row),
+            gender: row.gender,
+          }))
+        const nextId = category
+          ? pickCoverAfterDelete(category.requiredTags, remainingForPick, cover.speciesId)
+          : null
+        if (nextId) {
+          await db.covers.put({
+            categoryId: cover.categoryId,
+            speciesId: cover.speciesId,
+            variant,
+            specimenId: nextId,
+          })
+        } else {
+          await db.covers.delete([cover.categoryId, cover.speciesId, variant])
+        }
+      }
+
+      const specimens = await db.specimens.toArray()
+      const covers = await db.covers.toArray()
+      const mutations = coverMutationsAfterEdit(
+        edited,
+        updated,
+        categories,
+        covers,
+        specimens,
+        catalogs,
+      )
+      for (const mutation of mutations) {
+        if (mutation.op === 'put') {
+          await db.covers.put({
+            categoryId: mutation.categoryId,
+            speciesId: mutation.speciesId,
+            variant: mutation.variant,
+            specimenId: mutation.specimenId,
+          })
+        } else {
+          await db.covers.delete([mutation.categoryId, mutation.speciesId, mutation.variant])
+        }
+      }
+      await appendTransferLog(updated, 'edit', savedAt)
+    },
+  )
+
+  if (currentImageId !== edited.imageId) forgetImageUrls(currentImageId)
+
+  const extraSpecies = [
+    ...(edited.speciesId === updated.speciesId ? [] : [edited.speciesId]),
+    ...(currentSpeciesId === updated.speciesId ? [] : [currentSpeciesId]),
+  ]
+  const saved = await finishSave(updated, { duplicate: false }, extraSpecies)
+  const cloudDelete = await deleteCloudSpecimen(existingId, currentSpeciesId, currentHash)
+  if (
+    cropChanged &&
+    edited.fileHash &&
+    edited.fileHash !== updated.fileHash &&
+    saved.specimen.cloudBackupPending === false
+  ) {
+    await removeSpecimenPhoto(edited.fileHash)
+  }
+  return { cloudError: saved.cloudError || cloudDelete, specimen: saved.specimen }
 }
 
 async function finishSave(
