@@ -477,6 +477,10 @@ export function GalleryPage() {
       <SpecimenTagSheet
         specimen={editingTags ? preview : null}
         onClose={() => setEditingTags(false)}
+        onDiscarded={() => {
+          setEditingTags(false)
+          setPreview(null)
+        }}
         onSaved={(specimen) => {
           setEditingTags(false)
           if (specimen.speciesId !== Number(speciesId) || !hasAllRequired(specimenTags(specimen), filterTags)) {

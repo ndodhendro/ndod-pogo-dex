@@ -13,6 +13,7 @@ import {
   fieldsAllowedOnLimitedTags,
   limitedRosterWarning,
   nationalDexSlots,
+  searchDexSlots,
   searchSlots,
   searchVariantNames,
   slotsForEvolutionLine,
@@ -604,6 +605,39 @@ describe('searchSlots', () => {
     expect(party.length).toBeGreaterThan(2)
     expect(searchSlots(slots, '0001').every((slot) => slot.speciesId === 1)).toBe(true)
     expect(searchSlots(slots, '0001').length).toBeGreaterThanOrEqual(3)
+  })
+})
+
+describe('searchDexSlots', () => {
+  const slots = slotsForTrack(['costume'], [costume], roster)
+  const partyHat = {
+    ...specimen({ speciesId: 25, costume: 'Party Hat' }),
+    fileName: 'IMG_1234.PNG',
+  }
+  const shinyPikachu = {
+    ...specimen({ speciesId: 25, shiny: true }),
+    fileName: 'IMG_9999.png',
+  }
+
+  it('still matches species names when no filename hits', () => {
+    const names = searchDexSlots(slots, 'party', [partyHat], ['costume'], [costume]).map(
+      (slot) => slot.name,
+    )
+    expect(names.some((name) => name.toLowerCase() === 'pikachu party hat')).toBe(true)
+  })
+
+  it('keeps a slot whose screenshot filename matches', () => {
+    const hits = searchDexSlots(slots, 'img_1234', [partyHat], ['costume'], [costume])
+    expect(hits).toEqual([expect.objectContaining({ speciesId: 25, variant: 'Party Hat' })])
+  })
+
+  it('ignores a filename that does not fill the current track', () => {
+    expect(searchDexSlots(slots, 'img_9999', [shinyPikachu], ['costume'], [costume])).toEqual([])
+  })
+
+  it('does not leak a filename hit onto other variants of the same species', () => {
+    const hits = searchDexSlots(slots, 'img_1234', [partyHat], ['costume'], [costume])
+    expect(hits.every((slot) => slot.variant === 'Party Hat')).toBe(true)
   })
 })
 

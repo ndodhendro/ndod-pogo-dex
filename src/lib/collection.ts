@@ -8,7 +8,13 @@ import { galleryOrderPatch } from './galleryOrder'
 import { newId } from './id'
 import { cropBottomFromBlob, makeImageVariants } from './images'
 import { hashBlob } from './hash'
-import { screenshotFileName } from './screenshotFileName'
+import {
+  collectScreenshotFileNameKeys,
+  DuplicateScreenshotFileNameError,
+  screenshotFileName,
+  screenshotFileNameIsTaken,
+  screenshotFileNameKey,
+} from './screenshotFileName'
 import { cloudBackupErrorMessage, pickSpecimenToKeepForHash, sameSpecimenMetadata } from './specimenHash'
 import { rebaseSpecimenId } from './specimenMerge'
 import {
@@ -33,7 +39,7 @@ import {
   specimenFillsSlot,
   type SlotMode,
 } from './roster'
-import { appendInboxDiscardLog, appendTransferLog, replaceTransferLogTimes } from './transferLogs'
+import { appendInboxDiscardLog, appendTransferLog, appendDuplicateFileNameLog, replaceTransferLogTimes } from './transferLogs'
 import {
   extraTagList,
   isNotPure,
@@ -46,14 +52,39 @@ import {
   type TagId,
 } from './tags'
 
+export async function loadTakenScreenshotFileNames(): Promise<Set<string>> {
+  const [inbox, specimens] = await Promise.all([db.inbox.toArray(), db.specimens.toArray()])
+  return collectScreenshotFileNameKeys([...inbox, ...specimens])
+}
+
+async function findScreenshotFileOwner(
+  fileName: string,
+): Promise<{ id: string; imageId: string } | undefined> {
+  const key = screenshotFileNameKey(fileName)
+  if (!key) return undefined
+  const inbox = await db.inbox.toArray()
+  const inboxHit = inbox.find((row) => screenshotFileNameKey(row.fileName) === key)
+  if (inboxHit) return { id: inboxHit.id, imageId: inboxHit.imageId }
+  const specimens = await db.specimens.toArray()
+  const specimenHit = specimens.find((row) => screenshotFileNameKey(row.fileName) === key)
+  if (specimenHit) return { id: specimenHit.id, imageId: specimenHit.imageId }
+  return undefined
+}
+
 export async function ingestFile(
   file: File | Blob,
   fileName?: string | null,
+  takenNames?: Set<string>,
 ): Promise<InboxRow> {
+  const name = screenshotFileName(fileName) ?? screenshotFileName(file)
+  const taken = takenNames ?? (await loadTakenScreenshotFileNames())
+  if (name && screenshotFileNameIsTaken(name, taken)) {
+    await appendDuplicateFileNameLog(name, await findScreenshotFileOwner(name))
+    throw new DuplicateScreenshotFileNameError(name)
+  }
   const variants = await makeImageVariants(file)
   const imageId = newId()
   const inboxId = newId()
-  const name = screenshotFileName(fileName) ?? screenshotFileName(file)
   await db.transaction('rw', db.images, db.inbox, async () => {
     await db.images.add({ id: imageId, ...variants })
     await db.inbox.add({
@@ -63,6 +94,8 @@ export async function ingestFile(
       createdAt: Date.now(),
     })
   })
+  const key = screenshotFileNameKey(name)
+  if (key) taken.add(key)
   return (await db.inbox.get(inboxId))!
 }
 
@@ -888,7 +921,7 @@ export async function importPendingShares() {
     open.onsuccess = () => resolve(open.result)
     open.onerror = () => resolve(null)
   })
-  if (!shareDb) return 0
+  if (!shareDb) return { imported: 0, duplicateNames: [] }
 
   const items = await new Promise<{ id: string; blob: Blob; fileName?: string }[]>((resolve) => {
     const tx = shareDb.transaction(SHARE_STORE, 'readonly')
@@ -897,12 +930,19 @@ export async function importPendingShares() {
     req.onerror = () => resolve([])
   })
 
+  const duplicateNames: string[] = []
+  let imported = 0
   for (const item of items) {
+    let duplicateName: string | null = null
     try {
       await ingestFile(item.blob, item.fileName)
-    } catch {
-      // Keep the share row so the user can retry from Transfer refresh.
-      continue
+    } catch (err) {
+      if (err instanceof DuplicateScreenshotFileNameError) {
+        duplicateName = err.fileName
+      } else {
+        // Keep the share row so the user can retry from Transfer refresh.
+        continue
+      }
     }
     await new Promise<void>((resolve) => {
       const tx = shareDb.transaction(SHARE_STORE, 'readwrite')
@@ -910,7 +950,9 @@ export async function importPendingShares() {
       tx.oncomplete = () => resolve()
       tx.onerror = () => resolve()
     })
+    if (duplicateName) duplicateNames.push(duplicateName)
+    else imported += 1
   }
   shareDb.close()
-  return items.length
+  return { imported, duplicateNames }
 }

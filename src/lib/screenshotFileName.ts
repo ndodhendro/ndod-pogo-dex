@@ -9,6 +9,54 @@ export function screenshotFileName(
   return base || null
 }
 
+/** Lowercased basename for matching Transfer and Pokédex filenames. */
+export function screenshotFileNameKey(
+  source: File | Blob | string | null | undefined,
+): string | null {
+  const name = screenshotFileName(source)
+  return name ? name.toLowerCase() : null
+}
+
+/** Empty query matches. Otherwise the basename must contain the query. */
+export function screenshotFileNameMatchesQuery(
+  fileName: string | null | undefined,
+  query: string,
+): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  const name = screenshotFileNameKey(fileName)
+  return Boolean(name && name.includes(q))
+}
+
+export function collectScreenshotFileNameKeys(
+  rows: readonly { fileName?: string | null }[],
+): Set<string> {
+  const keys = new Set<string>()
+  for (const row of rows) {
+    const key = screenshotFileNameKey(row.fileName)
+    if (key) keys.add(key)
+  }
+  return keys
+}
+
+export function screenshotFileNameIsTaken(
+  source: File | Blob | string | null | undefined,
+  taken: ReadonlySet<string>,
+): boolean {
+  const key = screenshotFileNameKey(source)
+  return Boolean(key && taken.has(key))
+}
+
+export class DuplicateScreenshotFileNameError extends Error {
+  readonly fileName: string
+
+  constructor(fileName: string) {
+    super('Screenshot filename already in the app')
+    this.name = 'DuplicateScreenshotFileNameError'
+    this.fileName = fileName
+  }
+}
+
 /** Gallery File.name wins; fall back to a stored basename. */
 export function restoredScreenshotFileName(
   file: File | Blob | string | null | undefined,

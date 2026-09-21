@@ -2,7 +2,7 @@ import { db, type InboxRow, type SpecimenRow, type TransferLogRow } from './db'
 import { newId } from './id'
 import { extraTagList, fieldsFromSpecimen, isNotPure, isSilhouette, type SpecimenFields } from './tags'
 
-export type TransferLogAction = 'save' | 'edit' | 'delete' | 'restore' | 'discard'
+export type TransferLogAction = 'save' | 'edit' | 'delete' | 'restore' | 'discard' | 'duplicate'
 
 export const TRANSFER_LOG_LIMIT = 100
 
@@ -12,6 +12,7 @@ export const TRANSFER_LOG_ACTIONS: Record<TransferLogAction, { icon: string; lab
   delete: { icon: '🗑️', label: 'Deleted' },
   restore: { icon: '☁️', label: 'Restored' },
   discard: { icon: '🗑️', label: 'Discarded' },
+  duplicate: { icon: '⚠️', label: 'Duplicate filename' },
 }
 
 export function sortTransferLogs<T extends { createdAt: number; updatedAt: number }>(
@@ -46,8 +47,16 @@ export function transferLogIsUntaggedDiscard(log: TransferLogRow): boolean {
   return log.action === 'discard' && !transferLogHasSnapshot(log)
 }
 
+export function transferLogIsDuplicateFileName(log: TransferLogRow): boolean {
+  return log.action === 'duplicate' && !transferLogHasSnapshot(log)
+}
+
+export function transferLogIsFileOnly(log: TransferLogRow): boolean {
+  return transferLogIsUntaggedDiscard(log) || transferLogIsDuplicateFileName(log)
+}
+
 export function transferLogIsListed(log: TransferLogRow, live?: SpecimenRow): boolean {
-  return transferLogIsUntaggedDiscard(log) || transferLogHasSnapshot(log) || Boolean(live)
+  return transferLogIsFileOnly(log) || transferLogHasSnapshot(log) || Boolean(live)
 }
 
 export function inboxDiscardLogSnapshot(
@@ -173,6 +182,36 @@ export async function appendInboxDiscardLog(
   await db.transferLogs.add({
     id: newId(),
     ...inboxDiscardLogSnapshot(inbox, image?.thumb?.slice()),
+    createdAt: now,
+    updatedAt: now,
+  })
+  if (options.prune !== false) await pruneTransferLogs()
+}
+
+export function duplicateFileNameLogSnapshot(
+  fileName: string,
+  source?: { imageId: string },
+  thumb?: Blob,
+): Omit<TransferLogRow, 'id' | 'createdAt' | 'updatedAt'> {
+  return {
+    specimenId: newId(),
+    action: 'duplicate',
+    imageId: source?.imageId ?? null,
+    fileName,
+    thumb,
+  }
+}
+
+export async function appendDuplicateFileNameLog(
+  fileName: string,
+  source?: { id: string; imageId: string },
+  now = Date.now(),
+  options: { prune?: boolean } = {},
+) {
+  const image = source?.imageId ? await db.images.get(source.imageId) : undefined
+  await db.transferLogs.add({
+    id: newId(),
+    ...duplicateFileNameLogSnapshot(fileName, source, image?.thumb?.slice()),
     createdAt: now,
     updatedAt: now,
   })

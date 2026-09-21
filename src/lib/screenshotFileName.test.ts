@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  collectScreenshotFileNameKeys,
+  DuplicateScreenshotFileNameError,
   restoredScreenshotFileName,
   sameLookFilenamesCopied,
   screenshotFileName,
+  screenshotFileNameIsTaken,
+  screenshotFileNameKey,
+  screenshotFileNameMatchesQuery,
 } from './screenshotFileName'
 
 describe('screenshotFileName', () => {
@@ -26,6 +31,51 @@ describe('screenshotFileName', () => {
     expect(screenshotFileName('')).toBeNull()
     expect(screenshotFileName('   ')).toBeNull()
     expect(screenshotFileName(null)).toBeNull()
+  })
+})
+
+describe('screenshotFileNameKey', () => {
+  it('lowercases the basename for matching', () => {
+    expect(screenshotFileNameKey('C:\\Pictures\\IMG_0001.PNG')).toBe('img_0001.png')
+  })
+})
+
+describe('screenshotFileNameMatchesQuery', () => {
+  it('matches a basename fragment, ignoring case and path', () => {
+    expect(screenshotFileNameMatchesQuery('C:\\Pictures\\IMG_1234.PNG', 'img_1234')).toBe(true)
+    expect(screenshotFileNameMatchesQuery('IMG_1234.PNG', '1234')).toBe(true)
+    expect(screenshotFileNameMatchesQuery('IMG_1234.PNG', 'other')).toBe(false)
+  })
+
+  it('keeps every name when the query is empty', () => {
+    expect(screenshotFileNameMatchesQuery('IMG_1234.PNG', '  ')).toBe(true)
+    expect(screenshotFileNameMatchesQuery(null, '')).toBe(true)
+  })
+})
+
+describe('screenshotFileNameIsTaken', () => {
+  it('matches inbox or Pokédex names without the path', () => {
+    const taken = collectScreenshotFileNameKeys([
+      { fileName: 'shot.png' },
+      { fileName: 'C:\\Pictures\\Pikachu.JPG' },
+    ])
+    expect(screenshotFileNameIsTaken('shot.png', taken)).toBe(true)
+    expect(screenshotFileNameIsTaken('pikachu.jpg', taken)).toBe(true)
+    expect(screenshotFileNameIsTaken('other.webp', taken)).toBe(false)
+  })
+
+  it('ignores blank names', () => {
+    const taken = collectScreenshotFileNameKeys([{ fileName: 'shot.png' }, { fileName: null }])
+    expect(screenshotFileNameIsTaken(null, taken)).toBe(false)
+    expect(screenshotFileNameIsTaken('', taken)).toBe(false)
+  })
+})
+
+describe('DuplicateScreenshotFileNameError', () => {
+  it('keeps the basename that collided', () => {
+    const err = new DuplicateScreenshotFileNameError('IMG_0001.png')
+    expect(err.fileName).toBe('IMG_0001.png')
+    expect(err.message).toBe('Screenshot filename already in the app')
   })
 })
 

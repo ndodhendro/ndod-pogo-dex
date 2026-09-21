@@ -5,7 +5,7 @@ import { cropHeightForSpecimen } from '../data/tagCrops'
 import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { useTagCropHeights } from '../hooks/useCropSettings'
-import { updateSpecimen, replaceSpecimenLook } from '../lib/collection'
+import { deleteSpecimen, replaceSpecimenLook, updateSpecimen } from '../lib/collection'
 import { db, type SpecimenRow } from '../lib/db'
 import { cropBottomFromBlob, SCREENSHOT_WIDTH } from '../lib/images'
 import {
@@ -30,7 +30,7 @@ import {
   ocrMatchesGenderSpecies,
   uniqueOcrSpeciesId,
 } from '../lib/speciesOcr'
-import { useToast } from '../lib/toast'
+import { toastAfterWrite, useToast } from '../lib/toast'
 import {
   cropTagsFromFields,
   fieldsFromSpecimen,
@@ -596,10 +596,12 @@ export function SpecimenTagSheet({
   specimen,
   onClose,
   onSaved,
+  onDiscarded,
 }: {
   specimen: SpecimenRow | null
   onClose: () => void
   onSaved: (specimen: SpecimenRow) => void
+  onDiscarded: () => void
 }) {
   const { showToast } = useToast()
   const [pendingDuplicate, setPendingDuplicate] = useState<{
@@ -613,6 +615,21 @@ export function SpecimenTagSheet({
     setPendingDuplicate(null)
     setDuplicateBusy(false)
   }, [specimen?.id])
+
+  async function confirmDuplicateDiscard() {
+    if (!pendingDuplicate || !specimen || duplicateBusy) return
+    setDuplicateBusy(true)
+    try {
+      const cloudError = await deleteSpecimen(specimen.id)
+      setPendingDuplicate(null)
+      toastAfterWrite(showToast, 'Screenshot discarded', cloudError)
+      onDiscarded()
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not discard')
+    } finally {
+      setDuplicateBusy(false)
+    }
+  }
 
   async function confirmDuplicateReplace() {
     const pending = pendingDuplicate
@@ -686,11 +703,7 @@ export function SpecimenTagSheet({
         if (duplicateBusy) return
         setPendingDuplicate(null)
       }}
-      onDiscard={() => {
-        if (duplicateBusy) return
-        setPendingDuplicate(null)
-        onClose()
-      }}
+      onDiscard={() => void confirmDuplicateDiscard()}
       onReplace={() => void confirmDuplicateReplace()}
     />
     </>

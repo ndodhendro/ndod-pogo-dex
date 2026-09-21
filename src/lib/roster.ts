@@ -15,6 +15,7 @@ import { GO_RELEASED_IDS, isGoReleased } from '../data/goReleased'
 import { SPECIES, SPECIES_BY_ID, searchSpecies } from '../data/species'
 import { BASIC_CROP_TAG } from '../data/tagCrops'
 import { isGreenCover } from './covers'
+import { screenshotFileNameMatchesQuery } from './screenshotFileName'
 import {
   extraTagList,
   formLabelForPreview,
@@ -659,6 +660,38 @@ export function searchSlots(slots: readonly DexSlotDef[], query: string): DexSlo
       normalizeVariant(slot.variant).toLowerCase().includes(q)
     )
   })
+}
+
+type DexSearchSpecimen = SpecimenFields & { fileName?: string | null }
+
+/** Species, number, variant, plus screenshot filenames that fill a slot on this track. */
+export function searchDexSlots(
+  slots: readonly DexSlotDef[],
+  query: string,
+  specimens: readonly DexSearchSpecimen[] = [],
+  requiredTags: readonly TagId[] = [],
+  catalogs: readonly TagCatalog[] = [],
+): DexSlotDef[] {
+  const named = searchSlots(slots, query)
+  const q = query.trim()
+  if (!q || specimens.length === 0) return named
+
+  const byFile = specimens.filter((row) => screenshotFileNameMatchesQuery(row.fileName, q))
+  if (byFile.length === 0) return named
+
+  const keep = new Set(named.map((slot) => slotId(slot.speciesId, slot.variant)))
+  let added = false
+  for (const row of byFile) {
+    for (const slot of slots) {
+      const id = slotId(slot.speciesId, slot.variant)
+      if (keep.has(id)) continue
+      if (!specimenFillsSlot(row, requiredTags, slot, catalogs)) continue
+      keep.add(id)
+      added = true
+    }
+  }
+  if (!added) return named
+  return slots.filter((slot) => keep.has(slotId(slot.speciesId, slot.variant)))
 }
 
 /** Species search that hits exactly one species, otherwise null. */

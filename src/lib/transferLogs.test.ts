@@ -3,10 +3,13 @@ import { extraTagList } from './tags'
 import {
   idsToPrune,
   inboxDiscardLogSnapshot,
+  duplicateFileNameLogSnapshot,
   replaceTransferLogTimes,
   sortTransferLogs,
   specimenFromTransferLog,
   transferLogHasSnapshot,
+  transferLogIsDuplicateFileName,
+  transferLogIsFileOnly,
   transferLogIsListed,
   transferLogIsUntaggedDiscard,
   transferLogLiveImageId,
@@ -48,6 +51,10 @@ describe('TRANSFER_LOG_ACTIONS', () => {
 
   it('labels discarded untagged screenshots separately from deleted specimens', () => {
     expect(TRANSFER_LOG_ACTIONS.discard).toEqual({ icon: '🗑️', label: 'Discarded' })
+  })
+
+  it('labels a rejected duplicate filename', () => {
+    expect(TRANSFER_LOG_ACTIONS.duplicate).toEqual({ icon: '⚠️', label: 'Duplicate filename' })
   })
 })
 
@@ -126,6 +133,22 @@ describe('untagged discard logs', () => {
     expect(transferLogIsListed({ id: 'old', specimenId: 'gone', createdAt: 1, updatedAt: 1 })).toBe(
       false,
     )
+  })
+})
+
+describe('duplicate filename logs', () => {
+  it('keeps the filename without inventing a species', () => {
+    const snapshot = duplicateFileNameLogSnapshot('IMG_0001.png', { imageId: 'img-1' })
+    expect(snapshot).toMatchObject({
+      action: 'duplicate',
+      imageId: 'img-1',
+      fileName: 'IMG_0001.png',
+    })
+    expect(snapshot.speciesId).toBeUndefined()
+    const log = { ...snapshot, id: 'log', createdAt: 1, updatedAt: 1 }
+    expect(transferLogIsDuplicateFileName(log)).toBe(true)
+    expect(transferLogIsFileOnly(log)).toBe(true)
+    expect(transferLogIsListed(log)).toBe(true)
   })
 })
 

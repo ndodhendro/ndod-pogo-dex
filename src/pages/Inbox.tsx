@@ -21,6 +21,7 @@ import {
   discardInbox,
   importPendingShares,
   ingestFile,
+  loadTakenScreenshotFileNames,
   replaceSpecimenFromInbox,
   saveSpecimenFromInbox,
 } from '../lib/collection'
@@ -37,11 +38,14 @@ import {
   type InboxSortDir,
 } from '../lib/inboxOrder'
 import { isProbablyImageFile } from '../lib/images'
+import { DuplicateScreenshotFileNameError } from '../lib/screenshotFileName'
 import { useToast } from '../lib/toast'
 import {
   pruneTransferLogs,
   sortTransferLogs,
   specimenFromTransferLog,
+  transferLogIsDuplicateFileName,
+  transferLogIsFileOnly,
   transferLogIsListed,
   transferLogIsUntaggedDiscard,
   transferLogLiveImageId,
@@ -103,9 +107,15 @@ export function InboxPage() {
   const showSort = canDiscardAll
 
   useEffect(() => {
-    importPendingShares().catch(() => {
-      showToast('Could not import a shared screenshot')
-    })
+    importPendingShares()
+      .then((result) => {
+        if (result.duplicateNames.length > 0) {
+          showToast('Screenshot filename already in the app', 'warning')
+        }
+      })
+      .catch(() => {
+        showToast('Could not import a shared screenshot')
+      })
   }, [showToast])
 
   useEffect(() => {
@@ -116,19 +126,26 @@ export function InboxPage() {
     if (list.length === 0) return
     setAdding(true)
     let added = 0
+    let duplicates = 0
     try {
+      const taken = await loadTakenScreenshotFileNames()
       for (const file of list) {
         if (!isProbablyImageFile(file)) {
           showToast('That file is not an image')
           continue
         }
         try {
-          await ingestFile(file)
+          await ingestFile(file, undefined, taken)
           added += 1
         } catch (err) {
+          if (err instanceof DuplicateScreenshotFileNameError) {
+            duplicates += 1
+            continue
+          }
           showToast(err instanceof Error ? err.message : 'Could not add screenshot')
         }
       }
+      if (duplicates > 0) showToast('Screenshot filename already in the app', 'warning')
       if (added === 1) showToast('Screenshot added', 'success')
       else if (added > 1) showToast(`${added} screenshots added`, 'success')
     } finally {
@@ -477,13 +494,17 @@ function TransferLogItem({
   liveFileName?: string | null
   categories: CategoryRow[]
 }) {
-  const liveUrl = useImageUrl(liveImageId, 'thumb')
+  const liveUrl = useImageUrl(
+    liveImageId ?? (transferLogIsDuplicateFileName(log) ? log.imageId ?? undefined : undefined),
+    'thumb',
+  )
   const blobUrl = useBlobUrl(log.thumb)
   const url = liveUrl ?? blobUrl
   const untagged = transferLogIsUntaggedDiscard(log)
+  const fileOnly = transferLogIsFileOnly(log)
   const species = SPECIES_BY_ID.get(specimen.speciesId)
-  const tags = untagged ? [] : sortSpecimenTags(specimenTags(specimen), categories)
-  const progress = untagged ? { seen: false, caught: false, pure: false } : specimenProgressFlags(specimen, categories)
+  const tags = fileOnly ? [] : sortSpecimenTags(specimenTags(specimen), categories)
+  const progress = fileOnly ? { seen: false, caught: false, pure: false } : specimenProgressFlags(specimen, categories)
   const action = TRANSFER_LOG_ACTIONS[log.action ?? 'save']
   return (
     <article className={styles.item}>
@@ -503,7 +524,7 @@ function TransferLogItem({
         </p>
         {untagged ? (
           <strong data-tone="inbox">Untagged</strong>
-        ) : (
+        ) : transferLogIsDuplicateFileName(log) ? null : (
           <p className={styles.logSpecies}>
             <span className={styles.logId}>#{String(specimen.speciesId).padStart(4, '0')}</span>
             {species?.name ?? 'Unknown'}

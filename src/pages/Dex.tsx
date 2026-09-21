@@ -57,7 +57,7 @@ import { readDexViewState, writeDexViewState } from '../lib/dexViewState'
 import { listNeighbor } from '../lib/previewSwipe'
 import {
   countFilledSlots,
-  searchSlots,
+  searchDexSlots,
   slotsForEvolutionLine,
   slotsForTrack,
   specimenFillsSlot,
@@ -316,8 +316,8 @@ export function DexPage() {
           className={styles.speciesSearch}
           value={query}
           onChange={setQuery}
-          placeholder="Species"
-          aria-label="Species"
+          placeholder="Search"
+          aria-label="Search species and filenames"
         />
         <button
           type="button"
@@ -498,6 +498,10 @@ export function DexPage() {
       <SpecimenTagSheet
         specimen={editingTags ? preview : null}
         onClose={() => setEditingTags(false)}
+        onDiscarded={() => {
+          setEditingTags(false)
+          setPreview(null)
+        }}
         onSaved={(specimen) => {
           setEditingTags(false)
           if (
@@ -644,7 +648,7 @@ function buildSlots(
     evolutionSpeciesId != null
       ? slotsForEvolutionLine(catalog, evolutionSpeciesId)
       : query.trim()
-        ? searchSlots(catalog, query)
+        ? searchDexSlots(catalog, query, specimens, required, catalogs)
         : catalog
   const variantCounts = countBySpeciesId(catalog)
   const galleryCounts = countBySpeciesId(specimens)
