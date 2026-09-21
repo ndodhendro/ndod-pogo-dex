@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   mergeInboxDisplay,
   nextInboxSort,
+  inboxMatchesFileNameQuery,
   sortInboxByFileName,
 } from './inboxOrder'
 
@@ -103,5 +104,19 @@ describe('nextInboxSort', () => {
   it('re-applies the current direction so a newly added row is sorted only after a click', () => {
     const n = row('n', 'm.png', 4)
     expect(nextInboxSort([n, a, b, c], 'asc')).toEqual({ dir: 'asc', ids: ['a', 'b', 'c', 'n'] })
+  })
+})
+
+describe('inboxMatchesFileNameQuery', () => {
+  it('matches a case-insensitive filename fragment', () => {
+    expect(inboxMatchesFileNameQuery('Screenshot_2026.png', 'shot_2026')).toBe(true)
+    expect(inboxMatchesFileNameQuery('Screenshot_2026.png', 'PNG')).toBe(true)
+    expect(inboxMatchesFileNameQuery('Screenshot_2026.png', 'charizard')).toBe(false)
+  })
+
+  it('treats an empty query as a match and ignores missing names', () => {
+    expect(inboxMatchesFileNameQuery('shot.png', '  ')).toBe(true)
+    expect(inboxMatchesFileNameQuery(null, 'shot')).toBe(false)
+    expect(inboxMatchesFileNameQuery(null, '')).toBe(true)
   })
 })

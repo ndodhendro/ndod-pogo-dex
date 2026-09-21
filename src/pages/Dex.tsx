@@ -175,8 +175,9 @@ export function DexPage() {
     [category, catalogs, roster],
   )
   const searchedSpeciesId = useMemo(
-    () => uniqueSearchSpeciesId(catalog, query),
-    [catalog, query],
+    () =>
+      uniqueSearchSpeciesId(catalog, query, specimens, category?.requiredTags ?? [], catalogs),
+    [catalog, query, specimens, category, catalogs],
   )
   useEffect(() => {
     if (searchedSpeciesId == null) setShowEvolutionLine(false)

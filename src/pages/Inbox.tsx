@@ -7,12 +7,14 @@ import { TagChip } from '../components/TagChip'
 import { AppFooter } from '../components/AppFooter'
 import { FileNameCopy } from '../components/FileNameCopy'
 import { SameLookSheet } from '../components/SameLookSheet'
+import { SearchField } from '../components/SearchField'
 import {
   categoryForTag,
   lookForTag,
   SEEN_ICON,
   sortSpecimenTags,
   TAB_ICONS,
+  TAB_LOGOS,
 } from '../data/navIcons'
 import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
@@ -34,6 +36,7 @@ import {
 import {
   INBOX_SORT_EMOJI,
   INBOX_SORT_LABEL,
+  inboxMatchesFileNameQuery,
   sortInboxByFileName,
   type InboxSortDir,
 } from '../lib/inboxOrder'
@@ -101,9 +104,13 @@ export function InboxPage() {
   const [adding, setAdding] = useState(false)
   const [view, setView] = useState<TransferView>('untagged')
   const [sortDir, setSortDir] = useState<InboxSortDir>('asc')
+  const [fileQuery, setFileQuery] = useState('')
   const showingLogs = view === 'logs'
   const canDiscardAll = !showingLogs && items.length > 0
-  const displayed = useMemo(() => sortInboxByFileName(items, sortDir), [items, sortDir])
+  const displayed = useMemo(() => {
+    const sorted = sortInboxByFileName(items, sortDir)
+    return sorted.filter((item) => inboxMatchesFileNameQuery(item.fileName, fileQuery))
+  }, [items, sortDir, fileQuery])
   const showSort = canDiscardAll
 
   useEffect(() => {
@@ -305,6 +312,15 @@ export function InboxPage() {
             Logs
           </button>
         </div>
+        {!showingLogs && items.length > 0 ? (
+          <SearchField
+            className={styles.search}
+            value={fileQuery}
+            onChange={setFileQuery}
+            placeholder="Search filename"
+            aria-label="Search filenames"
+          />
+        ) : null}
       </div>
       {showingLogs ? (
         <section className={styles.logs} aria-label="Logs">
@@ -330,6 +346,8 @@ export function InboxPage() {
         </section>
       ) : items.length === 0 ? (
         <p className="empty-state">Nothing waiting. Catch something, screenshot it, transfer it here.</p>
+      ) : displayed.length === 0 ? (
+        <p className="empty-state">No matching filenames.</p>
       ) : (
         <div className={styles.list}>
           {displayed.map((item) => (
@@ -516,7 +534,18 @@ function TransferLogItem({
           className={styles.fileName}
         />
         <p className={styles.logAction} data-action={log.action ?? 'save'}>
-          <span aria-hidden="true">{action.icon}</span>
+          <span aria-hidden="true">
+            {log.action === 'duplicate-pokedex' ? (
+              <img
+                src={`${import.meta.env.BASE_URL}${TAB_LOGOS.dex}`}
+                alt=""
+                width={16}
+                height={16}
+              />
+            ) : (
+              action.icon
+            )}
+          </span>
           {action.label}
         </p>
         <p className={`page-sub ${styles.itemTime}`}>

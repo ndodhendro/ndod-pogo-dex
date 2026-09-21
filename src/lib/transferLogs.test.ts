@@ -3,6 +3,7 @@ import { extraTagList } from './tags'
 import {
   idsToPrune,
   inboxDiscardLogSnapshot,
+  duplicateFileNameAction,
   duplicateFileNameLogSnapshot,
   replaceTransferLogTimes,
   sortTransferLogs,
@@ -53,8 +54,19 @@ describe('TRANSFER_LOG_ACTIONS', () => {
     expect(TRANSFER_LOG_ACTIONS.discard).toEqual({ icon: '🗑️', label: 'Discarded' })
   })
 
-  it('labels a rejected duplicate filename', () => {
+  it('labels a rejected duplicate filename by where it already lives', () => {
     expect(TRANSFER_LOG_ACTIONS.duplicate).toEqual({ icon: '⚠️', label: 'Duplicate filename' })
+    expect(TRANSFER_LOG_ACTIONS['duplicate-untagged']).toEqual({
+      icon: '📥',
+      label: 'Duplicate in Untagged',
+    })
+    expect(TRANSFER_LOG_ACTIONS['duplicate-pokedex']).toEqual({
+      icon: '📖',
+      label: 'Duplicate in Pokédex',
+    })
+    expect(duplicateFileNameAction('untagged')).toBe('duplicate-untagged')
+    expect(duplicateFileNameAction('pokedex')).toBe('duplicate-pokedex')
+    expect(duplicateFileNameAction()).toBe('duplicate')
   })
 })
 
@@ -149,6 +161,24 @@ describe('duplicate filename logs', () => {
     expect(transferLogIsDuplicateFileName(log)).toBe(true)
     expect(transferLogIsFileOnly(log)).toBe(true)
     expect(transferLogIsListed(log)).toBe(true)
+  })
+
+  it('records whether the name is already in Untagged or the Pokédex', () => {
+    expect(
+      duplicateFileNameLogSnapshot('a.png', { imageId: 'in', place: 'untagged' }).action,
+    ).toBe('duplicate-untagged')
+    expect(
+      duplicateFileNameLogSnapshot('a.png', { imageId: 'dex', place: 'pokedex' }).action,
+    ).toBe('duplicate-pokedex')
+    expect(
+      transferLogIsDuplicateFileName({
+        id: 'log',
+        specimenId: 'x',
+        action: 'duplicate-pokedex',
+        createdAt: 1,
+        updatedAt: 1,
+      }),
+    ).toBe(true)
   })
 })
 

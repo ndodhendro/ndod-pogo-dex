@@ -694,14 +694,21 @@ export function searchDexSlots(
   return slots.filter((slot) => keep.has(slotId(slot.speciesId, slot.variant)))
 }
 
-/** Species search that hits exactly one species, otherwise null. */
-export function uniqueSearchSpeciesId(slots: readonly DexSlotDef[], query: string): number | null {
+/** Search hits that leave exactly one species, otherwise null. */
+export function uniqueSearchSpeciesId(
+  slots: readonly DexSlotDef[],
+  query: string,
+  specimens: readonly DexSearchSpecimen[] = [],
+  requiredTags: readonly TagId[] = [],
+  catalogs: readonly TagCatalog[] = [],
+): number | null {
   const q = query.trim()
   if (!q) return null
-  const catalogIds = new Set(slots.map((slot) => slot.speciesId))
-  const hits = searchSpecies(q).filter((species) => catalogIds.has(species.id))
-  if (hits.length !== 1) return null
-  return hits[0].id
+  const ids = new Set(
+    searchDexSlots(slots, q, specimens, requiredTags, catalogs).map((slot) => slot.speciesId),
+  )
+  if (ids.size !== 1) return null
+  return [...ids][0]
 }
 
 export function slotsForEvolutionLine(slots: readonly DexSlotDef[], speciesId: number): DexSlotDef[] {

@@ -1,3 +1,5 @@
+import { screenshotFileName } from './screenshotFileName'
+
 export type InboxSortDir = 'asc' | 'desc'
 
 export const INBOX_SORT_EMOJI: Record<InboxSortDir, string> = {
@@ -37,6 +39,16 @@ export function sortInboxByFileName<T extends InboxSortable>(
     if (a.createdAt !== b.createdAt) return b.createdAt - a.createdAt
     return a.id.localeCompare(b.id)
   })
+}
+
+export function inboxMatchesFileNameQuery(
+  fileName: string | null | undefined,
+  query: string,
+): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  const name = screenshotFileName(fileName)
+  return Boolean(name && name.toLowerCase().includes(q))
 }
 
 /** Keep the user's last order; newly added rows stay in live (newest-first) order at the top. */

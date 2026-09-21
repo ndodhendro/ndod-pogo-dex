@@ -2,7 +2,17 @@ import { db, type InboxRow, type SpecimenRow, type TransferLogRow } from './db'
 import { newId } from './id'
 import { extraTagList, fieldsFromSpecimen, isNotPure, isSilhouette, type SpecimenFields } from './tags'
 
-export type TransferLogAction = 'save' | 'edit' | 'delete' | 'restore' | 'discard' | 'duplicate'
+export type TransferLogAction =
+  | 'save'
+  | 'edit'
+  | 'delete'
+  | 'restore'
+  | 'discard'
+  | 'duplicate'
+  | 'duplicate-untagged'
+  | 'duplicate-pokedex'
+
+export type DuplicateFilePlace = 'untagged' | 'pokedex'
 
 export const TRANSFER_LOG_LIMIT = 100
 
@@ -13,6 +23,14 @@ export const TRANSFER_LOG_ACTIONS: Record<TransferLogAction, { icon: string; lab
   restore: { icon: '☁️', label: 'Restored' },
   discard: { icon: '🗑️', label: 'Discarded' },
   duplicate: { icon: '⚠️', label: 'Duplicate filename' },
+  'duplicate-untagged': { icon: '📥', label: 'Duplicate in Untagged' },
+  'duplicate-pokedex': { icon: '📖', label: 'Duplicate in Pokédex' },
+}
+
+export function duplicateFileNameAction(place?: DuplicateFilePlace): TransferLogAction {
+  if (place === 'untagged') return 'duplicate-untagged'
+  if (place === 'pokedex') return 'duplicate-pokedex'
+  return 'duplicate'
 }
 
 export function sortTransferLogs<T extends { createdAt: number; updatedAt: number }>(
@@ -48,7 +66,12 @@ export function transferLogIsUntaggedDiscard(log: TransferLogRow): boolean {
 }
 
 export function transferLogIsDuplicateFileName(log: TransferLogRow): boolean {
-  return log.action === 'duplicate' && !transferLogHasSnapshot(log)
+  return (
+    (log.action === 'duplicate' ||
+      log.action === 'duplicate-untagged' ||
+      log.action === 'duplicate-pokedex') &&
+    !transferLogHasSnapshot(log)
+  )
 }
 
 export function transferLogIsFileOnly(log: TransferLogRow): boolean {
@@ -190,12 +213,12 @@ export async function appendInboxDiscardLog(
 
 export function duplicateFileNameLogSnapshot(
   fileName: string,
-  source?: { imageId: string },
+  source?: { imageId: string; place?: DuplicateFilePlace },
   thumb?: Blob,
 ): Omit<TransferLogRow, 'id' | 'createdAt' | 'updatedAt'> {
   return {
     specimenId: newId(),
-    action: 'duplicate',
+    action: duplicateFileNameAction(source?.place),
     imageId: source?.imageId ?? null,
     fileName,
     thumb,
@@ -204,7 +227,7 @@ export function duplicateFileNameLogSnapshot(
 
 export async function appendDuplicateFileNameLog(
   fileName: string,
-  source?: { id: string; imageId: string },
+  source?: { id: string; imageId: string; place?: DuplicateFilePlace },
   now = Date.now(),
   options: { prune?: boolean } = {},
 ) {

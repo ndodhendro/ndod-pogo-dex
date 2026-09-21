@@ -644,7 +644,7 @@ describe('searchDexSlots', () => {
 describe('uniqueSearchSpeciesId', () => {
   const slots = slotsForTrack([], [], [])
 
-  it('is only set when the query points at one species', () => {
+  it('is only set when the query leaves one species', () => {
     expect(uniqueSearchSpeciesId(slots, 'pikachu')).toBe(25)
     expect(uniqueSearchSpeciesId(slots, '0025')).toBe(25)
     expect(uniqueSearchSpeciesId(slots, 'chu')).toBeNull()
@@ -654,9 +654,19 @@ describe('uniqueSearchSpeciesId', () => {
 
   it('still counts many looks of the same species as one species', () => {
     const costumes = slotsForTrack(['costume'], [costume], roster)
-    expect(uniqueSearchSpeciesId(costumes, 'pikachu')).toBe(25)
+    expect(uniqueSearchSpeciesId(costumes, 'dapper with')).toBe(25)
+    expect(uniqueSearchSpeciesId(costumes, 'pikachu')).toBeNull()
     expect(uniqueSearchSpeciesId(costumes, 'party')).toBeNull()
     expect(uniqueSearchSpeciesId(costumes, 'pikachu visor')).toBeNull()
+  })
+
+  it('is set when a filename search leaves one species', () => {
+    const costumes = slotsForTrack(['costume'], [costume], roster)
+    const partyHat = {
+      ...specimen({ speciesId: 25, costume: 'Party Hat' }),
+      fileName: 'IMG_1234.PNG',
+    }
+    expect(uniqueSearchSpeciesId(costumes, 'img_1234', [partyHat], ['costume'], [costume])).toBe(25)
   })
 })
 

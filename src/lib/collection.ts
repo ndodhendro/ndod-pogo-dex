@@ -39,7 +39,7 @@ import {
   specimenFillsSlot,
   type SlotMode,
 } from './roster'
-import { appendInboxDiscardLog, appendTransferLog, appendDuplicateFileNameLog, replaceTransferLogTimes } from './transferLogs'
+import { appendInboxDiscardLog, appendTransferLog, appendDuplicateFileNameLog, replaceTransferLogTimes, type DuplicateFilePlace } from './transferLogs'
 import {
   extraTagList,
   isNotPure,
@@ -59,15 +59,15 @@ export async function loadTakenScreenshotFileNames(): Promise<Set<string>> {
 
 async function findScreenshotFileOwner(
   fileName: string,
-): Promise<{ id: string; imageId: string } | undefined> {
+): Promise<{ id: string; imageId: string; place: DuplicateFilePlace } | undefined> {
   const key = screenshotFileNameKey(fileName)
   if (!key) return undefined
   const inbox = await db.inbox.toArray()
   const inboxHit = inbox.find((row) => screenshotFileNameKey(row.fileName) === key)
-  if (inboxHit) return { id: inboxHit.id, imageId: inboxHit.imageId }
+  if (inboxHit) return { id: inboxHit.id, imageId: inboxHit.imageId, place: 'untagged' }
   const specimens = await db.specimens.toArray()
   const specimenHit = specimens.find((row) => screenshotFileNameKey(row.fileName) === key)
-  if (specimenHit) return { id: specimenHit.id, imageId: specimenHit.imageId }
+  if (specimenHit) return { id: specimenHit.id, imageId: specimenHit.imageId, place: 'pokedex' }
   return undefined
 }
 

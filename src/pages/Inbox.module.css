@@ -34,6 +34,10 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.search {
+  min-width: 0;
+}
+
 .toolBtn {
   align-items: center;
   padding: 0 var(--space-2);
@@ -176,6 +180,21 @@
 
 .logAction[data-action='duplicate'] {
   color: var(--color-warning);
+}
+
+.logAction[data-action='duplicate-untagged'] {
+  color: var(--color-inbox-text);
+}
+
+.logAction[data-action='duplicate-pokedex'] {
+  color: var(--color-dex-text);
+}
+
+.logAction img {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  object-fit: contain;
 }
 
 .logSpecies {
