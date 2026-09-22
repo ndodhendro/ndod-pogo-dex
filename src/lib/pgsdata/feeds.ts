@@ -121,8 +121,18 @@ export function feedStem(name: string) {
   return numbered ? numbered[1] : trimmed
 }
 
-export function numberedFeedName(stem: string, index: number) {
-  return `${stem.trim()} ${formatRoman(index)}`
+/** Highest national dex id in a feed, or 0 when the list is empty. */
+export function maxFeedDexId(pokemons: readonly number[]) {
+  let max = 0
+  for (const id of pokemons) {
+    if (id > max) max = id
+  }
+  return max
+}
+
+/** Feed postfix is that list's max dex id (`Basic 151`, `Basic 025`, `Basic 1008`). */
+export function numberedFeedName(stem: string, pokemons: readonly number[]) {
+  return `${stem.trim()} ${String(maxFeedDexId(pokemons)).padStart(3, '0')}`
 }
 
 export function chunkSpeciesIds(ids: readonly number[], size = FEED_POKEMON_LIMIT): number[][] {
@@ -290,9 +300,9 @@ export function rebuildFeeds(
     rebuilt += chunks.length
     if (chunks.length > groupCount) created += chunks.length - groupCount
     if (groupCount > chunks.length) dropped += groupCount - chunks.length
-    chunks.forEach((pokemons, index) => {
-      next.push(copyFeed(feed, numberedFeedName(stem, index + 1), pokemons))
-    })
+    for (const pokemons of chunks) {
+      next.push(copyFeed(feed, numberedFeedName(stem, pokemons), pokemons))
+    }
   }
 
   return { feeds: next, stats: { skipped, rebuilt, created, dropped } }

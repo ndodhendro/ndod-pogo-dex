@@ -9,6 +9,7 @@ import {
   formatRoman,
   matchFeedCategory,
   normalizeFeedLabel,
+  numberedFeedName,
   parseRoman,
   rebuildFeeds,
 } from './feeds'
@@ -76,12 +77,21 @@ describe('Roman feed names', () => {
     expect(parseRoman('CP')).toBeNull()
   })
 
-  it('strips a roman or old dex suffix for the stem', () => {
+  it('strips a roman or dex suffix for the stem', () => {
     expect(feedStem('Basic I')).toBe('Basic')
     expect(feedStem('Basic II')).toBe('Basic')
     expect(feedStem('Max CP')).toBe('Max CP')
     expect(feedStem('Basic 001')).toBe('Basic')
+    expect(feedStem('Basic 1008')).toBe('Basic')
     expect(feedStem('Alolan')).toBe('Alolan')
+  })
+
+  it('names a feed from the highest pokedex id in its pokemon list', () => {
+    expect(numberedFeedName('Basic', [4, 1, 25])).toBe('Basic 025')
+    expect(numberedFeedName('Alolan', [19, 103])).toBe('Alolan 103')
+    expect(numberedFeedName('Basic', [1008])).toBe('Basic 1008')
+    expect(numberedFeedName('Basic', [])).toBe('Basic 000')
+    expect(feedStem(numberedFeedName('Max CP', [151]))).toBe('Max CP')
   })
 })
 
@@ -108,7 +118,11 @@ describe('PGSData feed matching', () => {
     ]
     const { feeds: next, stats } = rebuildFeeds(feeds, [], categories)
     expect(next[0]).toEqual({ name: 'Focus', pokemons: [99], size: 3 })
-    expect(next[1]).toEqual({ name: 'Alolan I', pokemons: alolanIds, form: 1 })
+    expect(next[1]).toEqual({
+      name: numberedFeedName('Alolan', alolanIds),
+      pokemons: alolanIds,
+      form: 1,
+    })
     expect(stats.skipped).toBe(1)
     expect(stats.rebuilt).toBe(1)
   })
@@ -125,7 +139,7 @@ describe('PGSData feed matching', () => {
     expect(next[0].pokemons).not.toContain(9999)
   })
 
-  it('splits overflow onto copied feeds with incrementing roman names', () => {
+  it('splits overflow onto copied feeds named by each chunk max dex id', () => {
     const feeds = [
       { name: 'Focus' },
       { name: 'Basic I', pokemons: [1], size: 0 },
@@ -133,20 +147,23 @@ describe('PGSData feed matching', () => {
     ]
     const { feeds: next, stats } = rebuildFeeds(feeds, [], categories)
     const basicFeeds = next.filter((row) => String(row.name).startsWith('Basic '))
+    const firstChunk = basicIds.slice(0, 300)
+    const secondChunk = basicIds.slice(300, 600)
     expect(basicFeeds.length).toBe(Math.ceil(basicIds.length / 300))
     expect(basicFeeds[0]).toEqual({
-      name: 'Basic I',
-      pokemons: basicIds.slice(0, 300),
+      name: numberedFeedName('Basic', firstChunk),
+      pokemons: firstChunk,
       size: 0,
     })
-    expect(basicFeeds[1]?.name).toBe('Basic II')
-    expect(basicFeeds[1]?.pokemons).toEqual(basicIds.slice(300, 600))
+    expect(basicFeeds[1]?.name).toBe(numberedFeedName('Basic', secondChunk))
+    expect(basicFeeds[1]?.pokemons).toEqual(secondChunk)
     expect(basicFeeds[1]?.size).toBe(0)
-    expect(next.findIndex((row) => row.name === 'Basic II')).toBe(
-      next.findIndex((row) => row.name === 'Basic I') + 1,
+    expect(basicFeeds[0]?.name).not.toBe(basicFeeds[1]?.name)
+    expect(next.findIndex((row) => row.name === numberedFeedName('Basic', secondChunk))).toBe(
+      next.findIndex((row) => row.name === numberedFeedName('Basic', firstChunk)) + 1,
     )
     expect(next[0].name).toBe('Focus')
-    expect(next.some((row) => row.name === 'Alolan I')).toBe(true)
+    expect(next.some((row) => row.name === numberedFeedName('Alolan', alolanIds))).toBe(true)
     expect(stats.created).toBeGreaterThan(0)
   })
 
@@ -157,7 +174,9 @@ describe('PGSData feed matching', () => {
       { name: 'Alolan III', pokemons: [50], size: 9 },
     ]
     const { feeds: next, stats } = rebuildFeeds(feeds, [], categories)
-    expect(next).toEqual([{ name: 'Alolan I', pokemons: alolanIds, size: 2 }])
+    expect(next).toEqual([
+      { name: numberedFeedName('Alolan', alolanIds), pokemons: alolanIds, size: 2 },
+    ])
     expect(stats.dropped).toBe(2)
   })
 
@@ -185,8 +204,12 @@ describe('PGSData feed matching', () => {
       ],
       categories,
     )
-    expect(next.find((row) => row.name === 'XXL I')?.pokemons).toEqual(remainingXxl.slice(0, 300))
-    expect(next.find((row) => row.name === 'Hundo I')?.pokemons).toEqual(remainingHundo.slice(0, 300))
+    expect(next.find((row) => row.name === numberedFeedName('XXL', remainingXxl.slice(0, 300)))?.pokemons).toEqual(
+      remainingXxl.slice(0, 300),
+    )
+    expect(
+      next.find((row) => row.name === numberedFeedName('Hundo', remainingHundo.slice(0, 300)))?.pokemons,
+    ).toEqual(remainingHundo.slice(0, 300))
   })
 
   function feedIds(feeds: { pokemons?: number[] }[]) {
@@ -295,9 +318,10 @@ describe('PGSData feed matching', () => {
       ],
       categories,
     )
-    expect(next[0].name).toBe('Male I')
-    expect(next[0].pokemons).toEqual(genderIds.filter((id) => id !== 25))
-    expect(next[1].name).toBe('Female I')
+    const maleIds = genderIds.filter((id) => id !== 25)
+    expect(next[0].name).toBe(numberedFeedName('Male', maleIds))
+    expect(next[0].pokemons).toEqual(maleIds)
+    expect(next[1].name).toBe(numberedFeedName('Female', genderIds))
     // Hisuian Female Sneasel is pure, but Female Weavile is still open, so 215 stays.
     expect(next[1].pokemons).toEqual(genderIds)
   })
@@ -328,9 +352,13 @@ describe('PGSData feed matching', () => {
       categories,
     )
     const packed = packPgsData(opened.payload, filled.feeds)
-    expect(packed.feeds.find((row) => row.name === 'Basic I')?.pokemons).not.toContain(1)
-    expect(packed.feeds.find((row) => row.name === 'Alolan I')?.pokemons).not.toContain(19)
-    expect(packed.feeds.find((row) => row.name === 'Alolan I')?.pokemons).toContain(26)
-    expect(packed.feeds.find((row) => row.name === 'Alolan I')?.form).toBe(1)
+    const basic = packed.feeds.find((row) => feedStem(String(row.name)) === 'Basic')
+    const alolan = packed.feeds.find((row) => feedStem(String(row.name)) === 'Alolan')
+    expect(basic?.name).toBe(numberedFeedName('Basic', basic?.pokemons ?? []))
+    expect(basic?.pokemons).not.toContain(1)
+    expect(alolan?.name).toBe(numberedFeedName('Alolan', alolan?.pokemons ?? []))
+    expect(alolan?.pokemons).not.toContain(19)
+    expect(alolan?.pokemons).toContain(26)
+    expect(alolan?.form).toBe(1)
   })
 })
