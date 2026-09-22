@@ -30,6 +30,41 @@ export const SEED_TAG_CROPS: { tag: string; height: number }[] = [
 
 export const MAX_TAG_CROP_HEIGHT = Math.max(...SEED_TAG_CROPS.map((row) => row.height))
 
+/**
+ * Lucky is 38px taller than Basic (748 − 710). The same extra is the default
+ * on size forms until a screenshot is measured on the crop page.
+ */
+export const LUCKY_CROP_EXTRA = 38
+
+/** Both tags must be present. Stored under `tag` so the crop page can replace the default. */
+export const SEED_COMBO_CROPS: { tag: string; tags: readonly string[]; height: number }[] = [
+  { tag: 'lucky+mega', tags: ['lucky', 'mega'], height: 1055 + LUCKY_CROP_EXTRA },
+  { tag: 'lucky+gigantamax', tags: ['lucky', 'gigantamax'], height: 1055 + LUCKY_CROP_EXTRA },
+  { tag: 'lucky+dynamax', tags: ['lucky', 'dynamax'], height: 1055 + LUCKY_CROP_EXTRA },
+  { tag: 'lucky+xxs', tags: ['lucky', 'xxs'], height: 930 + LUCKY_CROP_EXTRA },
+  { tag: 'lucky+xxl', tags: ['lucky', 'xxl'], height: 930 + LUCKY_CROP_EXTRA },
+]
+
+const COMBO_CROP_TAGS = new Set(SEED_COMBO_CROPS.map((row) => row.tag))
+
+export function isComboCropTag(tag: string): boolean {
+  return COMBO_CROP_TAGS.has(tag)
+}
+
+export function matchingComboCrops(tags: readonly string[]) {
+  const selected = new Set(tags)
+  return SEED_COMBO_CROPS.filter((row) => row.tags.every((tag) => selected.has(tag)))
+}
+
+function storedHeight(
+  tag: string,
+  heights: Record<string, number>,
+  fallback: number,
+): number {
+  const height = heights[tag]
+  return typeof height === 'number' ? height : fallback
+}
+
 export const EXTRA_SPECIMEN_TAGS: {
   tag: string
   label: string
@@ -56,11 +91,11 @@ export function cropHeightForTags(
   fallback = 710,
 ): number {
   const keys = tags.length === 0 ? [BASIC_CROP_TAG] : tags
+  const combos = matchingComboCrops(keys)
+  const covered = new Set(combos.flatMap((combo) => combo.tags))
   let max = fallback
   let found = false
-  for (const tag of keys) {
-    const height = heights[tag]
-    if (typeof height !== 'number') continue
+  const consider = (height: number) => {
     if (!found) {
       max = height
       found = true
@@ -68,7 +103,27 @@ export function cropHeightForTags(
       max = Math.max(max, height)
     }
   }
+  for (const tag of keys) {
+    if (covered.has(tag)) continue
+    const height = heights[tag]
+    if (typeof height !== 'number') continue
+    consider(height)
+  }
+  for (const combo of combos) {
+    consider(storedHeight(combo.tag, heights, combo.height))
+  }
   return max
+}
+
+/** Combo rows that supplied `height`, so a crop-page edit can replace those defaults. */
+export function comboCropsAtHeight(
+  tags: readonly string[],
+  heights: Record<string, number>,
+  height: number,
+) {
+  return matchingComboCrops(tags).filter(
+    (combo) => storedHeight(combo.tag, heights, combo.height) === height,
+  )
 }
 
 export function cropHeightForSpecimen(

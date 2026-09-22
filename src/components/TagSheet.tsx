@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { categoryForTag, SEEN_ICON, NOT_PURE_ICON, specimenTagChoices } from '../data/navIcons'
-import { cropHeightForSpecimen } from '../data/tagCrops'
+import { comboCropsAtHeight, cropHeightForSpecimen, matchingComboCrops } from '../data/tagCrops'
 import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { useTagCropHeights } from '../hooks/useCropSettings'
@@ -149,6 +149,7 @@ export function TagSheet({
   const sheetTopRef = useRef<HTMLDivElement>(null)
   const openedKey = useRef<string | null>(null)
   const keepStoredCrop = useRef(true)
+  const heightTouched = useRef(false)
   const initialFieldsRef = useRef(initialFields)
   initialFieldsRef.current = initialFields
   const previewUrl = useImageUrl(imageId, 'original')
@@ -159,8 +160,10 @@ export function TagSheet({
   const roster = useLiveQuery(() => db.tagRoster.toArray(), []) ?? []
   const tagChoices = useMemo(() => specimenTagChoices(categories), [categories])
   const tags = specimenTags(fields)
+  const cropTags = cropTagsFromFields(fields)
+  const luckyCombo = !fields.silhouette && matchingComboCrops(cropTags).length > 0
   const suggestedHeight = cropHeightForSpecimen(
-    cropTagsFromFields(fields),
+    cropTags,
     heightMap,
     Boolean(fields.silhouette),
   )
@@ -215,6 +218,7 @@ export function TagSheet({
     if (!open) {
       openedKey.current = null
       keepStoredCrop.current = true
+      heightTouched.current = false
       setStoredCrop(null)
       setLightbox(false)
       return
@@ -258,15 +262,18 @@ export function TagSheet({
     if (openedKey.current !== resetKey) {
       openedKey.current = resetKey
       keepStoredCrop.current = true
+      heightTouched.current = false
       setHeightDraft(String(storedCrop ?? suggestedHeight))
       return
     }
     if (keepStoredCrop.current && storedCrop != null) {
       keepStoredCrop.current = false
+      heightTouched.current = false
       setHeightDraft(String(storedCrop))
       return
     }
     keepStoredCrop.current = false
+    heightTouched.current = false
     setHeightDraft(String(suggestedHeight))
   }, [open, resetKey, suggestedHeight, storedCrop])
 
@@ -348,6 +355,17 @@ export function TagSheet({
         },
         cropBottom,
       )
+      const comboTags = cropTagsFromFields(fields)
+      const comboSuggestion = cropHeightForSpecimen(comboTags, heightMap, false)
+      const winners = comboCropsAtHeight(comboTags, heightMap, comboSuggestion)
+      if (
+        heightTouched.current &&
+        !fields.silhouette &&
+        winners.length > 0 &&
+        cropBottom !== comboSuggestion
+      ) {
+        await db.tagCrops.bulkPut(winners.map((row) => ({ tag: row.tag, height: cropBottom })))
+      }
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Could not save')
     } finally {
@@ -570,14 +588,19 @@ export function TagSheet({
               min={1}
               max={1600}
               value={heightDraft}
-              onChange={(e) => setHeightDraft(e.target.value)}
+              onChange={(e) => {
+                heightTouched.current = true
+                setHeightDraft(e.target.value)
+              }}
               onBlur={() => setHeightDraft(String(cropBottom))}
             />
           </label>
           <p className="page-sub">
             {fields.silhouette
               ? 'Seen always uses 710px. Changing this number crops this screenshot only.'
-              : 'Follows the tallest selected tag. Changing this number crops this screenshot only.'}
+              : luckyCombo
+                ? 'Uses the taller Lucky combination crop. Saving a different height updates that combination for the next screenshot and crops this one.'
+                : 'Follows the tallest selected tag. Changing this number crops this screenshot only.'}
           </p>
         </>
       )}

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { cropHeightForTags, MAX_TAG_CROP_HEIGHT, SEED_TAG_CROPS } from '../data/tagCrops'
+import { cropHeightForTags, isComboCropTag, MAX_TAG_CROP_HEIGHT, SEED_TAG_CROPS } from '../data/tagCrops'
 import { db } from '../lib/db'
 
 const SEED_CROP_HEIGHTS = Object.fromEntries(SEED_TAG_CROPS.map((row) => [row.tag, row.height]))
@@ -15,7 +15,9 @@ export function useTagCropHeights(): Record<string, number> {
 
 export function useFrameHeight() {
   const heights = useTagCropHeights()
-  const values = Object.values(heights)
+  const values = Object.entries(heights)
+    .filter(([tag]) => !isComboCropTag(tag))
+    .map(([, height]) => height)
   if (values.length === 0) return MAX_TAG_CROP_HEIGHT
   return Math.max(...values)
 }

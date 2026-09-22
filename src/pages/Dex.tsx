@@ -27,6 +27,7 @@ import {
 import { useDexCollapse } from '../hooks/useDexCollapse'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { useTrackFrameHeight } from '../hooks/useCropSettings'
+import { SCREENSHOT_WIDTH } from '../lib/images'
 import { coverPurity, findCover, type CoverPurity } from '../lib/covers'
 import { deleteSpecimen, setAsCover } from '../lib/collection'
 import { categoryChromeStyle } from '../lib/categoryStyle'
@@ -337,7 +338,10 @@ export function DexPage() {
   }
 
   return (
-    <section className={styles.page}>
+    <section
+      className={styles.page}
+      style={{ ['--card-aspect' as string]: `${SCREENSHOT_WIDTH} / ${frameHeight}` }}
+    >
       <div className={styles.titleRow}>
         <SearchableSelect
           className={styles.trackSelect}

@@ -1,7 +1,7 @@
 import Dexie, { type Table } from 'dexie'
 import { colorForCategory, iconForCategory } from '../data/navIcons'
 import { SEED_CATEGORIES, LEGACY_SEED_NAMES } from '../data/seedCategories'
-import { SEED_TAG_CROPS } from '../data/tagCrops'
+import { SEED_COMBO_CROPS, SEED_TAG_CROPS } from '../data/tagCrops'
 import type { SlotMode } from './roster'
 import { allocateCategoryTag, TAG_IDS, type ShadowStatus, type TagId } from './tags'
 import { clampCropBottom } from './screenshotCrop'
@@ -228,6 +228,13 @@ export async function ensureSeedTagCrops() {
       height: clampCropBottom(row.height),
     })),
   )
+  // Combo heights are edited from the crop page, so an existing row is left alone.
+  const present = await db.tagCrops.bulkGet(SEED_COMBO_CROPS.map((row) => row.tag))
+  const missing = SEED_COMBO_CROPS.filter((_, index) => !present[index]).map((row) => ({
+    tag: row.tag,
+    height: clampCropBottom(row.height),
+  }))
+  if (missing.length > 0) await db.tagCrops.bulkAdd(missing)
 }
 
 /** Custom tracks saved with no picked tags become their own atomic tag (Lucky → lucky). */
