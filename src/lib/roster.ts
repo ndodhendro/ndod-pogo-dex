@@ -43,6 +43,9 @@ export const FOLLOW_BASIC_TAGS = new Set<TagId>([
   'max-cp',
 ])
 
+/** Pumpkaboo and Gourgeist have no XXS; their smallest size is XS. */
+const NO_XXS_SPECIES = new Set<number>([710, 711])
+
 export function tagFollowsBasicList(tag: TagId): boolean {
   return FOLLOW_BASIC_TAGS.has(tag)
 }
@@ -603,13 +606,20 @@ export function trackIsLimited(requiredTags: readonly TagId[], catalogs: readonl
   return true
 }
 
+function omitSpeciesWithoutXxs(requiredTags: readonly TagId[], slots: DexSlotDef[]): DexSlotDef[] {
+  if (!requiredTags.includes('xxs')) return slots
+  return slots.filter((slot) => !NO_XXS_SPECIES.has(slot.speciesId))
+}
+
 export function slotsForTrack(
   requiredTags: readonly TagId[],
   catalogs: readonly TagCatalog[],
   roster: readonly TagRosterEntry[],
 ): DexSlotDef[] {
-  if (usesBasicSpeciesList(requiredTags)) return basicSpeciesSlots(catalogs, roster)
-  return slotsForLimitedTags(ownListTags(requiredTags), catalogs, roster)
+  const slots = usesBasicSpeciesList(requiredTags)
+    ? basicSpeciesSlots(catalogs, roster)
+    : slotsForLimitedTags(ownListTags(requiredTags), catalogs, roster)
+  return omitSpeciesWithoutXxs(requiredTags, slots)
 }
 
 export function slotsForSelectedTags(
@@ -823,6 +833,7 @@ export function fieldsAllowedOnLimitedTags(
   roster: readonly TagRosterEntry[],
 ): TagId | null {
   const tags = specimenTags(fields)
+  if (tags.includes('xxs') && NO_XXS_SPECIES.has(fields.speciesId)) return 'xxs'
   const check: TagId[] = []
   if (tags.length === 0 || tags.includes(BASIC_DEX_TAG) || tags.some(tagFollowsBasicList)) {
     check.push(BASIC_DEX_TAG)
@@ -860,6 +871,7 @@ export function canEnableLimitedTag(
   roster: readonly TagRosterEntry[],
 ): boolean {
   if (!fields.speciesId) return true
+  if (tag === 'xxs' && NO_XXS_SPECIES.has(fields.speciesId)) return false
   if (tagFollowsBasicList(tag) || tag === BASIC_DEX_TAG) {
     const basic = catalogForTag(catalogs, BASIC_DEX_TAG)
     if (!basic.limitPokedex) return true

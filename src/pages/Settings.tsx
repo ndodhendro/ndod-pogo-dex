@@ -436,7 +436,11 @@ export function SettingsPage() {
                         {label}
                       </p>
                       {followsBasic ? (
-                        <p className="page-sub">Uses the Basic species list.</p>
+                        <p className="page-sub">
+                          {tag === 'xxs'
+                            ? 'Uses the Basic species list, except Pumpkaboo and Gourgeist. They have no XXS size.'
+                            : 'Uses the Basic species list.'}
+                        </p>
                       ) : (
                         <>
                           {isOwnListTag(tag) ? null : (

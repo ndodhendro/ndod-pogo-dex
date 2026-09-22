@@ -864,6 +864,28 @@ describe('Basic Pokédex limit', () => {
     expect(trackIsLimited(['max-cp'], [basic])).toBe(true)
   })
 
+  it('omits Pumpkaboo and Gourgeist from XXS because they have no XXS size', () => {
+    const ids = slotsForTrack(['xxs'], [basic], []).map((slot) => slot.speciesId)
+    expect(ids).not.toContain(710)
+    expect(ids).not.toContain(711)
+    expect(ids).toHaveLength(GO_RELEASED_IDS.size - 2)
+    const xxl = slotsForTrack(['xxl'], [basic], []).map((slot) => slot.speciesId)
+    expect(xxl).toContain(710)
+    expect(xxl).toContain(711)
+    expect(slotsForTrack(['hundo', 'xxs'], [basic], []).some((slot) => slot.speciesId === 710)).toBe(
+      false,
+    )
+    expect(canEnableLimitedTag(specimen({ speciesId: 710, extraTags: ['xxs'] }), 'xxs', [basic], [])).toBe(
+      false,
+    )
+    expect(canEnableLimitedTag(specimen({ speciesId: 1, extraTags: ['xxs'] }), 'xxs', [basic], [])).toBe(
+      true,
+    )
+    expect(limitedRosterWarning(specimen({ speciesId: 711, extraTags: ['xxs'] }), [basic], [])).toBe(
+      'Not in the XXS Pokédex',
+    )
+  })
+
   it('starts other tags at zero released slots', () => {
     expect(slotsForTrack(['friendship'], [], [])).toEqual([])
     expect(countReleasedSlots(['friendship'], [], [])).toBe(0)
