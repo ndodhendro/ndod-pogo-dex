@@ -121,18 +121,18 @@ export function feedStem(name: string) {
   return numbered ? numbered[1] : trimmed
 }
 
-/** Highest national dex id in a feed, or 0 when the list is empty. */
-export function maxFeedDexId(pokemons: readonly number[]) {
-  let max = 0
+/** Lowest national dex id in a feed, or 0 when the list is empty. */
+export function minFeedDexId(pokemons: readonly number[]) {
+  let min = 0
   for (const id of pokemons) {
-    if (id > max) max = id
+    if (min === 0 || id < min) min = id
   }
-  return max
+  return min
 }
 
-/** Feed postfix is that list's max dex id (`Basic 151`, `Basic 025`, `Basic 1008`). */
+/** Feed postfix is that list's min dex id (`Basic 001`, `Basic 151`, `Basic 1008`). */
 export function numberedFeedName(stem: string, pokemons: readonly number[]) {
-  return `${stem.trim()} ${String(maxFeedDexId(pokemons)).padStart(3, '0')}`
+  return `${stem.trim()} ${String(minFeedDexId(pokemons)).padStart(3, '0')}`
 }
 
 export function chunkSpeciesIds(ids: readonly number[], size = FEED_POKEMON_LIMIT): number[][] {

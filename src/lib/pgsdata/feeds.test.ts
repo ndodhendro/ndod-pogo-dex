@@ -86,9 +86,9 @@ describe('Roman feed names', () => {
     expect(feedStem('Alolan')).toBe('Alolan')
   })
 
-  it('names a feed from the highest pokedex id in its pokemon list', () => {
-    expect(numberedFeedName('Basic', [4, 1, 25])).toBe('Basic 025')
-    expect(numberedFeedName('Alolan', [19, 103])).toBe('Alolan 103')
+  it('names a feed from the lowest pokedex id in its pokemon list', () => {
+    expect(numberedFeedName('Basic', [4, 1, 25])).toBe('Basic 001')
+    expect(numberedFeedName('Alolan', [19, 103])).toBe('Alolan 019')
     expect(numberedFeedName('Basic', [1008])).toBe('Basic 1008')
     expect(numberedFeedName('Basic', [])).toBe('Basic 000')
     expect(feedStem(numberedFeedName('Max CP', [151]))).toBe('Max CP')
@@ -139,7 +139,7 @@ describe('PGSData feed matching', () => {
     expect(next[0].pokemons).not.toContain(9999)
   })
 
-  it('splits overflow onto copied feeds named by each chunk max dex id', () => {
+  it('splits overflow onto copied feeds named by each chunk min dex id', () => {
     const feeds = [
       { name: 'Focus' },
       { name: 'Basic I', pokemons: [1], size: 0 },
