@@ -13,6 +13,7 @@ import {
   fieldsAllowedOnLimitedTags,
   limitedRosterWarning,
   nationalDexSlots,
+  exactFileNameDexSpecimen,
   searchDexSlots,
   searchSlots,
   searchVariantNames,
@@ -638,6 +639,38 @@ describe('searchDexSlots', () => {
   it('does not leak a filename hit onto other variants of the same species', () => {
     const hits = searchDexSlots(slots, 'img_1234', [partyHat], ['costume'], [costume])
     expect(hits.every((slot) => slot.variant === 'Party Hat')).toBe(true)
+  })
+})
+
+describe('exactFileNameDexSpecimen', () => {
+  const slots = slotsForTrack(['costume'], [costume], roster)
+  const partyHat = {
+    ...specimen({ speciesId: 25, costume: 'Party Hat' }),
+    fileName: 'IMG_1234.PNG',
+  }
+
+  it('returns the specimen when the query is the full filename with extension', () => {
+    expect(exactFileNameDexSpecimen(slots, 'img_1234.png', [partyHat], ['costume'], [costume])).toBe(
+      partyHat,
+    )
+    expect(
+      exactFileNameDexSpecimen(slots, 'C:\\Pictures\\IMG_1234.PNG', [partyHat], ['costume'], [costume]),
+    ).toBe(partyHat)
+  })
+
+  it('stays closed for a partial filename', () => {
+    expect(exactFileNameDexSpecimen(slots, 'img_1234', [partyHat], ['costume'], [costume])).toBeNull()
+    expect(exactFileNameDexSpecimen(slots, '1234.png', [partyHat], ['costume'], [costume])).toBeNull()
+  })
+
+  it('ignores a full filename that does not fill the current track', () => {
+    const shinyPikachu = {
+      ...specimen({ speciesId: 25, shiny: true }),
+      fileName: 'IMG_9999.png',
+    }
+    expect(
+      exactFileNameDexSpecimen(slots, 'IMG_9999.png', [shinyPikachu], ['costume'], [costume]),
+    ).toBeNull()
   })
 })
 

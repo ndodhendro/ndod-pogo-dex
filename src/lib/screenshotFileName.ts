@@ -28,6 +28,18 @@ export function screenshotFileNameMatchesQuery(
   return Boolean(name && name.includes(q))
 }
 
+/** Query is the whole basename, including a file extension. */
+export function screenshotFileNameIsExact(
+  fileName: string | null | undefined,
+  query: string,
+): boolean {
+  const stored = screenshotFileNameKey(fileName)
+  const q = screenshotFileNameKey(query)
+  if (!stored || !q || stored !== q) return false
+  const dot = q.lastIndexOf('.')
+  return dot > 0 && dot < q.length - 1
+}
+
 export function collectScreenshotFileNameKeys(
   rows: readonly { fileName?: string | null }[],
 ): Set<string> {

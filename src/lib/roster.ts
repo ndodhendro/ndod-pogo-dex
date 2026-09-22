@@ -15,7 +15,7 @@ import { GO_RELEASED_IDS, isGoReleased } from '../data/goReleased'
 import { SPECIES, SPECIES_BY_ID, searchSpecies } from '../data/species'
 import { BASIC_CROP_TAG } from '../data/tagCrops'
 import { isGreenCover } from './covers'
-import { screenshotFileNameMatchesQuery } from './screenshotFileName'
+import { screenshotFileNameIsExact, screenshotFileNameMatchesQuery } from './screenshotFileName'
 import {
   extraTagList,
   formLabelForPreview,
@@ -692,6 +692,23 @@ export function searchDexSlots(
   }
   if (!added) return named
   return slots.filter((slot) => keep.has(slotId(slot.speciesId, slot.variant)))
+}
+
+/** The one specimen on this track whose filename is the full query, including extension. */
+export function exactFileNameDexSpecimen<T extends DexSearchSpecimen>(
+  slots: readonly DexSlotDef[],
+  query: string,
+  specimens: readonly T[],
+  requiredTags: readonly TagId[] = [],
+  catalogs: readonly TagCatalog[] = [],
+): T | null {
+  const q = query.trim()
+  if (!q || specimens.length === 0) return null
+  const hits = specimens.filter((row) => {
+    if (!screenshotFileNameIsExact(row.fileName, q)) return false
+    return slots.some((slot) => specimenFillsSlot(row, requiredTags, slot, catalogs))
+  })
+  return hits.length === 1 ? hits[0] : null
 }
 
 /** Search hits that leave exactly one species, otherwise null. */

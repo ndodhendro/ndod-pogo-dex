@@ -5,6 +5,7 @@ import {
   restoredScreenshotFileName,
   sameLookFilenamesCopied,
   screenshotFileName,
+  screenshotFileNameIsExact,
   screenshotFileNameIsTaken,
   screenshotFileNameKey,
   screenshotFileNameMatchesQuery,
@@ -50,6 +51,22 @@ describe('screenshotFileNameMatchesQuery', () => {
   it('keeps every name when the query is empty', () => {
     expect(screenshotFileNameMatchesQuery('IMG_1234.PNG', '  ')).toBe(true)
     expect(screenshotFileNameMatchesQuery(null, '')).toBe(true)
+  })
+})
+
+describe('screenshotFileNameIsExact', () => {
+  it('matches only the full basename, including extension', () => {
+    expect(screenshotFileNameIsExact('C:\\Pictures\\IMG_1234.PNG', 'img_1234.png')).toBe(true)
+    expect(screenshotFileNameIsExact('IMG_1234.PNG', 'IMG_1234.PNG')).toBe(true)
+    expect(screenshotFileNameIsExact('IMG_1234.PNG', 'img_1234')).toBe(false)
+    expect(screenshotFileNameIsExact('IMG_1234.PNG', '1234.png')).toBe(false)
+    expect(screenshotFileNameIsExact('IMG_1234.PNG', 'IMG_1234.PNG.jpg')).toBe(false)
+  })
+
+  it('rejects a name with no extension', () => {
+    expect(screenshotFileNameIsExact('IMG_1234', 'IMG_1234')).toBe(false)
+    expect(screenshotFileNameIsExact('IMG_1234.', 'IMG_1234.')).toBe(false)
+    expect(screenshotFileNameIsExact(null, 'IMG_1234.PNG')).toBe(false)
   })
 })
 

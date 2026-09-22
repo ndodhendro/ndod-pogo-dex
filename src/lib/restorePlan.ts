@@ -1,7 +1,39 @@
+import { screenshotFileNameIsTaken, screenshotFileNameKey } from './screenshotFileName'
+
 export type RestorePlan = {
   restoreIds: string[]
   unmatchedHashes: string[]
   alreadyLocalHashes: string[]
+}
+
+export type RestoreInboxPlan<T extends { hash: string; fileName?: string | null }> = {
+  ingest: T[]
+  skipped: T[]
+}
+
+/** Unmatched restore photos already in Untagged (or Pokédex) stay put. */
+export function planRestoreInbox<T extends { hash: string; fileName?: string | null }>(
+  unmatched: readonly T[],
+  takenNames: ReadonlySet<string>,
+): RestoreInboxPlan<T> {
+  const ingest: T[] = []
+  const skipped: T[] = []
+  const seen = new Set<string>()
+  const claimed = new Set(takenNames)
+
+  for (const row of unmatched) {
+    if (seen.has(row.hash)) continue
+    seen.add(row.hash)
+    if (screenshotFileNameIsTaken(row.fileName, claimed)) {
+      skipped.push(row)
+      continue
+    }
+    const key = screenshotFileNameKey(row.fileName)
+    if (key) claimed.add(key)
+    ingest.push(row)
+  }
+
+  return { ingest, skipped }
 }
 
 export function planGalleryRestore(

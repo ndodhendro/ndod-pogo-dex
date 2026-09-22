@@ -1,14 +1,18 @@
 import type { RestoreProgress } from './restoreProgress'
-import { ingestFile } from './collection'
+import { ingestFile, loadTakenScreenshotFileNames } from './collection'
 import { db, ensureCustomCategoryTags, ensureSeedCategories } from './db'
 import { applyCategoryPull } from './categorySync'
 import { extraTagList, cropTagsFromFields, isNotPure, isSilhouette } from './tags'
 import { cropHeightForSpecimen } from '../data/tagCrops'
 import { hashBlob } from './hash'
 import { newId } from './id'
-import { restoredScreenshotFileName } from './screenshotFileName'
+import {
+  DuplicateScreenshotFileNameError,
+  restoredScreenshotFileName,
+  screenshotFileName,
+} from './screenshotFileName'
 import { isProbablyImageFile, makeImageVariants } from './images'
-import { planCloudPhotoRestore, planGalleryRestore } from './restorePlan'
+import { planCloudPhotoRestore, planGalleryRestore, planRestoreInbox } from './restorePlan'
 import { downloadSpecimenOriginal } from './specimenStorage'
 import { getSupabase } from './supabase'
 import { applyCloudCatalogs, pullCloudCollection, type CloudSpecimen } from './sync'
@@ -196,29 +200,34 @@ export async function restoreFromGallery(
   }
 
   const unmatchedSet = new Set(plan.unmatchedHashes)
-  const unmatchedFiles = hashed.filter((row) => unmatchedSet.has(row.hash))
-  const seenUnmatched = new Set<string>()
+  const unmatchedFiles = hashed
+    .filter((row) => unmatchedSet.has(row.hash))
+    .map((row) => ({ hash: row.hash, file: row.file, fileName: screenshotFileName(row.file) }))
+  const takenNames = await loadTakenScreenshotFileNames()
+  const inboxPlan = planRestoreInbox(unmatchedFiles, takenNames)
   let inbox = 0
-  let unmatchedIndex = 0
-  const inboxTotal = plan.unmatchedHashes.length
+  let skippedInbox = inboxPlan.skipped.length
+  const inboxTotal = inboxPlan.ingest.length
   if (inboxTotal > 0) {
     onProgress?.({ phase: 'inbox', current: 0, total: inboxTotal })
     await yieldUi()
   }
-  for (const row of unmatchedFiles) {
-    if (seenUnmatched.has(row.hash)) continue
-    seenUnmatched.add(row.hash)
-    unmatchedIndex += 1
+  for (let i = 0; i < inboxPlan.ingest.length; i++) {
+    const row = inboxPlan.ingest[i]
     onProgress?.({
       phase: 'inbox',
-      current: unmatchedIndex,
-      total: inboxTotal || unmatchedIndex,
+      current: i + 1,
+      total: inboxTotal || i + 1,
     })
     await yieldUi()
     try {
-      await ingestFile(row.file)
+      await ingestFile(row.file, undefined, takenNames)
       inbox += 1
     } catch (err) {
+      if (err instanceof DuplicateScreenshotFileNameError) {
+        skippedInbox += 1
+        continue
+      }
       failed += 1
       lastError = errorMessage(err, 'Could not add screenshot')
       if (isQuotaError(err)) break
@@ -230,7 +239,7 @@ export async function restoreFromGallery(
 
   return {
     restored,
-    alreadyLocal: plan.alreadyLocalHashes.length,
+    alreadyLocal: plan.alreadyLocalHashes.length + skippedInbox,
     inbox,
     cloudWithoutPhoto: cloud.specimens.filter((row) => !blobByHash.has(row.fileHash)).length,
     failed,

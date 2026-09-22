@@ -189,6 +189,96 @@ describe('PGSData feed matching', () => {
     expect(next.find((row) => row.name === 'Hundo I')?.pokemons).toEqual(remainingHundo.slice(0, 300))
   })
 
+  function feedIds(feeds: { pokemons?: number[] }[]) {
+    return feeds.flatMap((row) => row.pokemons ?? [])
+  }
+
+  it('keeps a branch root while a different-dex evolution is still missing', () => {
+    const pure = (speciesId: number) => specimen({ speciesId, extraTags: ['basic'] })
+    const { feeds: next } = rebuildFeeds(
+      [{ name: 'Basic I', pokemons: [] }],
+      [
+        pure(133),
+        pure(43),
+        pure(44),
+        pure(789),
+        pure(790),
+        pure(265),
+        pure(840),
+        pure(841),
+        pure(842),
+      ],
+      categories,
+    )
+    const ids = feedIds(next)
+    expect(ids).toContain(133)
+    expect(ids).toContain(134)
+    expect(ids).not.toContain(43)
+    expect(ids).toContain(44)
+    expect(ids).toContain(182)
+    expect(ids).not.toContain(789)
+    expect(ids).toContain(790)
+    expect(ids).toContain(791)
+    expect(ids).toContain(265)
+    expect(ids).toContain(266)
+    expect(ids).toContain(840)
+    expect(ids).toContain(1011)
+  })
+
+  it('does not keep a branch root for a later linear evolution', () => {
+    const pure = (speciesId: number) => specimen({ speciesId, extraTags: ['basic'] })
+    const { feeds: next } = rebuildFeeds(
+      [{ name: 'Basic I', pokemons: [] }],
+      [pure(265), pure(266), pure(268), pure(840), pure(841), pure(842), pure(1011)],
+      categories,
+    )
+    const ids = feedIds(next)
+    expect(ids).not.toContain(265)
+    expect(ids).toContain(267)
+    expect(ids).toContain(269)
+    expect(ids).not.toContain(840)
+    expect(ids).toContain(1019)
+  })
+
+  it('drops the branch root once every direct evolution is pure', () => {
+    const rows = [133, 134, 135, 136, 196, 197, 470, 471, 700].map((speciesId) =>
+      specimen({ speciesId, extraTags: ['basic'] }),
+    )
+    const { feeds: next } = rebuildFeeds([{ name: 'Basic I', pokemons: [] }], rows, categories)
+    const ids = feedIds(next)
+    for (const speciesId of [133, 134, 135, 136, 196, 197, 470, 471, 700]) {
+      expect(ids).not.toContain(speciesId)
+    }
+  })
+
+  it('drops a pure Tyrogue while a Hitmon is still missing', () => {
+    const { feeds: next } = rebuildFeeds(
+      [{ name: 'Basic I', pokemons: [236, 106] }],
+      [specimen({ speciesId: 236, extraTags: ['basic'] })],
+      categories,
+    )
+    const ids = feedIds(next)
+    expect(ids).not.toContain(236)
+    expect(ids).toContain(106)
+    expect(ids).toContain(107)
+    expect(ids).toContain(237)
+  })
+
+  it('keeps Eevee on the category that still has a missing evolution', () => {
+    const { feeds: next } = rebuildFeeds(
+      [
+        { name: 'Basic I', pokemons: [] },
+        { name: 'Shiny I', pokemons: [] },
+      ],
+      [specimen({ speciesId: 133, shiny: true })],
+      [...categories, category('Shiny', ['shiny'])],
+    )
+    expect(feedIds(next.filter((row) => String(row.name).startsWith('Basic')))).toContain(133)
+    const shiny = feedIds(next.filter((row) => String(row.name).startsWith('Shiny')))
+    expect(shiny).toContain(133)
+    expect(shiny).toContain(134)
+  })
+
   it('splits Gender pures into Male and Female feeds', () => {
     const { feeds: next } = rebuildFeeds(
       [
@@ -208,7 +298,8 @@ describe('PGSData feed matching', () => {
     expect(next[0].name).toBe('Male I')
     expect(next[0].pokemons).toEqual(genderIds.filter((id) => id !== 25))
     expect(next[1].name).toBe('Female I')
-    expect(next[1].pokemons).toEqual(genderIds.filter((id) => id !== 215))
+    // Hisuian Female Sneasel is pure, but Female Weavile is still open, so 215 stays.
+    expect(next[1].pokemons).toEqual(genderIds)
   })
 
   it('packs a dat file after filling feeds', () => {

@@ -18,6 +18,32 @@ export type FeedRebuildStats = {
 
 export const FEED_POKEMON_LIMIT = 300
 
+/**
+ * Branch root kept in a feed while any direct evolution with a different dex ID
+ * is still missing from that category. Further linear stages do not keep the root.
+ * Tyrogue is left out: it is rarer than Hitmonlee, Hitmonchan, and Hitmontop.
+ */
+const BRANCH_FEED_ANCHORS: ReadonlyMap<number, readonly number[]> = new Map([
+  [44, [45, 182]],
+  [52, [53, 863]],
+  [61, [62, 186]],
+  [79, [80, 199]],
+  [123, [212, 900]],
+  [133, [134, 135, 136, 196, 197, 470, 471, 700]],
+  [194, [195, 980]],
+  [215, [461, 903]],
+  [265, [266, 268]],
+  [281, [282, 475]],
+  [290, [291, 292]],
+  [361, [362, 478]],
+  [366, [367, 368]],
+  [412, [413, 414]],
+  [562, [563, 867]],
+  [790, [791, 792]],
+  [840, [841, 842, 1011]],
+  [935, [936, 937]],
+])
+
 const ROMAN_GLYPHS: readonly [string, number][] = [
   ['M', 1000],
   ['CM', 900],
@@ -186,6 +212,25 @@ export function catalogSpeciesIds(
   return [...ids].sort((a, b) => a - b)
 }
 
+function keepBranchAnchors(remaining: readonly number[], catalogIds: readonly number[]): number[] {
+  const open = new Set(remaining)
+  const catalog = new Set(catalogIds)
+  const extras: number[] = []
+  for (const [anchor, branches] of BRANCH_FEED_ANCHORS) {
+    if (!catalog.has(anchor) || open.has(anchor)) continue
+    if (branches.some((id) => open.has(id))) extras.push(anchor)
+  }
+  if (extras.length === 0) return [...remaining]
+  const out: number[] = []
+  let index = 0
+  for (const id of extras) {
+    while (index < remaining.length && remaining[index] < id) out.push(remaining[index++])
+    out.push(id)
+  }
+  while (index < remaining.length) out.push(remaining[index++])
+  return out
+}
+
 function remainingSpeciesIds(
   category: CategoryRow,
   stem: string,
@@ -197,7 +242,11 @@ function remainingSpeciesIds(
   const drop = gender
     ? (pure.get(gender) ?? new Set())
     : (pure.get(normalizeFeedLabel(category.name)) ?? new Set())
-  return catalogSpeciesIds(category, catalogs, roster).filter((id) => !drop.has(id))
+  const catalogIds = catalogSpeciesIds(category, catalogs, roster)
+  return keepBranchAnchors(
+    catalogIds.filter((id) => !drop.has(id)),
+    catalogIds,
+  )
 }
 
 function copyFeed(template: PgsFeed, name: string, pokemons: number[]): PgsFeed {

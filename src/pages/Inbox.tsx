@@ -41,8 +41,10 @@ import {
   type InboxSortDir,
 } from '../lib/inboxOrder'
 import { isProbablyImageFile } from '../lib/images'
+import { untaggedRemainingLabel, type InboxAddProgress } from '../lib/inboxUpload'
 import { DuplicateScreenshotFileNameError } from '../lib/screenshotFileName'
 import { useToast } from '../lib/toast'
+import { yieldUi } from '../lib/yieldUi'
 import {
   pruneTransferLogs,
   sortTransferLogs,
@@ -65,10 +67,6 @@ const PROGRESS_META: Record<DexProgressKind, { icon: string; label: string }> = 
 }
 
 type TransferView = 'untagged' | 'logs'
-
-function untaggedRemainingLabel(count: number) {
-  return `${count.toLocaleString('en-US')} remaining`
-}
 
 type PendingDuplicate = {
   item: InboxRow
@@ -102,11 +100,13 @@ export function InboxPage() {
   const [discardAllBusy, setDiscardAllBusy] = useState(false)
   const [duplicateBusy, setDuplicateBusy] = useState(false)
   const [adding, setAdding] = useState(false)
+  const [addProgress, setAddProgress] = useState<InboxAddProgress | null>(null)
   const [view, setView] = useState<TransferView>('untagged')
   const [sortDir, setSortDir] = useState<InboxSortDir>('asc')
   const [fileQuery, setFileQuery] = useState('')
   const showingLogs = view === 'logs'
   const canDiscardAll = !showingLogs && items.length > 0
+  const remainingWraps = addProgress ? addProgress.total > 999 : items.length > 9999
   const displayed = useMemo(() => {
     const sorted = sortInboxByFileName(items, sortDir)
     return sorted.filter((item) => inboxMatchesFileNameQuery(item.fileName, fileQuery))
@@ -132,30 +132,36 @@ export function InboxPage() {
   async function onFiles(list: File[]) {
     if (list.length === 0) return
     setAdding(true)
+    setAddProgress({ current: 0, total: list.length })
     let added = 0
     let duplicates = 0
     try {
+      await yieldUi()
       const taken = await loadTakenScreenshotFileNames()
-      for (const file of list) {
+      for (let i = 0; i < list.length; i++) {
+        const file = list[i]
         if (!isProbablyImageFile(file)) {
           showToast('That file is not an image')
-          continue
-        }
-        try {
-          await ingestFile(file, undefined, taken)
-          added += 1
-        } catch (err) {
-          if (err instanceof DuplicateScreenshotFileNameError) {
-            duplicates += 1
-            continue
+        } else {
+          try {
+            await ingestFile(file, undefined, taken)
+            added += 1
+          } catch (err) {
+            if (err instanceof DuplicateScreenshotFileNameError) {
+              duplicates += 1
+            } else {
+              showToast(err instanceof Error ? err.message : 'Could not add screenshot')
+            }
           }
-          showToast(err instanceof Error ? err.message : 'Could not add screenshot')
         }
+        setAddProgress({ current: i + 1, total: list.length })
+        if (i % 2 === 0) await yieldUi()
       }
       if (duplicates > 0) showToast('Screenshot filename already in the app', 'warning')
       if (added === 1) showToast('Screenshot added', 'success')
       else if (added > 1) showToast(`${added} screenshots added`, 'success')
     } finally {
+      setAddProgress(null)
       setAdding(false)
     }
   }
@@ -294,9 +300,9 @@ export function InboxPage() {
               <span
                 className={styles.remaining}
                 role="status"
-                data-wrap={items.length > 9999 ? 'true' : undefined}
+                data-wrap={remainingWraps ? 'true' : undefined}
               >
-                {untaggedRemainingLabel(items.length)}
+                {untaggedRemainingLabel(items.length, addProgress)}
               </span>
             </span>
           </button>

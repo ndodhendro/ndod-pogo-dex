@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { BottomSheet } from '../components/BottomSheet'
 import { CardPreview } from '../components/CardPreview'
@@ -54,9 +54,11 @@ import {
   type TagRosterRow,
 } from '../lib/db'
 import { readDexViewState, writeDexViewState } from '../lib/dexViewState'
+import { screenshotFileNameKey } from '../lib/screenshotFileName'
 import { listNeighbor } from '../lib/previewSwipe'
 import {
   countFilledSlots,
+  exactFileNameDexSpecimen,
   searchDexSlots,
   slotsForEvolutionLine,
   slotsForTrack,
@@ -211,6 +213,42 @@ export function DexPage() {
       searchedSpeciesId,
     ],
   )
+  const exactFileHit = useMemo(() => {
+    if (!category) return null
+    const hit = exactFileNameDexSpecimen(
+      catalog,
+      query,
+      specimens,
+      category.requiredTags,
+      catalogs,
+    )
+    if (!hit) return null
+    const shown = slots.some((slot) =>
+      specimenFillsSlot(hit, category.requiredTags, slot, catalogs),
+    )
+    return shown ? hit : null
+  }, [catalog, query, specimens, category, catalogs, slots])
+  const fileSearchPreview = useRef<{ queryKey: string; specimenId: string } | null>(null)
+  useEffect(() => {
+    const key = screenshotFileNameKey(query)
+    const opened = fileSearchPreview.current
+    if (!exactFileHit || !key) {
+      if (opened) {
+        setPreview((current) => (current?.id === opened.specimenId ? null : current))
+        fileSearchPreview.current = null
+      }
+      return
+    }
+    if (opened?.queryKey === key) {
+      if (opened.specimenId === exactFileHit.id) {
+        setPreview((current) => (current?.id === exactFileHit.id ? exactFileHit : current))
+      }
+      return
+    }
+    fileSearchPreview.current = { queryKey: key, specimenId: exactFileHit.id }
+    setPreview(exactFileHit)
+    if (document.activeElement instanceof HTMLInputElement) document.activeElement.blur()
+  }, [exactFileHit, query])
   const groups = useMemo(
     () =>
       showEvolutionLine
