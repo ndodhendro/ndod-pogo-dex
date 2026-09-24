@@ -7,6 +7,7 @@ import {
   mapCloudCategory,
   mergeCategoryPull,
   shouldApplyRemoteCategory,
+  splitCategoryUpserts,
   type CloudCategoryRaw,
 } from './categorySyncPlan'
 import type { CategoryRow } from './db'
@@ -221,5 +222,14 @@ describe('category upsert sort_order', () => {
   it('omits sort_order from metadata upserts of rows already in cloud', () => {
     expect(categoryUpsertRow(row, userId, new Set(), false)).not.toHaveProperty('sort_order')
     expect(categoryUpsertRow(row, userId, new Set(), true)).toMatchObject({ sort_order: 4 })
+  })
+
+  it('splits inserts from metadata so a bulk upsert cannot null sort_order', () => {
+    const insert = categoryUpsertRow(row, userId, new Set(), true)
+    const update = categoryUpsertRow({ ...row, id: 'cat-2', name: 'Shadow' }, userId, new Set(), false)
+    const { withOrder, metadata } = splitCategoryUpserts([insert, update])
+    expect(withOrder).toEqual([insert])
+    expect(metadata).toEqual([update])
+    expect(metadata.every((item) => !('sort_order' in item))).toBe(true)
   })
 })

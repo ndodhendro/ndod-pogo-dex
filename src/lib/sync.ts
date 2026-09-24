@@ -4,7 +4,12 @@ import {
   LEGACY_SEED_CLOUD_IDS,
   toCloudCategoryId,
 } from '../data/seedCategories'
-import { categoryUpsertRow, includeSortOrderOnUpsert, mapCloudCategory } from './categorySyncPlan'
+import {
+  categoryUpsertRow,
+  includeSortOrderOnUpsert,
+  mapCloudCategory,
+  splitCategoryUpserts,
+} from './categorySyncPlan'
 import {
   ackIntroducedSeedCategories,
   db,
@@ -150,18 +155,21 @@ export async function pushCategories(opts?: { syncOrder?: boolean }): Promise<st
   }
 
   const categories = await db.categories.toArray()
-  const { error } = await supabase.from('categories').upsert(
-    categories.map((row) => {
-      const cloudId = toCloudCategoryId(row.id, userId, ownedLegacy)
-      return categoryUpsertRow(
-        row,
-        userId,
-        ownedLegacy,
-        includeSortOrderOnUpsert(syncOrder, existingIds.has(cloudId)),
-      )
-    }),
-  )
-  if (error) return error.message
+  const payloads = categories.map((row) => {
+    const cloudId = toCloudCategoryId(row.id, userId, ownedLegacy)
+    return categoryUpsertRow(
+      row,
+      userId,
+      ownedLegacy,
+      includeSortOrderOnUpsert(syncOrder, existingIds.has(cloudId)),
+    )
+  })
+  const { withOrder, metadata } = splitCategoryUpserts(payloads)
+  for (const batch of [withOrder, metadata]) {
+    if (batch.length === 0) continue
+    const { error } = await supabase.from('categories').upsert(batch)
+    if (error) return error.message
+  }
   await markCategoriesBackedUp(categories.map((row) => row.id))
   ackIntroducedSeedCategories(categories.map((row) => row.id))
 }

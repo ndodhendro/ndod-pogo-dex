@@ -62,8 +62,22 @@ export function categoryUpsertRow(
     emoji: row.emoji ?? null,
     label_color: row.labelColor ?? null,
   }
-  if (includeSortOrder) payload.sort_order = row.sortOrder
+  if (includeSortOrder) payload.sort_order = Number.isFinite(row.sortOrder) ? row.sortOrder : 0
   return payload
+}
+
+/**
+ * PostgREST fills a missing key with null across one bulk upsert.
+ * A row that omits sort_order must not share a request with a row that sends it.
+ */
+export function splitCategoryUpserts<T extends { sort_order?: number }>(rows: readonly T[]) {
+  const withOrder: T[] = []
+  const metadata: T[] = []
+  for (const row of rows) {
+    if (Object.prototype.hasOwnProperty.call(row, 'sort_order')) withOrder.push(row)
+    else metadata.push(row)
+  }
+  return { withOrder, metadata }
 }
 
 export function mergeCategoryPull(local: CategoryRow[], cloud: CategoryRow[]): {
