@@ -52,11 +52,14 @@ async function applyCloudCategories(
 async function applyCloudCovers(cloud: NonNullable<Awaited<ReturnType<typeof pullCloudCollection>>>) {
   for (const cover of cloud.covers) {
     if (await db.specimens.get(cover.specimenId)) {
+      const variant = cover.variant ?? ''
+      const existing = await db.covers.get([cover.categoryId, cover.speciesId, variant])
       await db.covers.put({
         categoryId: cover.categoryId,
         speciesId: cover.speciesId,
-        variant: cover.variant ?? '',
+        variant,
         specimenId: cover.specimenId,
+        ...(existing?.specimenId === cover.specimenId && existing.userChosen ? { userChosen: true } : {}),
       })
     }
   }
@@ -270,6 +273,7 @@ async function writeRestoredSpecimen(spec: CloudSpecimen, file: Blob, alreadyCro
     gender: spec.gender ?? null,
     hundo: spec.hundo,
     nundo: spec.nundo,
+    hokido: Boolean(spec.hokido),
     extraTags: extraTagList(spec),
     silhouette: isSilhouette(spec),
     notPure: isNotPure(spec),

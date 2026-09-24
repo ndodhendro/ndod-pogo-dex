@@ -45,6 +45,7 @@ function specimen(partial: Partial<SpecimenRow> & { speciesId: number }): Specim
     gender: null,
     hundo: false,
     nundo: false,
+    hokido: false,
     extraTags: [],
     imageId: 'img',
     createdAt: 1,
@@ -274,6 +275,87 @@ describe('PGSData feed matching', () => {
     }
   })
 
+  it('drops a pure Meowth because Perrserker is only a Galarian evolution', () => {
+    const { feeds: alolan } = rebuildFeeds(
+      [{ name: 'Alolan', pokemons: [] }],
+      [specimen({ speciesId: 52, extraTags: ['alolan'] })],
+      categories,
+    )
+    const alolanIds = feedIds(alolan)
+    expect(alolanIds).not.toContain(52)
+    expect(alolanIds).toContain(53)
+
+    const { feeds: basic } = rebuildFeeds(
+      [{ name: 'Basic I', pokemons: [] }],
+      [specimen({ speciesId: 52, extraTags: ['basic'] })],
+      categories,
+    )
+    const basicKept = feedIds(basic)
+    expect(basicKept).not.toContain(52)
+    expect(basicKept).toContain(53)
+    expect(basicKept).toContain(863)
+
+    const { feeds: galarian } = rebuildFeeds(
+      [{ name: 'Galarian', pokemons: [] }],
+      [specimen({ speciesId: 52, extraTags: ['galarian'] })],
+      [...categories, category('Galarian', ['galarian'])],
+    )
+    const galarianIds = feedIds(galarian)
+    expect(galarianIds).not.toContain(52)
+    expect(galarianIds).not.toContain(53)
+    expect(galarianIds).not.toContain(863)
+  })
+
+  it('drops Wooper, Sneasel, and Yamask once their own form is pure', () => {
+    const { feeds: basic } = rebuildFeeds(
+      [{ name: 'Basic I', pokemons: [] }],
+      [
+        specimen({ speciesId: 194, extraTags: ['basic'] }),
+        specimen({ speciesId: 215, extraTags: ['basic'] }),
+        specimen({ speciesId: 562, extraTags: ['basic'] }),
+      ],
+      categories,
+    )
+    const basicIds = feedIds(basic)
+    expect(basicIds).not.toContain(194)
+    expect(basicIds).toContain(195)
+    expect(basicIds).toContain(980)
+    expect(basicIds).not.toContain(215)
+    expect(basicIds).toContain(461)
+    expect(basicIds).toContain(903)
+    expect(basicIds).not.toContain(562)
+    expect(basicIds).toContain(563)
+    expect(basicIds).toContain(867)
+
+    const { feeds: regional } = rebuildFeeds(
+      [
+        { name: 'Paldean', pokemons: [] },
+        { name: 'Hisuian', pokemons: [] },
+        { name: 'Galarian', pokemons: [] },
+      ],
+      [
+        specimen({ speciesId: 194, extraTags: ['paldean'] }),
+        specimen({ speciesId: 215, extraTags: ['hisuian'] }),
+        specimen({ speciesId: 562, extraTags: ['galarian'] }),
+      ],
+      [
+        ...categories,
+        category('Paldean', ['paldean']),
+        category('Hisuian', ['hisuian']),
+        category('Galarian', ['galarian']),
+      ],
+    )
+    const paldean = feedIds(regional.filter((row) => String(row.name).startsWith('Paldean')))
+    const hisuian = feedIds(regional.filter((row) => String(row.name).startsWith('Hisuian')))
+    const galarian = feedIds(regional.filter((row) => String(row.name).startsWith('Galarian')))
+    expect(paldean).not.toContain(194)
+    expect(paldean).toContain(128)
+    expect(hisuian).not.toContain(215)
+    expect(hisuian).toContain(58)
+    expect(galarian).not.toContain(562)
+    expect(galarian).not.toContain(867)
+  })
+
   it('drops a pure Tyrogue while a Hitmon is still missing', () => {
     const { feeds: next } = rebuildFeeds(
       [{ name: 'Basic I', pokemons: [236, 106] }],
@@ -319,11 +401,11 @@ describe('PGSData feed matching', () => {
       categories,
     )
     const maleIds = genderIds.filter((id) => id !== 25)
+    const femaleIds = genderIds.filter((id) => id !== 215)
     expect(next[0].name).toBe(numberedFeedName('Male', maleIds))
     expect(next[0].pokemons).toEqual(maleIds)
-    expect(next[1].name).toBe(numberedFeedName('Female', genderIds))
-    // Hisuian Female Sneasel is pure, but Female Weavile is still open, so 215 stays.
-    expect(next[1].pokemons).toEqual(genderIds)
+    expect(next[1].name).toBe(numberedFeedName('Female', femaleIds))
+    expect(next[1].pokemons).toEqual(femaleIds)
   })
 
   it('packs a dat file after filling feeds', () => {

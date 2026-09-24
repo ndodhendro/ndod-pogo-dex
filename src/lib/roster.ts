@@ -11,6 +11,7 @@ import {
   staticFormSlotCount,
 } from '../data/goFormReleased'
 import { compareByEvolutionLine, evolutionLine } from '../data/evolutions'
+import { nundoExcludesSpecies } from '../data/goLegendary'
 import { GO_RELEASED_IDS, isGoReleased } from '../data/goReleased'
 import { SPECIES, SPECIES_BY_ID, searchSpecies } from '../data/species'
 import { BASIC_CROP_TAG } from '../data/tagCrops'
@@ -40,6 +41,7 @@ export const FOLLOW_BASIC_TAGS = new Set<TagId>([
   'xxs',
   'hundo',
   'nundo',
+  'hokido',
   'max-cp',
 ])
 
@@ -611,6 +613,11 @@ function omitSpeciesWithoutXxs(requiredTags: readonly TagId[], slots: DexSlotDef
   return slots.filter((slot) => !NO_XXS_SPECIES.has(slot.speciesId))
 }
 
+function omitLegendaryFromNundo(requiredTags: readonly TagId[], slots: DexSlotDef[]): DexSlotDef[] {
+  if (!requiredTags.includes('nundo')) return slots
+  return slots.filter((slot) => !nundoExcludesSpecies(slot.speciesId))
+}
+
 export function slotsForTrack(
   requiredTags: readonly TagId[],
   catalogs: readonly TagCatalog[],
@@ -619,7 +626,7 @@ export function slotsForTrack(
   const slots = usesBasicSpeciesList(requiredTags)
     ? basicSpeciesSlots(catalogs, roster)
     : slotsForLimitedTags(ownListTags(requiredTags), catalogs, roster)
-  return omitSpeciesWithoutXxs(requiredTags, slots)
+  return omitLegendaryFromNundo(requiredTags, omitSpeciesWithoutXxs(requiredTags, slots))
 }
 
 export function slotsForSelectedTags(
@@ -834,6 +841,7 @@ export function fieldsAllowedOnLimitedTags(
 ): TagId | null {
   const tags = specimenTags(fields)
   if (tags.includes('xxs') && NO_XXS_SPECIES.has(fields.speciesId)) return 'xxs'
+  if (tags.includes('nundo') && nundoExcludesSpecies(fields.speciesId)) return 'nundo'
   const check: TagId[] = []
   if (tags.length === 0 || tags.includes(BASIC_DEX_TAG) || tags.some(tagFollowsBasicList)) {
     check.push(BASIC_DEX_TAG)
@@ -872,6 +880,7 @@ export function canEnableLimitedTag(
 ): boolean {
   if (!fields.speciesId) return true
   if (tag === 'xxs' && NO_XXS_SPECIES.has(fields.speciesId)) return false
+  if (tag === 'nundo' && nundoExcludesSpecies(fields.speciesId)) return false
   if (tagFollowsBasicList(tag) || tag === BASIC_DEX_TAG) {
     const basic = catalogForTag(catalogs, BASIC_DEX_TAG)
     if (!basic.limitPokedex) return true

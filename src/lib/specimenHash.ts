@@ -33,6 +33,7 @@ export function sameSpecimenMetadata(a: SpecimenFields, b: SpecimenFields): bool
     (a.gender ?? null) === (b.gender ?? null) &&
     a.hundo === b.hundo &&
     a.nundo === b.nundo &&
+    Boolean(a.hokido) === Boolean(b.hokido) &&
     isSilhouette(a) === isSilhouette(b) &&
     isNotPure(a) === isNotPure(b) &&
     extraA.length === extraB.length &&

@@ -20,6 +20,7 @@ const spec = (over: Partial<SpecimenFields> & { fileName?: string | null } = {})
   background: null,
   hundo: false,
   nundo: false,
+  hokido: false,
   extraTags: [],
   ...over,
 })

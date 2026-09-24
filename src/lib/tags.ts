@@ -6,6 +6,7 @@ export const TAG_IDS = [
   'background',
   'hundo',
   'nundo',
+  'hokido',
 ] as const
 
 export type BuiltInTagId = (typeof TAG_IDS)[number]
@@ -44,6 +45,8 @@ export type SpecimenFields = {
   gender?: string | null
   hundo: boolean
   nundo: boolean
+  /** Exact IV 88. */
+  hokido: boolean
   extraTags?: TagId[]
   /** Seen in the wild, not caught. Not a tag; never counts as a pure cover. */
   silhouette?: boolean
@@ -59,6 +62,7 @@ export const TAG_LABELS: Record<BuiltInTagId, string> = {
   background: 'Background',
   hundo: 'Hundo',
   nundo: 'Nundo',
+  hokido: 'Hokido',
 }
 
 import { BASIC_CROP_TAG, EXTRA_TAG_LABELS } from '../data/tagCrops'
@@ -144,6 +148,7 @@ export function fieldsFromSpecimen(row: SpecimenFields): SpecimenFields {
     gender: row.gender ?? null,
     hundo: row.hundo,
     nundo: row.nundo,
+    hokido: Boolean(row.hokido),
     extraTags: extraTagList(row),
     silhouette: isSilhouette(row),
     notPure: isNotPure(row),
@@ -197,6 +202,7 @@ export function clearVisualTags(fields: SpecimenFields): SpecimenFields {
     gender: null,
     hundo: false,
     nundo: false,
+    hokido: false,
     extraTags: [],
     silhouette: isSilhouette(fields),
     notPure: isNotPure(fields),
@@ -230,6 +236,7 @@ export function specimenTags(s: SpecimenFields): TagId[] {
   if (s.background !== null) tags.push('background')
   if (s.hundo) tags.push('hundo')
   if (s.nundo) tags.push('nundo')
+  if (s.hokido) tags.push('hokido')
   tags.push(...extraTagList(s))
   return tags
 }
@@ -241,6 +248,7 @@ export function visualKey(s: SpecimenFields): string {
     s.shiny ? '1' : '0',
     s.hundo ? '1' : '0',
     s.nundo ? '1' : '0',
+    s.hokido ? '1' : '0',
     (s.costume ?? '').trim().toLowerCase(),
     s.shadowStatus,
     (s.background ?? '').trim().toLowerCase(),
@@ -292,7 +300,7 @@ export function toggleRequiredTags(picked: TagId[], tags: TagId[]): TagId[] {
   return [...new Set([...picked, ...tags])]
 }
 
-export function hasAllRequired(tags: TagId[], required: TagId[]): boolean {
+export function hasAllRequired(tags: readonly TagId[], required: readonly TagId[]): boolean {
   return required.every((tag) => tags.includes(tag))
 }
 
@@ -308,6 +316,7 @@ export function toggleTag(fields: SpecimenFields, tag: TagId): SpecimenFields {
   if (tag === 'shiny') next.shiny = !next.shiny
   if (tag === 'hundo') next.hundo = !next.hundo
   if (tag === 'nundo') next.nundo = !next.nundo
+  if (tag === 'hokido') next.hokido = !next.hokido
   if (tag === 'shadow') {
     next.shadowStatus = combineShadowStatus(
       !hasShadowStatus(next.shadowStatus),

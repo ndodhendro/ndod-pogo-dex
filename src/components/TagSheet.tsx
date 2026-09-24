@@ -60,6 +60,7 @@ const emptyFields = (): SpecimenFields => ({
   gender: null,
   hundo: false,
   nundo: false,
+  hokido: false,
   extraTags: ['basic'],
   silhouette: false,
   notPure: false,

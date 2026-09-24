@@ -34,6 +34,7 @@ import {
   type TagRosterEntry,
 } from './roster'
 import { GO_BACKGROUND, GO_COSTUME, GO_FORM_SPECIES_IDS, GO_MEGA } from '../data/goFormReleased'
+import { nundoExcludesSpecies } from '../data/goLegendary'
 import { GO_LUCKY_IDS, GO_RELEASED_IDS } from '../data/goReleased'
 import type { SpecimenFields } from './tags'
 
@@ -46,6 +47,7 @@ const specimen = (over: Partial<SpecimenFields> = {}): SpecimenFields => ({
   background: null,
   hundo: false,
   nundo: false,
+  hokido: false,
   extraTags: [],
   ...over,
 })
@@ -859,9 +861,49 @@ describe('Basic Pokédex limit', () => {
     expect(slotsForTrack(['hundo'], [basic], []).map((slot) => slot.speciesId)).toHaveLength(
       GO_RELEASED_IDS.size,
     )
-    expect(slotsForTrack(['nundo', 'xxl'], [basic], [])).toHaveLength(GO_RELEASED_IDS.size)
+    const nundoEligible = [...GO_RELEASED_IDS].filter((id) => !nundoExcludesSpecies(id)).length
+    expect(slotsForTrack(['nundo', 'xxl'], [basic], [])).toHaveLength(nundoEligible)
     expect(slotsForTrack(['best-buddy'], [], [])).toHaveLength(GO_RELEASED_IDS.size)
+    expect(slotsForTrack(['hokido'], [basic], []).map((slot) => slot.speciesId)).toEqual(
+      slotsForTrack([], [basic], []).map((slot) => slot.speciesId),
+    )
     expect(trackIsLimited(['max-cp'], [basic])).toBe(true)
+  })
+
+  it('omits raid legendaries from Nundo and keeps Galarian birds', () => {
+    const ids = slotsForTrack(['nundo'], [basic], []).map((slot) => slot.speciesId)
+    const excluded = [...GO_RELEASED_IDS].filter((id) => nundoExcludesSpecies(id))
+    expect(ids).toHaveLength(GO_RELEASED_IDS.size - excluded.length)
+    expect(excluded.length).toBeGreaterThan(40)
+    expect(ids).not.toContain(150)
+    expect(ids).not.toContain(249)
+    expect(ids).not.toContain(384)
+    expect(ids).not.toContain(800)
+    expect(ids).not.toContain(888)
+    expect(ids).toContain(1)
+    expect(ids).toContain(144)
+    expect(ids).toContain(145)
+    expect(ids).toContain(146)
+    expect(ids).toContain(151)
+    expect(slotsForTrack(['hundo'], [basic], []).some((slot) => slot.speciesId === 150)).toBe(true)
+    expect(canEnableLimitedTag(specimen({ speciesId: 150, nundo: true }), 'nundo', [basic], [])).toBe(
+      false,
+    )
+    expect(canEnableLimitedTag(specimen({ speciesId: 144, nundo: true }), 'nundo', [basic], [])).toBe(
+      true,
+    )
+    expect(canEnableLimitedTag(specimen({ speciesId: 1, nundo: true }), 'nundo', [basic], [])).toBe(true)
+    expect(limitedRosterWarning(specimen({ speciesId: 150, nundo: true }), [basic], [])).toBe(
+      'Not in the Nundo Pokédex',
+    )
+    expect(limitedRosterWarning(specimen({ speciesId: 1, nundo: true }), [basic], [])).toBe('')
+    const shadow: TagCatalog = { tag: 'shadow', limitPokedex: true, slotMode: 'species' }
+    const shadowNundo = slotsForTrack(['shadow', 'nundo'], [shadow, basic], []).map(
+      (slot) => slot.speciesId,
+    )
+    expect(GO_FORM_SPECIES_IDS.shadow.has(150)).toBe(true)
+    expect(shadowNundo).not.toContain(150)
+    expect(shadowNundo).toContain(1)
   })
 
   it('omits Pumpkaboo and Gourgeist from XXS because they have no XXS size', () => {

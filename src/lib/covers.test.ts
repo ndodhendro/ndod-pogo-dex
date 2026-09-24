@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { coverMutationsAfterEdit, coverPurity, pickCoverAfterDelete, speciesInCategory, shouldAutoReplaceCover } from './covers'
+import {
+  coverCompareSortOrder,
+  coverMutationsAfterEdit,
+  coverPurity,
+  pickCoverAfterDelete,
+  preferredCoverId,
+  speciesInCategory,
+  shouldAutoReplaceCover,
+} from './covers'
 import { hasAllRequired, isExactMatch, specimenTags, visualKey, type SpecimenFields, type TagId } from './tags'
 
 const shadowGray = specimenTags({
@@ -11,6 +19,7 @@ const shadowGray = specimenTags({
   background: 'Tokyo',
   hundo: false,
   nundo: false,
+  hokido: false,
 })
 
 const shadowPure = specimenTags({
@@ -22,6 +31,7 @@ const shadowPure = specimenTags({
   background: null,
   hundo: false,
   nundo: false,
+  hokido: false,
 })
 
 describe('tags', () => {
@@ -35,6 +45,7 @@ describe('tags', () => {
       background: null,
       hundo: false,
       nundo: false,
+      hokido: false,
     }
     expect(visualKey({ ...base, hundo: true })).not.toBe(visualKey(base))
     expect(visualKey({ ...base, nundo: true })).not.toBe(visualKey(base))
@@ -51,6 +62,7 @@ describe('tags', () => {
       background: null,
       hundo: false,
       nundo: false,
+      hokido: false,
     }
     expect(visualKey({ ...base, extraTags: ['lucky'] })).not.toBe(visualKey(base))
   })
@@ -65,6 +77,7 @@ describe('tags', () => {
       background: null,
       hundo: false,
       nundo: false,
+      hokido: false,
     }
     expect(visualKey({ ...base, silhouette: true })).not.toBe(visualKey(base))
   })
@@ -79,6 +92,7 @@ describe('tags', () => {
       background: null,
       hundo: false,
       nundo: false,
+      hokido: false,
     }
     expect(visualKey(base)).not.toBe(visualKey({ ...base, costume: 'Party' }))
     expect(visualKey({ ...base, costume: null, background: 'Tokyo' })).not.toBe(
@@ -176,6 +190,7 @@ describe('covers', () => {
       background: null,
       hundo: true,
       nundo: false,
+      hokido: false,
     })
     const exact = specimenTags({
       speciesId: 1,
@@ -186,6 +201,7 @@ describe('covers', () => {
       background: null,
       hundo: true,
       nundo: false,
+      hokido: false,
     })
     expect(coverPurity(extra, ['shadow', 'hundo'])).toBe('gray')
     expect(coverPurity(exact, ['shadow', 'hundo'])).toBe('green')
@@ -320,6 +336,7 @@ function spec(partial: Partial<CoverSpecimen> & Pick<CoverSpecimen, 'id'>): Cove
     background: null,
     hundo: false,
     nundo: false,
+    hokido: false,
     extraTags: [],
     createdAt: 1,
     ...partial,
@@ -492,5 +509,140 @@ describe('coverMutationsAfterEdit', () => {
         specimenId: 'incoming',
       },
     ])
+  })
+
+  it('replaces a gray cover with a higher sortOrder when none is pure', () => {
+    const shiny = spec({ id: 'shiny', shiny: true, createdAt: 5 })
+    const hundo = spec({ id: 'hundo', hundo: true, createdAt: 1 })
+    expect(
+      coverMutationsAfterEdit(
+        hundo,
+        hundo,
+        [basicCat, shinyCatRank, hundoCat],
+        [{ categoryId: 'basic', speciesId: 1, specimenId: 'shiny' }],
+        [shiny, hundo],
+      ),
+    ).toEqual([
+      { op: 'put', categoryId: 'basic', speciesId: 1, variant: '', specimenId: 'hundo' },
+      { op: 'put', categoryId: 'hundo', speciesId: 1, variant: '', specimenId: 'hundo' },
+    ])
+  })
+
+  it('keeps a user-chosen gray cover when a higher sortOrder arrives', () => {
+    const shiny = spec({ id: 'shiny', shiny: true, createdAt: 5 })
+    const hundo = spec({ id: 'hundo', hundo: true, createdAt: 1 })
+    expect(
+      coverMutationsAfterEdit(
+        hundo,
+        hundo,
+        [basicCat, shinyCatRank, hundoCat],
+        [{ categoryId: 'basic', speciesId: 1, specimenId: 'shiny', userChosen: true }],
+        [shiny, hundo],
+      ),
+    ).toEqual([{ op: 'put', categoryId: 'hundo', speciesId: 1, variant: '', specimenId: 'hundo' }])
+  })
+})
+
+const rankCategories = [
+  { requiredTags: [] as const, sortOrder: 0 },
+  { requiredTags: ['shiny'] as const, sortOrder: 1 },
+  { requiredTags: ['shadow'] as const, sortOrder: 2 },
+  { requiredTags: ['hundo'] as const, sortOrder: 6 },
+]
+
+const basicCat = { id: 'basic', requiredTags: [] as TagId[], sortOrder: 0 }
+const shinyCatRank = { id: 'shiny', requiredTags: ['shiny'] as TagId[], sortOrder: 1 }
+const hundoCat = { id: 'hundo', requiredTags: ['hundo'] as TagId[], sortOrder: 6 }
+
+describe('gray cover sort order', () => {
+  it('scores a multi-tag screenshot by its smallest non-Basic sortOrder', () => {
+    expect(coverCompareSortOrder(['shiny', 'hundo'], rankCategories)).toBe(1)
+    expect(coverCompareSortOrder(['shadow'], rankCategories)).toBe(2)
+    expect(coverCompareSortOrder(['hundo'], rankCategories)).toBe(6)
+    expect(coverCompareSortOrder(['basic'], rankCategories)).toBeNull()
+  })
+
+  it('lets a higher sortOrder replace a gray cover, and leaves a lower one', () => {
+    expect(shouldAutoReplaceCover([], ['shiny'], ['hundo'], { rankCategories })).toBe(true)
+    expect(shouldAutoReplaceCover([], ['hundo'], ['shiny'], { rankCategories })).toBe(false)
+    expect(shouldAutoReplaceCover([], ['shiny'], ['shiny'], { rankCategories })).toBe(false)
+  })
+
+  it('keeps a user-chosen gray ahead of a higher sortOrder', () => {
+    expect(
+      shouldAutoReplaceCover([], ['shiny'], ['hundo'], { rankCategories, keepUserCover: true }),
+    ).toBe(false)
+  })
+
+  it('still lets the first pure replace a user-chosen gray', () => {
+    expect(shouldAutoReplaceCover([], ['shiny'], [], { rankCategories, keepUserCover: false })).toBe(true)
+    expect(shouldAutoReplaceCover([], ['shiny'], [], { keepUserCover: true })).toBe(false)
+  })
+
+  it('picks the highest sortOrder when nothing is pure, then the newest tie', () => {
+    expect(
+      pickCoverAfterDelete(
+        [],
+        [
+          { id: 'shiny', tags: ['shiny'], createdAt: 9 },
+          { id: 'hundo', tags: ['hundo'], createdAt: 1 },
+          { id: 'plain', tags: [], createdAt: 20, notPure: true },
+        ],
+        1,
+        rankCategories,
+      ),
+    ).toBe('hundo')
+    expect(
+      pickCoverAfterDelete(
+        [],
+        [
+          { id: 'old', tags: ['shiny'], createdAt: 1 },
+          { id: 'new', tags: ['shiny'], createdAt: 3 },
+        ],
+        1,
+        rankCategories,
+      ),
+    ).toBe('new')
+  })
+
+  it('keeps a pure cover ahead of a higher sortOrder', () => {
+    expect(
+      pickCoverAfterDelete(
+        [],
+        [
+          { id: 'hundo', tags: ['hundo'], createdAt: 9 },
+          { id: 'pure', tags: [], createdAt: 1 },
+        ],
+        1,
+        rankCategories,
+      ),
+    ).toBe('pure')
+    expect(
+      preferredCoverId(
+        [],
+        [
+          { id: 'pure', tags: [], createdAt: 1 },
+          { id: 'hundo', tags: ['hundo'], createdAt: 9 },
+        ],
+        1,
+        rankCategories,
+        { id: 'pure' },
+      ),
+    ).toBe('pure')
+  })
+
+  it('shows the user-chosen photo even when a pure exists', () => {
+    expect(
+      preferredCoverId(
+        [],
+        [
+          { id: 'shiny', tags: ['shiny'], createdAt: 2 },
+          { id: 'pure', tags: [], createdAt: 1 },
+        ],
+        1,
+        rankCategories,
+        { id: 'shiny', userChosen: true },
+      ),
+    ).toBe('shiny')
   })
 })

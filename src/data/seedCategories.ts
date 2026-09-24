@@ -82,7 +82,34 @@ export const SEED_CATEGORIES: {
     emoji: TAG_ICONS.nundo,
     labelColor: TONE_TEXT_HEX.nundo,
   },
+  {
+    id: 'seed:hokido',
+    name: 'Hokido',
+    requiredTags: ['hokido'],
+    sortOrder: 8,
+    seed: true,
+    emoji: TAG_ICONS.hokido,
+    labelColor: TONE_TEXT_HEX.hokido,
+  },
 ]
+
+/** Seed tracks added after the first install. Insert once; a later cloud delete stays deleted. */
+export const INTRODUCED_SEED_IDS = ['seed:hokido'] as const
+
+export function introducedSeedStorageKey(id: string) {
+  return `ndod-pogo-dex:introduced:${id}`
+}
+
+export function seedsToIntroduce(
+  localIds: ReadonlySet<string>,
+  alreadyIntroduced: ReadonlySet<string>,
+) {
+  return INTRODUCED_SEED_IDS.flatMap((id) => {
+    if (localIds.has(id) || alreadyIntroduced.has(id)) return []
+    const seed = seedCategoryById(id)
+    return seed ? [seed] : []
+  })
+}
 
 /**
  * Shared UUIDs used by the first cloud backup. `categories.id` was a global
@@ -98,6 +125,7 @@ export const SEED_CLOUD_IDS: Record<string, string> = {
   'seed:background': '01000000-0000-4000-8000-000000000006',
   'seed:hundo': '01000000-0000-4000-8000-000000000007',
   'seed:nundo': '01000000-0000-4000-8000-000000000008',
+  'seed:hokido': '01000000-0000-4000-8000-000000000009',
 }
 
 export const LEGACY_SEED_CLOUD_IDS = Object.values(SEED_CLOUD_IDS)

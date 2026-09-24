@@ -28,7 +28,7 @@ import { useDexCollapse } from '../hooks/useDexCollapse'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { useTrackFrameHeight } from '../hooks/useCropSettings'
 import { SCREENSHOT_WIDTH } from '../lib/images'
-import { coverPurity, findCover, type CoverPurity } from '../lib/covers'
+import { coverPurity, findCover, rankCategoriesFrom, type CoverPurity } from '../lib/covers'
 import { deleteSpecimen, setAsCover } from '../lib/collection'
 import { categoryChromeStyle } from '../lib/categoryStyle'
 import {
@@ -170,8 +170,8 @@ export function DexPage() {
   )
 
   const allSlots = useMemo(
-    () => buildSlots(category, specimens, covers, catalogs, roster, '', progressFilter, filterTags),
-    [category, specimens, covers, catalogs, roster, progressFilter, filterTags],
+    () => buildSlots(category, specimens, covers, catalogs, roster, '', progressFilter, filterTags, null, categories),
+    [category, specimens, covers, catalogs, roster, progressFilter, filterTags, categories],
   )
   const catalog = useMemo(
     () => slotsForTrack(category?.requiredTags ?? [], catalogs, roster),
@@ -198,6 +198,7 @@ export function DexPage() {
             progressFilter,
             filterTags,
             showEvolutionLine ? searchedSpeciesId : null,
+            categories,
           )
         : allSlots,
     [
@@ -212,6 +213,7 @@ export function DexPage() {
       filterTags,
       showEvolutionLine,
       searchedSpeciesId,
+      categories,
     ],
   )
   const exactFileHit = useMemo(() => {
@@ -684,8 +686,10 @@ function buildSlots(
   progressFilter: DexProgressKind | null = null,
   filterTags: readonly TagId[] = [],
   evolutionSpeciesId: number | null = null,
+  allCategories: readonly CategoryRow[] = [],
 ): Slot[] {
   const required = category?.requiredTags ?? []
+  const rankCategories = allCategories.length > 0 ? rankCategoriesFrom(allCategories) : undefined
   const catalog = slotsForTrack(required, catalogs, roster)
   const defs =
     evolutionSpeciesId != null
@@ -712,7 +716,15 @@ function buildSlots(
     const coverRow = category
       ? findCover(categoryCovers, category.id, def.speciesId, def.variant)
       : undefined
-    const cover = pickDexCover(filtering ? matching : group, coverRow?.specimenId)
+    const coverPool = filtering ? matching : group
+    const cover = rankCategories
+      ? pickDexCover(coverPool, coverRow?.specimenId, {
+          required,
+          speciesId: def.speciesId,
+          userChosen: coverRow?.userChosen === true,
+          rankCategories,
+        })
+      : pickDexCover(coverPool, coverRow?.specimenId)
     const inCategory = group.length > 0
     const purity =
       cover

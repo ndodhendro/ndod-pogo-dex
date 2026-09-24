@@ -103,6 +103,7 @@ const specimen = (over: Partial<SpecimenFields>): SpecimenFields => ({
   background: null,
   hundo: false,
   nundo: false,
+  hokido: false,
   ...over,
 })
 
@@ -142,6 +143,34 @@ describe('pickDexCover', () => {
     expect(pickDexCover([silOld, catchRow], 'catch')).toEqual(catchRow)
     expect(pickDexCover([silOld, catchRow], 'missing')).toEqual(silOld)
     expect(pickDexCover([], 'catch')).toBeUndefined()
+  })
+
+  it('uses the highest sortOrder when the stored cover is an automatic gray', () => {
+    const shiny = {
+      id: 'shiny',
+      createdAt: 9,
+      speciesId: 1,
+      form: null,
+      shiny: true,
+      shadowStatus: 'none' as const,
+      costume: null,
+      background: null,
+      hundo: false,
+      nundo: false,
+      hokido: false,
+    }
+    const hundo = { ...shiny, id: 'hundo', createdAt: 1, shiny: false, hundo: true }
+    const rank = [
+      { requiredTags: [] as const, sortOrder: 0 },
+      { requiredTags: ['shiny'] as const, sortOrder: 1 },
+      { requiredTags: ['hundo'] as const, sortOrder: 6 },
+    ]
+    expect(
+      pickDexCover([shiny, hundo], 'shiny', { required: [], rankCategories: rank, userChosen: false }),
+    ).toEqual(hundo)
+    expect(
+      pickDexCover([shiny, hundo], 'shiny', { required: [], rankCategories: rank, userChosen: true }),
+    ).toEqual(shiny)
   })
 })
 

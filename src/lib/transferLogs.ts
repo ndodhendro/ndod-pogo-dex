@@ -127,6 +127,7 @@ export function specimenFromTransferLog(
         gender: log.gender ?? null,
         hundo: Boolean(log.hundo),
         nundo: Boolean(log.nundo),
+        hokido: Boolean(log.hokido),
         extraTags: extraTagList(log),
         silhouette: isSilhouette(log),
         notPure: isNotPure(log),
@@ -146,6 +147,7 @@ export function specimenFromTransferLog(
         background: null,
         hundo: false,
         nundo: false,
+        hokido: false,
       }),
     }
   }
@@ -169,6 +171,7 @@ function snapshotFromSpecimen(
     gender: specimen.gender ?? null,
     hundo: specimen.hundo,
     nundo: specimen.nundo,
+    hokido: Boolean(specimen.hokido),
     extraTags: extraTagList(specimen),
     silhouette: isSilhouette(specimen),
     notPure: isNotPure(specimen),

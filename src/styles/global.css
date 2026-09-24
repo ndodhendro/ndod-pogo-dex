@@ -48,6 +48,9 @@
   --color-nundo: #94a3b8;
   --color-nundo-text: #cbd5e1;
   --color-nundo-soft: rgba(148, 163, 184, 0.12);
+  --color-hokido: #6366f1;
+  --color-hokido-text: #a5b4fc;
+  --color-hokido-soft: rgba(99, 102, 241, 0.14);
   --color-alolan: #f9a8d4;
   --color-alolan-text: #fbcfe8;
   --color-alolan-soft: rgba(249, 168, 212, 0.12);
@@ -158,6 +161,11 @@
   --tone: var(--color-hundo-text);
   --tone-fill: var(--color-hundo);
   --tone-soft: var(--color-hundo-soft);
+}
+[data-tone='hokido'] {
+  --tone: var(--color-hokido-text);
+  --tone-fill: var(--color-hokido);
+  --tone-soft: var(--color-hokido-soft);
 }
 [data-tone='alolan'] {
   --tone: var(--color-alolan-text);

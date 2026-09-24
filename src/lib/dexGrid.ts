@@ -1,6 +1,6 @@
 import type { Generation } from '../data/generations'
 import { MAX_TAG_CROP_HEIGHT } from '../data/tagCrops'
-import { isGreenCover } from './covers'
+import { isGreenCover, preferredCoverId, type CoverRankCategory } from './covers'
 import { SCREENSHOT_WIDTH } from './images'
 import { hasAllRequired, isNotPure, isSilhouette, specimenTags, type SpecimenFields, type TagId } from './tags'
 
@@ -189,9 +189,45 @@ export function countFilledSpecies(
 export function pickDexCover<T extends { id: string }>(
   group: readonly T[],
   coverId: string | undefined,
+): T | undefined
+export function pickDexCover<T extends SpecimenFields & { id: string; createdAt: number }>(
+  group: readonly T[],
+  coverId: string | undefined,
+  opts: {
+    required: TagId[]
+    speciesId?: number
+    userChosen?: boolean
+    rankCategories: readonly CoverRankCategory[]
+  },
+): T | undefined
+export function pickDexCover<T extends { id: string }>(
+  group: readonly T[],
+  coverId: string | undefined,
+  opts?: {
+    required: TagId[]
+    speciesId?: number
+    userChosen?: boolean
+    rankCategories: readonly CoverRankCategory[]
+  },
 ): T | undefined {
   if (group.length === 0) return undefined
-  return group.find((row) => row.id === coverId) ?? group[0]
+  if (!opts) return group.find((row) => row.id === coverId) ?? group[0]
+  const ranked = group as readonly (T & SpecimenFields & { createdAt: number })[]
+  const nextId = preferredCoverId(
+    opts.required,
+    ranked.map((row) => ({
+      id: row.id,
+      tags: specimenTags(row),
+      createdAt: row.createdAt,
+      silhouette: isSilhouette(row),
+      notPure: isNotPure(row),
+      gender: row.gender,
+    })),
+    opts.speciesId ?? ranked[0].speciesId,
+    opts.rankCategories,
+    coverId ? { id: coverId, userChosen: opts.userChosen } : null,
+  )
+  return group.find((row) => row.id === nextId) ?? group[0]
 }
 
 export function keepDexSlot(hasMatch: boolean, filtering: boolean): boolean {

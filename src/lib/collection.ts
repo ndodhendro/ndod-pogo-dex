@@ -2,7 +2,15 @@ import { forgetImageUrls } from '../hooks/useImageUrl'
 import { colorForCategory, iconForCategory } from '../data/navIcons'
 import { categoryOrderPatch } from './categoryOrder'
 import { firstGrapheme, normalizeHexColor } from './categoryStyle'
-import { coverMutationsAfterEdit, coverPurity, pickCoverAfterDelete, shouldAutoReplaceCover } from './covers'
+import {
+  coverMutationsAfterEdit,
+  coverPurity,
+  keepUserChosenCover,
+  pickCoverAfterDelete,
+  planCategoryCoverPuts,
+  rankCategoriesFrom,
+  shouldAutoReplaceCover,
+} from './covers'
 import { db, ensureSeedCategories, type CategoryRow, type InboxRow, type SpecimenRow, type TagCatalogRow } from './db'
 import { galleryOrderPatch } from './galleryOrder'
 import { newId } from './id'
@@ -190,6 +198,7 @@ export async function saveSpecimenFromInbox(
     gender: fields.gender ?? null,
     hundo: fields.hundo,
     nundo: fields.nundo,
+    hokido: Boolean(fields.hokido),
     extraTags,
     silhouette: isSilhouette(fields),
     notPure: isNotPure(fields),
@@ -207,7 +216,7 @@ export async function saveSpecimenFromInbox(
     await db.specimens.add(specimen)
     await db.inbox.delete(inboxId)
     for (const category of categories) {
-      await maybeSetCover(category, specimen, incomingTags, catalogs)
+      await maybeSetCover(category, specimen, incomingTags, catalogs, categories)
     }
     await appendTransferLog(specimen, 'save')
   })
@@ -247,6 +256,7 @@ export async function replaceSpecimenFromInbox(
     gender: fields.gender ?? null,
     hundo: fields.hundo,
     nundo: fields.nundo,
+    hokido: Boolean(fields.hokido),
     extraTags,
     silhouette: isSilhouette(fields),
     notPure: isNotPure(fields),
@@ -327,6 +337,7 @@ async function saveExistingScreenshot(
     gender: fields.gender ?? null,
     hundo: fields.hundo,
     nundo: fields.nundo,
+    hokido: Boolean(fields.hokido),
     extraTags: extraTagList(fields),
     silhouette: isSilhouette(fields),
     notPure: isNotPure(fields),
@@ -353,7 +364,7 @@ async function saveExistingScreenshot(
     if (imageStillUsed === 0) await db.images.delete(inbox.imageId)
     if (!unchanged) {
       for (const category of categories) {
-        await maybeSetCover(category, updated, incomingTags, catalogs)
+        await maybeSetCover(category, updated, incomingTags, catalogs, categories)
       }
     }
     await appendTransferLog(updated, 'save')
@@ -386,6 +397,7 @@ export async function updateSpecimen(
     gender: fields.gender ?? null,
     hundo: fields.hundo,
     nundo: fields.nundo,
+    hokido: Boolean(fields.hokido),
     extraTags,
     silhouette: isSilhouette(fields),
     notPure: isNotPure(fields),
@@ -479,6 +491,7 @@ export async function replaceSpecimenLook(
     gender: fields.gender ?? null,
     hundo: fields.hundo,
     nundo: fields.nundo,
+    hokido: Boolean(fields.hokido),
     extraTags,
     silhouette: isSilhouette(fields),
     notPure: isNotPure(fields),
@@ -513,6 +526,7 @@ export async function replaceSpecimenLook(
 
       const remaining = await db.specimens.where('speciesId').equals(currentSpeciesId).toArray()
       const categories = await db.categories.toArray()
+      const rankCategories = rankCategoriesFrom(categories)
       const affectedCovers = await db.covers.where('specimenId').equals(existingId).toArray()
       for (const cover of affectedCovers) {
         const category = categories.find((row) => row.id === cover.categoryId)
@@ -537,7 +551,7 @@ export async function replaceSpecimenLook(
             gender: row.gender,
           }))
         const nextId = category
-          ? pickCoverAfterDelete(category.requiredTags, remainingForPick, cover.speciesId)
+          ? pickCoverAfterDelete(category.requiredTags, remainingForPick, cover.speciesId, rankCategories)
           : null
         if (nextId) {
           await db.covers.put({
@@ -615,11 +629,51 @@ async function finishSave(
   return { ...flags, specimen }
 }
 
+async function userChoseThisCover(
+  category: CategoryRow,
+  specimen: SpecimenRow,
+  incomingTags: TagId[],
+  catalogs: TagCatalogRow[],
+  variant: string,
+  userChosen: boolean,
+) {
+  if (!userChosen) return false
+  const sameSpecies = await db.specimens.where('speciesId').equals(specimen.speciesId).toArray()
+  const others = sameSpecies.filter(
+    (row) =>
+      row.id !== specimen.id &&
+      specimenFillsSlot(
+        row,
+        category.requiredTags,
+        { speciesId: specimen.speciesId, variant, name: '' },
+        catalogs,
+      ),
+  )
+  return keepUserChosenCover(
+    true,
+    category.requiredTags,
+    incomingTags,
+    {
+      silhouette: isSilhouette(specimen),
+      notPure: isNotPure(specimen),
+      gender: specimen.gender,
+      speciesId: specimen.speciesId,
+    },
+    others.map((row) => ({
+      tags: specimenTags(row),
+      silhouette: isSilhouette(row),
+      notPure: isNotPure(row),
+      gender: row.gender,
+    })),
+  )
+}
+
 async function maybeSetCover(
   category: CategoryRow,
   specimen: SpecimenRow,
   incomingTags: TagId[],
   catalogs: TagCatalogRow[],
+  allCategories: CategoryRow[],
 ) {
   const variant = slotVariantForTrack(specimen, category.requiredTags, catalogs)
   const current = await db.covers.get([category.id, specimen.speciesId, variant])
@@ -643,6 +697,8 @@ async function maybeSetCover(
       speciesId: specimen.speciesId,
       currentGender,
       incomingGender: specimen.gender,
+      rankCategories: rankCategoriesFrom(allCategories),
+      keepUserCover: await userChoseThisCover(category, specimen, incomingTags, catalogs, variant, current?.userChosen === true),
     })
   ) {
     await db.covers.put({
@@ -668,6 +724,7 @@ export async function setAsCover(categoryId: string, specimenId: string) {
     speciesId: specimen.speciesId,
     variant,
     specimenId,
+    userChosen: true,
   })
   return pushCover(categoryId, specimen.speciesId, specimenId, variant)
 }
@@ -692,6 +749,7 @@ export async function deleteSpecimen(id: string) {
 
     const remaining = await db.specimens.where('speciesId').equals(speciesId).toArray()
     const categories = await db.categories.toArray()
+    const rankCategories = rankCategoriesFrom(categories)
     for (const cover of affectedCovers) {
       const category = categories.find((row) => row.id === cover.categoryId)
       const variant = cover.variant ?? ''
@@ -715,7 +773,7 @@ export async function deleteSpecimen(id: string) {
           gender: row.gender,
         }))
       const nextId = category
-        ? pickCoverAfterDelete(category.requiredTags, remainingForPick, cover.speciesId)
+        ? pickCoverAfterDelete(category.requiredTags, remainingForPick, cover.speciesId, rankCategories)
         : null
       if (nextId) {
         await db.covers.put({
@@ -825,9 +883,69 @@ export async function refreshCoversForCategory(category: CategoryRow) {
     }
   }
   const specimens = await db.specimens.toArray()
-  for (const specimen of specimens) {
-    await maybeSetCover(category, specimen, specimenTags(specimen), catalogs)
+  const allCategories = await db.categories.toArray()
+  const liveCovers = await db.covers.toArray()
+  const mutations = planCategoryCoverPuts(
+    category,
+    specimens,
+    liveCovers,
+    catalogs,
+    rankCategoriesFrom(allCategories),
+  )
+  for (const mutation of mutations) {
+    if (mutation.op !== 'put') continue
+    await db.covers.put({
+      categoryId: mutation.categoryId,
+      speciesId: mutation.speciesId,
+      variant: mutation.variant,
+      specimenId: mutation.specimenId,
+    })
   }
+}
+
+const GRAY_COVER_RANK_KEY = 'ndod-pogo-dex:gray-cover-rank'
+
+/** Rewrite automatic gray covers to the sort_order rank. User-chosen and green covers stay. */
+export async function reconcileDefaultCovers(): Promise<string | undefined> {
+  const categories = await db.categories.toArray()
+  const specimens = await db.specimens.toArray()
+  const covers = await db.covers.toArray()
+  const catalogs = await db.tagCatalogs.toArray()
+  const rankCategories = rankCategoriesFrom(categories)
+  const mutations = categories.flatMap((category) =>
+    planCategoryCoverPuts(category, specimens, covers, catalogs, rankCategories),
+  )
+  if (mutations.length === 0) return
+  await db.transaction('rw', db.covers, async () => {
+    for (const mutation of mutations) {
+      if (mutation.op !== 'put') continue
+      await db.covers.put({
+        categoryId: mutation.categoryId,
+        speciesId: mutation.speciesId,
+        variant: mutation.variant,
+        specimenId: mutation.specimenId,
+      })
+    }
+  })
+  let error: string | undefined
+  for (const mutation of mutations) {
+    if (mutation.op !== 'put') continue
+    const message = await pushCover(
+      mutation.categoryId,
+      mutation.speciesId,
+      mutation.specimenId,
+      mutation.variant,
+    )
+    if (message) error = message
+  }
+  return error
+}
+
+/** One pass so existing automatic covers follow the rank. Later saves update themselves. */
+export async function migrateDefaultCovers() {
+  if (localStorage.getItem(GRAY_COVER_RANK_KEY) === '1') return
+  const error = await reconcileDefaultCovers()
+  if (!error) localStorage.setItem(GRAY_COVER_RANK_KEY, '1')
 }
 
 export async function deleteCategory(id: string) {
@@ -851,7 +969,8 @@ export async function reorderCategories(orderedIds: string[]) {
       patch.map((row) => db.categories.update(row.id, { sortOrder: row.sortOrder, cloudBackupPending: true })),
     )
   })
-  return pushCategories({ syncOrder: true })
+  const coverError = await reconcileDefaultCovers()
+  return (await pushCategories({ syncOrder: true })) || coverError
 }
 
 export async function reorderGallerySpecimens(speciesId: number, orderedIds: string[]) {

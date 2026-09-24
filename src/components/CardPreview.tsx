@@ -653,6 +653,7 @@ function PreviewPhoto({
         ) : null}
         {showFx && tags.includes('shiny') ? <ShinySparkles /> : null}
         {showFx && tags.includes('hundo') ? <span className={styles.hundo} /> : null}
+        {showFx && tags.includes('hokido') ? <span className={styles.hokido} /> : null}
       </div>
     </div>
   )

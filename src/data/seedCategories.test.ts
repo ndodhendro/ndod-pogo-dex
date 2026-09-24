@@ -3,6 +3,7 @@ import {
   fromCloudCategoryId,
   perUserSeedCloudId,
   SEED_CLOUD_IDS,
+  seedsToIntroduce,
   toCloudCategoryId,
 } from './seedCategories'
 
@@ -29,6 +30,18 @@ describe('cloud seed category ids', () => {
     expect(perUserSeedCloudId(userId, 'seed:nundo')).toBe(
       'aaaaaaaa-bbbb-4ccc-8ddd-000000000008',
     )
+    expect(perUserSeedCloudId(userId, 'seed:hokido')).toBe(
+      'aaaaaaaa-bbbb-4ccc-8ddd-000000000009',
+    )
+  })
+
+  it('introduces Hokido once for an existing install', () => {
+    const local = new Set(['seed:living', 'seed:nundo'])
+    const added = seedsToIntroduce(local, new Set())
+    expect(added.map((row) => row.id)).toEqual(['seed:hokido'])
+    expect(added[0]?.requiredTags).toEqual(['hokido'])
+    expect(seedsToIntroduce(new Set(['seed:hokido']), new Set())).toEqual([])
+    expect(seedsToIntroduce(local, new Set(['seed:hokido']))).toEqual([])
   })
 
   it('maps unnamed seed rows back by display name', () => {

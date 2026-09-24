@@ -31,6 +31,7 @@ const spec = (
   background: null,
   hundo: false,
   nundo: false,
+  hokido: false,
   ...over,
 })
 

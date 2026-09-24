@@ -1,6 +1,12 @@
 import Dexie, { type Table } from 'dexie'
 import { colorForCategory, iconForCategory } from '../data/navIcons'
-import { SEED_CATEGORIES, LEGACY_SEED_NAMES } from '../data/seedCategories'
+import {
+  INTRODUCED_SEED_IDS,
+  introducedSeedStorageKey,
+  LEGACY_SEED_NAMES,
+  SEED_CATEGORIES,
+  seedsToIntroduce,
+} from '../data/seedCategories'
 import { SEED_COMBO_CROPS, SEED_TAG_CROPS } from '../data/tagCrops'
 import type { SlotMode } from './roster'
 import { allocateCategoryTag, TAG_IDS, type ShadowStatus, type TagId } from './tags'
@@ -17,6 +23,7 @@ export type SpecimenRow = {
   gender?: string | null
   hundo: boolean
   nundo: boolean
+  hokido: boolean
   extraTags?: TagId[]
   silhouette?: boolean
   notPure?: boolean
@@ -63,6 +70,8 @@ export type CoverRow = {
   /** Empty string for species-mode tracks. */
   variant: string
   specimenId: string
+  /** Set as cover. Stays until a pure specimen replaces it. */
+  userChosen?: boolean
 }
 
 export type TagCatalogRow = {
@@ -105,6 +114,7 @@ export type TransferLogRow = {
   gender?: string | null
   hundo?: boolean
   nundo?: boolean
+  hokido?: boolean
   extraTags?: TagId[]
   silhouette?: boolean
   notPure?: boolean
@@ -218,7 +228,24 @@ export async function ensureSeedCategories() {
     }
     await ensureCustomCategoryTags()
   }
+  await ensureIntroducedSeedCategories()
   await ensureSeedTagCrops()
+}
+
+/** Add seed tracks that shipped after this install, until a backup has acknowledged them. */
+export async function ensureIntroducedSeedCategories() {
+  const ids = new Set((await db.categories.toArray()).map((row) => row.id))
+  const introduced = new Set(
+    INTRODUCED_SEED_IDS.filter((id) => localStorage.getItem(introducedSeedStorageKey(id)) === '1'),
+  )
+  const missing = seedsToIntroduce(ids, introduced)
+  if (missing.length > 0) await db.categories.bulkAdd(missing)
+}
+
+export function ackIntroducedSeedCategories(ids: readonly string[]) {
+  for (const id of INTRODUCED_SEED_IDS) {
+    if (ids.includes(id)) localStorage.setItem(introducedSeedStorageKey(id), '1')
+  }
 }
 
 export async function ensureSeedTagCrops() {

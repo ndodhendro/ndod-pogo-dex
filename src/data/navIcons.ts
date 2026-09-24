@@ -41,6 +41,7 @@ export const TAG_ICONS: Record<BuiltInTagId, string> = {
   background: '🖼️',
   hundo: '💯',
   nundo: '0️⃣',
+  hokido: '🎯',
 }
 
 export const CATEGORY_ICONS: Record<string, string> = {
@@ -54,6 +55,7 @@ export const CATEGORY_ICONS: Record<string, string> = {
   Background: TAG_ICONS.background,
   Hundo: TAG_ICONS.hundo,
   Nundo: TAG_ICONS.nundo,
+  Hokido: TAG_ICONS.hokido,
 }
 
 export const FORM_ICONS: Record<string, string> = {
@@ -77,6 +79,7 @@ export const TONE_TEXT_HEX: Record<UiTone, string> = {
   background: '#67e8f9',
   hundo: '#fcd34d',
   nundo: '#cbd5e1',
+  hokido: '#a5b4fc',
   default: '#cbd5e1',
   alolan: '#fbcfe8',
   galarian: '#bfdbfe',
@@ -114,7 +117,15 @@ export function toneForCategory(category: { name: string; requiredTags: TagId[] 
   }
   if (category.name === 'Background') return 'background'
   const named = category.name.toLowerCase()
-  if (named === 'shiny' || named === 'shadow' || named === 'purified' || named === 'costume' || named === 'hundo' || named === 'nundo') {
+  if (
+    named === 'shiny' ||
+    named === 'shadow' ||
+    named === 'purified' ||
+    named === 'costume' ||
+    named === 'hundo' ||
+    named === 'nundo' ||
+    named === 'hokido'
+  ) {
     return named
   }
   const first = category.requiredTags[0]

@@ -54,6 +54,7 @@ describe('sameSpecimenMetadata', () => {
     background: null,
     hundo: false,
     nundo: false,
+    hokido: false,
     extraTags: [] as string[],
   }
 

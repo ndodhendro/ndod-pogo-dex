@@ -5,7 +5,15 @@ import {
   toCloudCategoryId,
 } from '../data/seedCategories'
 import { categoryUpsertRow, includeSortOrderOnUpsert, mapCloudCategory } from './categorySyncPlan'
-import { db, type CategoryRow, type CoverRow, type SpecimenRow, type TagCatalogRow, type TagRosterRow } from './db'
+import {
+  ackIntroducedSeedCategories,
+  db,
+  type CategoryRow,
+  type CoverRow,
+  type SpecimenRow,
+  type TagCatalogRow,
+  type TagRosterRow,
+} from './db'
 import { hashBlob } from './hash'
 import { screenshotFileName } from './screenshotFileName'
 import { normalizeVariant, type SlotMode } from './roster'
@@ -41,6 +49,7 @@ export type CloudSpecimen = {
   gender?: string | null
   hundo: boolean
   nundo: boolean
+  hokido: boolean
   extraTags?: TagId[]
   silhouette?: boolean
   notPure?: boolean
@@ -154,6 +163,7 @@ export async function pushCategories(opts?: { syncOrder?: boolean }): Promise<st
   )
   if (error) return error.message
   await markCategoriesBackedUp(categories.map((row) => row.id))
+  ackIntroducedSeedCategories(categories.map((row) => row.id))
 }
 
 function specimenCloudRow(
@@ -174,6 +184,7 @@ function specimenCloudRow(
     gender: specimen.gender ?? null,
     hundo: specimen.hundo,
     nundo: specimen.nundo,
+    hokido: Boolean(specimen.hokido),
     extra_tags: extraTagList(specimen),
     silhouette: isSilhouette(specimen),
     not_pure: isNotPure(specimen),
@@ -749,6 +760,7 @@ export async function pullCloudCollection(): Promise<{
     gender?: string | null
     hundo: boolean
     nundo: boolean
+    hokido?: boolean
     extra_tags?: string[] | null
     silhouette?: boolean | null
     not_pure?: boolean | null
@@ -807,6 +819,7 @@ export async function pullCloudCollection(): Promise<{
         gender: row.gender ?? null,
         hundo: row.hundo,
         nundo: row.nundo,
+        hokido: Boolean(row.hokido),
         extraTags: extraTagList({ extraTags: row.extra_tags ?? [] }),
         silhouette: Boolean(row.silhouette),
         notPure: Boolean(row.not_pure),

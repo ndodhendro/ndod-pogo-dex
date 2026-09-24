@@ -22,23 +22,22 @@ export const FEED_POKEMON_LIMIT = 300
  * Branch root kept in a feed while any direct evolution with a different dex ID
  * is still missing from that category. Further linear stages do not keep the root.
  * Tyrogue is left out: it is rarer than Hitmonlee, Hitmonchan, and Hitmontop.
+ * Form-locked lines are left out. Each form has one evolution:
+ * Meowth to Persian or Perrserker, Wooper to Quagsire or Clodsire,
+ * Sneasel to Weavile or Sneasler, Yamask to Cofagrigus or Runerigus.
  */
 const BRANCH_FEED_ANCHORS: ReadonlyMap<number, readonly number[]> = new Map([
   [44, [45, 182]],
-  [52, [53, 863]],
   [61, [62, 186]],
   [79, [80, 199]],
   [123, [212, 900]],
   [133, [134, 135, 136, 196, 197, 470, 471, 700]],
-  [194, [195, 980]],
-  [215, [461, 903]],
   [265, [266, 268]],
   [281, [282, 475]],
   [290, [291, 292]],
   [361, [362, 478]],
   [366, [367, 368]],
   [412, [413, 414]],
-  [562, [563, 867]],
   [790, [791, 792]],
   [840, [841, 842, 1011]],
   [935, [936, 937]],

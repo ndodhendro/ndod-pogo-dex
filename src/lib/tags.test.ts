@@ -13,6 +13,8 @@ import {
   labelForTag,
   pickDuplicateLook,
   pickDuplicateLookForEdit,
+  specimenTags,
+  visualKey,
   resolveRequiredTags,
   specimenChipIcon,
   specimenChipLabel,
@@ -28,6 +30,7 @@ const base = (): SpecimenFields => ({
   background: null,
   hundo: false,
   nundo: false,
+  hokido: false,
 })
 
 describe('specimenSaveWarning', () => {
@@ -163,6 +166,7 @@ describe('toggleTag', () => {
       gender: null,
       hundo: false,
       nundo: false,
+      hokido: false,
       extraTags: [],
       silhouette: false,
       notPure: false,
@@ -233,6 +237,14 @@ describe('pickDuplicateLook', () => {
     const newer = row('b', 20, { shiny: true })
     const older = row('a', 10, { shiny: true })
     expect(pickDuplicateLook([newer, older], incoming)?.id).toBe('a')
+  })
+
+  it('toggles Hokido without clearing other tags', () => {
+    const on = toggleTag(base(), 'hokido')
+    expect(on.hokido).toBe(true)
+    expect(specimenTags(on)).toContain('hokido')
+    expect(toggleTag(on, 'hokido').hokido).toBe(false)
+    expect(visualKey({ ...base(), hokido: true })).not.toBe(visualKey(base()))
   })
 
   it('treats hundo and nundo as different looks', () => {

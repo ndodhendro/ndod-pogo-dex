@@ -48,6 +48,7 @@ const fields = (): SpecimenFields => ({
   gender: null,
   hundo: false,
   nundo: false,
+  hokido: false,
   extraTags: ['basic'],
 })
 

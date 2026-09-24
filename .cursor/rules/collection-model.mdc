@@ -7,7 +7,7 @@ alwaysApply: true
 
 Unit of collection = one screenshot (`specimen`) with independent tags. Never store a combo name as a tag (`shadow_shiny_polos`). Combos are categories.
 
-Visual uniqueness key: `species + form + shiny + costume + shadowStatus + background + hundo + nundo + custom tags`. "Normal IV" is not a tag.
+Visual uniqueness key: `species + form + shiny + costume + shadowStatus + background + hundo + nundo + hokido + custom tags`. "Normal IV" is not a tag.
 
 A **category** is a name plus a set of required tags the user picks. Seed defaults (Basic, Shiny, Shadow, Purified, Costume, Background, Hundo, Nundo). Users may add more.
 
@@ -18,7 +18,8 @@ A **category** is a name plus a set of required tags the user picks. Seed defaul
 - A custom category saved with **no picked tags** (Lucky, etc.) defines one new atomic tag from its name. That tag shows in required tags and on Transfer.
 - Picking existing tags makes a combo track (`[shadow, hundo]`). Do not store a combo name as a tag (`shadow_shiny_polos`).
 - Shadow polos = category tags `[shadow]` only. Do not add an IV tag unless the category is meant to be Shadow Hundo / Shadow Nundo.
-- Hundo / Nundo are optional tags (`hundo`, `nundo`), not a generic `iv` tag.
+- Hundo / Nundo / Hokido are optional tags (`hundo`, `nundo`, `hokido`), not a generic `iv` tag. Hokido means exact IV 88. Its species list is the Basic list.
+- Nundo omits legendary species. A raid catch cannot be 0/0/0. Galarian Articuno, Zapdos, and Moltres stay, because Daily Adventure Incense can be 0/0/0.
 
 A species is **in** a category if some specimen's tags include every required tag (extras allowed).
 

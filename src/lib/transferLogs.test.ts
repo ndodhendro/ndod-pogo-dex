@@ -100,6 +100,7 @@ describe('specimenFromTransferLog', () => {
       background: null,
       hundo: false,
       nundo: false,
+      hokido: false,
       extraTags: ['basic'],
       silhouette: false,
       imageId: 'img',

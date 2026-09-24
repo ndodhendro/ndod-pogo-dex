@@ -223,6 +223,33 @@
   animation-delay: 0.2s;
 }
 
+.hokido {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+}
+
+.hokido::before,
+.hokido::after {
+  content: '✦';
+  position: absolute;
+  color: var(--color-hokido);
+  font-size: 1.2rem;
+  animation: pulse 1.6s ease-in-out 2;
+}
+
+.hokido::before {
+  top: 0.7rem;
+  left: 0.7rem;
+}
+
+.hokido::after {
+  right: 0.8rem;
+  bottom: 0.8rem;
+  font-size: 0.9rem;
+  animation-delay: 0.25s;
+}
+
 .meta h2 {
   margin: 0 0 var(--space-3);
   font-weight: var(--font-weight-bold);
@@ -312,7 +339,9 @@
 .sheet[data-preview-fx='off'] .flame,
 .sheet[data-preview-fx='off'] .sparkleStar,
 .sheet[data-preview-fx='off'] .hundo::before,
-.sheet[data-preview-fx='off'] .hundo::after {
+.sheet[data-preview-fx='off'] .hundo::after,
+.sheet[data-preview-fx='off'] .hokido::before,
+.sheet[data-preview-fx='off'] .hokido::after {
   animation: none;
 }
 
@@ -330,6 +359,8 @@
   .sparkleStar,
   .hundo::before,
   .hundo::after,
+  .hokido::before,
+  .hokido::after,
   .flame {
     animation: none;
   }

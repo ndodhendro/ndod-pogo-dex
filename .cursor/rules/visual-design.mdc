@@ -31,6 +31,7 @@ Semantic hue is for **labels** (nav, tracks, tags, forms, page titles). Body cop
 | Background | `--color-scene-text` |
 | Hundo | `--color-hundo-text` |
 | Nundo | `--color-nundo-text` |
+| Hokido | `--color-hokido-text` |
 
 Set `data-tone` on the control (see global `[data-tone]`). Custom categories use the first required tag’s tone, or `living` if none. A stored category font color overrides that tone on labels and track chips.
 

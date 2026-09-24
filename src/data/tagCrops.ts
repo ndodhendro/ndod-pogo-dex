@@ -22,6 +22,7 @@ export const SEED_TAG_CROPS: { tag: string; height: number }[] = [
   { tag: 'xxl', height: 930 },
   { tag: 'hundo', height: 710 },
   { tag: 'nundo', height: 710 },
+  { tag: 'hokido', height: 710 },
   { tag: 'alternate-forme', height: 710 },
   { tag: 'gender', height: 710 },
   { tag: 'shiny', height: 710 },
