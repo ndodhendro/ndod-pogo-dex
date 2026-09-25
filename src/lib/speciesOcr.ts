@@ -23,6 +23,29 @@ export function isGenderDexSpecies(speciesId: number): boolean {
   return GO_FORM_SPECIES_IDS.gender.has(speciesId)
 }
 
+/** Hisuian Sneasel is the only regional form with a visible male/female difference. */
+const HISUIAN_SNEASEL_ID = 215
+
+const FORM_TAGS_WITHOUT_GENDER = new Set([
+  'alolan',
+  'galarian',
+  'paldean',
+  'mega',
+  'gigantamax',
+])
+
+/**
+ * Kantonian gender art does not carry onto regional, Mega, or Gigantamax looks.
+ * Hisuian Sneasel keeps Male and Female.
+ */
+export function formShowsGenderDifference(fields: SpecimenFields, speciesId: number): boolean {
+  if (!isGenderDexSpecies(speciesId)) return false
+  const tags = specimenTags(fields)
+  if (tags.some((tag) => FORM_TAGS_WITHOUT_GENDER.has(tag))) return false
+  if (tags.includes('hisuian') && speciesId !== HISUIAN_SNEASEL_ID) return false
+  return true
+}
+
 export function uniqueOcrSpeciesId(result: OcrSpeciesResult): number | undefined {
   if (result.speciesId) return result.speciesId
   if (result.slot?.speciesId) return result.slot.speciesId

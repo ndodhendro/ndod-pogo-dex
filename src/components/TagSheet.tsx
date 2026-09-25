@@ -24,8 +24,8 @@ import { parseCropBottom } from '../lib/screenshotCrop'
 import { readPokemonName } from '../lib/screenshotOcr'
 import {
   applyOcrGenderSpecies,
+  formShowsGenderDifference,
   genderSlotsForSpecies,
-  isGenderDexSpecies,
   matchSpeciesFromOcr,
   ocrMatchesGenderSpecies,
   uniqueOcrSpeciesId,
@@ -294,7 +294,7 @@ export function TagSheet({
       const result = matchSpeciesFromOcr(rawText, availableSlots)
       if (ocrMatchesGenderSpecies(result)) {
         const speciesId = uniqueOcrSpeciesId(result)
-        if (speciesId) {
+        if (speciesId && formShowsGenderDifference(fields, speciesId)) {
           setOcrHits(null)
           setSpeciesMenuOpen(false)
           setFields((current) => applyOcrGenderSpecies(current, speciesId))
@@ -531,7 +531,10 @@ export function TagSheet({
                     data-on={query === label ? 'true' : 'false'}
                     onClick={() => {
                       setOcrHits(null)
-                      if (isGenderDexSpecies(slot.speciesId) && !normalizeVariant(slot.variant)) {
+                      if (
+                        formShowsGenderDifference(fields, slot.speciesId) &&
+                        !normalizeVariant(slot.variant)
+                      ) {
                         setSpeciesMenuOpen(true)
                         setFields((f) => applyOcrGenderSpecies(f, slot.speciesId))
                         setQuery(baseSpeciesBoxLabel(slot.speciesId))

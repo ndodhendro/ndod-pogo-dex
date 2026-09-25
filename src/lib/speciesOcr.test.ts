@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyOcrGenderSpecies,
+  formShowsGenderDifference,
   genderSlotsForSpecies,
   isGenderDexSpecies,
   matchSpeciesFromOcr,
@@ -175,6 +176,37 @@ describe('matchSpeciesFromOcr', () => {
     expect(result.kind).toBe('weak')
     expect(result.suggestions.some((row) => row.speciesId === 95)).toBe(true)
     expect(result.slot).toBeUndefined()
+  })
+})
+
+describe('formShowsGenderDifference', () => {
+  it('keeps the Kantonian whisker difference for Rattata', () => {
+    expect(formShowsGenderDifference(fields(), 19)).toBe(true)
+  })
+
+  it('skips Alolan Rattata, whose male and female look the same', () => {
+    expect(
+      formShowsGenderDifference({ ...fields(), form: 'Alolan', extraTags: ['alolan'] }, 19),
+    ).toBe(false)
+    expect(
+      formShowsGenderDifference({ ...fields(), form: 'Alolan', extraTags: ['alolan'] }, 20),
+    ).toBe(false)
+  })
+
+  it('skips Mega and Gigantamax looks', () => {
+    expect(formShowsGenderDifference({ ...fields(), form: 'Mega', extraTags: ['mega'] }, 3)).toBe(
+      false,
+    )
+    expect(formShowsGenderDifference({ ...fields(), extraTags: ['gigantamax'] }, 25)).toBe(false)
+  })
+
+  it('keeps Hisuian Sneasel and skips Paldean Wooper', () => {
+    expect(
+      formShowsGenderDifference({ ...fields(), form: 'Hisuian', extraTags: ['hisuian'] }, 215),
+    ).toBe(true)
+    expect(
+      formShowsGenderDifference({ ...fields(), form: 'Paldean', extraTags: ['paldean'] }, 194),
+    ).toBe(false)
   })
 })
 
