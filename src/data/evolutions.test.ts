@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { SPECIES } from './species'
-import { compareByEvolutionLine, evolutionLine, evolutionStage } from './evolutions'
+import { compareByEvolutionLine, evolutionLine, evolutionStage, priorEvolutions } from './evolutions'
 
 describe('evolutionLine', () => {
   it('orders Pikachu with its previous and next stages', () => {
@@ -31,6 +31,30 @@ describe('evolutionStage', () => {
     expect(evolutionStage(25)).toBe(1)
     expect(evolutionStage(26)).toBe(2)
     expect(evolutionStage(151)).toBe(0)
+  })
+})
+
+describe('priorEvolutions', () => {
+  it('walks every earlier stage of a linear line', () => {
+    expect(priorEvolutions(3)).toEqual([1, 2])
+    expect(priorEvolutions(25)).toEqual([172])
+    expect(priorEvolutions(26)).toEqual([172, 25])
+    expect(priorEvolutions(521)).toEqual([519, 520])
+  })
+
+  it('returns nothing for the first stage', () => {
+    expect(priorEvolutions(133)).toEqual([])
+    expect(priorEvolutions(415)).toEqual([])
+    expect(priorEvolutions(1)).toEqual([])
+  })
+
+  it('follows the branch that actually evolves into the species', () => {
+    expect(priorEvolutions(45)).toEqual([43, 44])
+    expect(priorEvolutions(186)).toEqual([60, 61])
+    expect(priorEvolutions(461)).toEqual([215])
+    expect(priorEvolutions(217)).toEqual([216])
+    expect(priorEvolutions(267)).toEqual([265, 266])
+    expect(priorEvolutions(269)).toEqual([265, 268])
   })
 })
 

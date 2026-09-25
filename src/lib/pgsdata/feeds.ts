@@ -1,3 +1,5 @@
+import { priorEvolutions } from '../../data/evolutions'
+import { isGoReleased } from '../../data/goReleased'
 import { isGreenCover } from '../covers'
 import type { CategoryRow, SpecimenRow, TagCatalogRow, TagRosterRow } from '../db'
 import { slotsForTrack } from '../roster'
@@ -240,6 +242,21 @@ function keepBranchAnchors(remaining: readonly number[], catalogIds: readonly nu
   return out
 }
 
+/**
+ * A gender difference past stage 1 is often unavailable in the wild.
+ * Until that species is pure, the feed also lists every earlier stage
+ * so it can be caught and evolved. Male and Female stay separate.
+ */
+function withGenderPreEvolutions(remaining: readonly number[]): number[] {
+  const ids = new Set(remaining)
+  for (const speciesId of remaining) {
+    for (const prior of priorEvolutions(speciesId)) {
+      if (isGoReleased(prior)) ids.add(prior)
+    }
+  }
+  return [...ids].sort((a, b) => a - b)
+}
+
 function remainingSpeciesIds(
   category: CategoryRow,
   stem: string,
@@ -252,10 +269,12 @@ function remainingSpeciesIds(
     ? (pure.get(gender) ?? new Set())
     : (pure.get(normalizeFeedLabel(category.name)) ?? new Set())
   const catalogIds = catalogSpeciesIds(category, catalogs, roster)
-  return keepBranchAnchors(
+  const anchored = keepBranchAnchors(
     catalogIds.filter((id) => !drop.has(id)),
     catalogIds,
   )
+  if (!isGenderCategory(category.requiredTags)) return anchored
+  return withGenderPreEvolutions(anchored)
 }
 
 function copyFeed(template: PgsFeed, name: string, pokemons: number[]): PgsFeed {

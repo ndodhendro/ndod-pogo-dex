@@ -22,6 +22,33 @@ export function evolutionStage(speciesId: number): number {
   return data.stages[speciesId] ?? 0
 }
 
+/**
+ * Parent when the previous stage has more than one species.
+ * Beautifly evolves from Silcoon, Dustox from Cascoon.
+ */
+const SPLIT_PARENT = new Map<number, number>([
+  [267, 266],
+  [269, 268],
+])
+
+/** Earlier stages on the path to this species, from the first stage of the line. */
+export function priorEvolutions(speciesId: number): readonly number[] {
+  if (evolutionStage(speciesId) <= 0) return []
+  const line = evolutionLine(speciesId)
+  const chain: number[] = []
+  let cursor = speciesId
+  const seen = new Set<number>()
+  while (evolutionStage(cursor) > 0 && !seen.has(cursor)) {
+    seen.add(cursor)
+    const atPrevious = line.filter((id) => evolutionStage(id) === evolutionStage(cursor) - 1)
+    const parent = atPrevious.length === 1 ? atPrevious[0] : SPLIT_PARENT.get(cursor)
+    if (parent == null) break
+    chain.push(parent)
+    cursor = parent
+  }
+  return chain.reverse()
+}
+
 /** Stage, then the current dex slot order: national number, then variant name. */
 export function compareByEvolutionLine(
   a: { speciesId: number; variant: string },

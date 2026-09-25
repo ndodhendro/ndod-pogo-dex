@@ -384,6 +384,25 @@ describe('PGSData feed matching', () => {
     expect(shiny).toContain(134)
   })
 
+  function gendered(speciesId: number, gender: string) {
+    return specimen({
+      id: `${gender}-${speciesId}`,
+      speciesId,
+      extraTags: ['gender'],
+      gender,
+    })
+  }
+
+  function allGendersPureExcept(open: { speciesId: number; gender: 'Male' | 'Female' }[]) {
+    const openKeys = new Set(open.map((row) => `${row.gender}:${row.speciesId}`))
+    const rows = []
+    for (const speciesId of genderIds) {
+      if (!openKeys.has(`Male:${speciesId}`)) rows.push(gendered(speciesId, 'Male'))
+      if (!openKeys.has(`Female:${speciesId}`)) rows.push(gendered(speciesId, 'Female'))
+    }
+    return rows
+  }
+
   it('splits Gender pures into Male and Female feeds', () => {
     const { feeds: next } = rebuildFeeds(
       [
@@ -392,20 +411,97 @@ describe('PGSData feed matching', () => {
       ],
       [
         specimen({ speciesId: 25, extraTags: ['gender'], gender: 'Male' }),
+        specimen({ speciesId: 26, extraTags: ['gender'], gender: 'Male' }),
         specimen({
           speciesId: 215,
           extraTags: ['gender', 'hisuian'],
           gender: 'Hisuian Female',
         }),
+        specimen({
+          id: 'weavile-female',
+          speciesId: 461,
+          extraTags: ['gender'],
+          gender: 'Female',
+        }),
       ],
       categories,
     )
-    const maleIds = genderIds.filter((id) => id !== 25)
-    const femaleIds = genderIds.filter((id) => id !== 215)
-    expect(next[0].name).toBe(numberedFeedName('Male', maleIds))
-    expect(next[0].pokemons).toEqual(maleIds)
-    expect(next[1].name).toBe(numberedFeedName('Female', femaleIds))
-    expect(next[1].pokemons).toEqual(femaleIds)
+    const male = feedIds(next.filter((row) => String(row.name).startsWith('Male')))
+    const female = feedIds(next.filter((row) => String(row.name).startsWith('Female')))
+    expect(male).not.toContain(25)
+    expect(male).not.toContain(26)
+    expect(male).not.toContain(172)
+    expect(male).toContain(215)
+    expect(female).toContain(25)
+    expect(female).toContain(172)
+    expect(female).not.toContain(215)
+    expect(female).not.toContain(461)
+  })
+
+  it('keeps earlier stages on a gender feed until the later form is pure', () => {
+    const { feeds: venusaur } = rebuildFeeds(
+      [{ name: 'Male', pokemons: [] }],
+      allGendersPureExcept([{ speciesId: 3, gender: 'Male' }]),
+      categories,
+    )
+    expect(feedIds(venusaur)).toEqual([1, 2, 3])
+
+    const { feeds: both } = rebuildFeeds(
+      [
+        { name: 'Male', pokemons: [] },
+        { name: 'Female', pokemons: [] },
+      ],
+      allGendersPureExcept([{ speciesId: 3, gender: 'Female' }]),
+      categories,
+    )
+    expect(feedIds(both.filter((row) => String(row.name).startsWith('Male')))).toEqual([])
+    expect(feedIds(both.filter((row) => String(row.name).startsWith('Female')))).toEqual([1, 2, 3])
+
+    const { feeds: raichu } = rebuildFeeds(
+      [{ name: 'Male', pokemons: [] }],
+      allGendersPureExcept([{ speciesId: 26, gender: 'Male' }]),
+      categories,
+    )
+    expect(feedIds(raichu)).toEqual([25, 26, 172])
+
+    const { feeds: closed } = rebuildFeeds(
+      [{ name: 'Male', pokemons: [] }],
+      allGendersPureExcept([]),
+      categories,
+    )
+    expect(feedIds(closed)).toEqual([])
+  })
+
+  it('leaves a first-stage gender species without extra pre-evolutions', () => {
+    const { feeds: eevee } = rebuildFeeds(
+      [{ name: 'Female', pokemons: [] }],
+      allGendersPureExcept([{ speciesId: 133, gender: 'Female' }]),
+      categories,
+    )
+    expect(feedIds(eevee)).toEqual([133])
+
+    const { feeds: combee } = rebuildFeeds(
+      [{ name: 'Male', pokemons: [] }],
+      allGendersPureExcept([{ speciesId: 415, gender: 'Male' }]),
+      categories,
+    )
+    expect(feedIds(combee)).toEqual([415])
+  })
+
+  it('keeps the cocoon that evolves into the missing gender form', () => {
+    const { feeds: beautifly } = rebuildFeeds(
+      [{ name: 'Female', pokemons: [] }],
+      allGendersPureExcept([{ speciesId: 267, gender: 'Female' }]),
+      categories,
+    )
+    expect(feedIds(beautifly)).toEqual([265, 266, 267])
+
+    const { feeds: dustox } = rebuildFeeds(
+      [{ name: 'Female', pokemons: [] }],
+      allGendersPureExcept([{ speciesId: 269, gender: 'Female' }]),
+      categories,
+    )
+    expect(feedIds(dustox)).toEqual([265, 268, 269])
   })
 
   it('packs a dat file after filling feeds', () => {
