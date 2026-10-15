@@ -39,10 +39,10 @@ import {
   dexGridLayout,
   dexOpenAmount,
   dexSpeciesExtraCount,
-  keepDexSlot,
   pickDexCover,
   specimenMatchesDexFilters,
   specimenMatchesProgressFilter,
+  slotMatchesProgressFilter,
   type DexProgressKind,
 } from '../lib/dexGrid'
 import {
@@ -436,11 +436,13 @@ export function DexPage() {
             ? 'No matching species.'
             : filterTags.length > 0
               ? 'No matching tags.'
-              : progressFilter === 'caught'
-                ? 'None caught on this track.'
-                : progressFilter === 'pure'
-                  ? 'None pure on this track.'
-                  : 'None seen on this track.'}
+              : progressFilter === 'uncaught'
+                ? 'None uncaught on this track.'
+                : progressFilter === 'caught'
+                  ? 'None caught on this track.'
+                  : progressFilter === 'pure'
+                    ? 'None pure on this track.'
+                    : 'None seen on this track.'}
         </p>
       ) : (
       <div ref={setHost} className={styles.gridHost}>
@@ -712,7 +714,7 @@ function buildSlots(
         specimenMatchesDexFilters(row, filterTags) &&
         specimenMatchesProgressFilter(row, required, progressFilter),
     )
-    if (!keepDexSlot(matching.length > 0, filtering)) continue
+    if (!slotMatchesProgressFilter(group, required, filterTags, progressFilter)) continue
     const coverRow = category
       ? findCover(categoryCovers, category.id, def.speciesId, def.variant)
       : undefined
@@ -745,7 +747,7 @@ function buildSlots(
         variantCounts.get(def.speciesId) ?? 0,
         galleryCounts.get(def.speciesId) ?? 0,
       ),
-      filled: inCategory,
+      filled: progressFilter === 'uncaught' ? Boolean(cover) : inCategory,
       purity,
       cover: cover,
     })

@@ -38,6 +38,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+.kinds[data-count='4'] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-1);
+}
+
 .progress[data-compact='true'] .kinds {
   margin: 0 0 0.125rem;
 }
@@ -54,6 +59,10 @@ button.kind {
   padding: 0;
   border-radius: var(--radius-md);
   text-align: left;
+}
+
+.kind[data-kind='uncaught'] {
+  color: var(--color-text-muted);
 }
 
 .kind[data-kind='seen'] {
@@ -116,6 +125,8 @@ button.kind {
   overflow: hidden;
   clip: auto;
   clip-path: none;
+  max-width: 100%;
+  min-width: 0;
   text-overflow: ellipsis;
   font-weight: var(--font-weight-bold);
   letter-spacing: var(--letter-ui);

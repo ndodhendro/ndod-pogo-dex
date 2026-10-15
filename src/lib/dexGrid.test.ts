@@ -18,6 +18,7 @@ import {
   pickDexCover,
   specimenMatchesDexFilters,
   specimenMatchesProgressFilter,
+  slotMatchesProgressFilter,
   specimenProgressFlags,
   toggleDexProgressFilter,
   countBySpeciesId,
@@ -228,6 +229,38 @@ describe('specimenMatchesProgressFilter', () => {
     const marked = specimen({ notPure: true })
     expect(specimenMatchesProgressFilter(marked, [], 'caught')).toBe(true)
     expect(specimenMatchesProgressFilter(marked, [], 'pure')).toBe(false)
+  })
+
+  it('keeps only silhouettes for Uncaught', () => {
+    expect(specimenMatchesProgressFilter(sil, [], 'uncaught')).toBe(true)
+    expect(specimenMatchesProgressFilter(extra, [], 'uncaught')).toBe(false)
+    expect(specimenMatchesProgressFilter(pureRow, [], 'uncaught')).toBe(false)
+  })
+})
+
+describe('slotMatchesProgressFilter', () => {
+  const sil = specimen({ silhouette: true })
+  const caught = specimen()
+
+  it('keeps empty and silhouette-only slots for Uncaught', () => {
+    expect(slotMatchesProgressFilter([], [], [], 'uncaught')).toBe(true)
+    expect(slotMatchesProgressFilter([sil], [], [], 'uncaught')).toBe(true)
+  })
+
+  it('hides a slot once it has a catch', () => {
+    expect(slotMatchesProgressFilter([caught], [], [], 'uncaught')).toBe(false)
+    expect(slotMatchesProgressFilter([sil, caught], [], [], 'uncaught')).toBe(false)
+  })
+
+  it('keeps every slot when no progress filter is set', () => {
+    expect(slotMatchesProgressFilter([], [], [], null)).toBe(true)
+    expect(slotMatchesProgressFilter([caught], [], [], null)).toBe(true)
+  })
+
+  it('hides empty slots for Seen, Caught, and Pure', () => {
+    expect(slotMatchesProgressFilter([], [], [], 'seen')).toBe(false)
+    expect(slotMatchesProgressFilter([sil], [], [], 'caught')).toBe(false)
+    expect(slotMatchesProgressFilter([caught], [], [], 'pure')).toBe(true)
   })
 })
 

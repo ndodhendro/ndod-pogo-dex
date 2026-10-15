@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { SEEN_ICON, type UiTone } from '../data/navIcons'
 import { categoryChromeStyle } from '../lib/categoryStyle'
 import {
+  DEX_GRID_FILTER_KINDS,
   DEX_PROGRESS_KINDS,
   formatDexCompletionPercent,
   stackDexProgressLayers,
@@ -11,6 +12,7 @@ import {
 import styles from './DexProgress.module.css'
 
 const KIND_META: Record<DexProgressKind, { icon: string; label: string }> = {
+  uncaught: { icon: '❓', label: 'Uncaught' },
   seen: { icon: SEEN_ICON, label: 'Seen' },
   caught: { icon: '🎯', label: 'Caught' },
   pure: { icon: '🟢', label: 'Pure' },
@@ -49,14 +51,15 @@ export function DexProgress({
   selectedKind = null,
   onSelectKind,
 }: Props) {
-  const counts = { seen, caught, pure }
-  const layers = stackDexProgressLayers(counts, total)
-  const valueText = DEX_PROGRESS_KINDS.map((kind) => {
+  const counts = { uncaught: Math.max(0, total - caught), seen, caught, pure }
+  const layers = stackDexProgressLayers({ seen, caught, pure }, total)
+  const selectable = Boolean(onSelectKind)
+  const kinds = selectable ? DEX_GRID_FILTER_KINDS : DEX_PROGRESS_KINDS
+  const valueText = kinds.map((kind) => {
     const meta = KIND_META[kind]
     return `${meta.label} ${counts[kind]}/${total} (${formatDexCompletionPercent(counts[kind], total)})`
   }).join('. ')
   const highest = layers[0]
-  const selectable = Boolean(onSelectKind)
   return (
     <div
       className={[styles.progress, className].filter(Boolean).join(' ')}
@@ -68,10 +71,11 @@ export function DexProgress({
       {heading ? <span className={styles.heading}>{heading}</span> : null}
       <div
         className={styles.kinds}
+        data-count={kinds.length}
         role={selectable ? 'group' : undefined}
         aria-label={selectable ? 'Filter grid' : undefined}
       >
-        {DEX_PROGRESS_KINDS.map((kind) => {
+        {kinds.map((kind) => {
           const meta = KIND_META[kind]
           const current = counts[kind]
           const selected = selectedKind === kind

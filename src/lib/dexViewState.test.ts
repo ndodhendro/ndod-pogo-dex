@@ -33,6 +33,16 @@ describe('dexViewState', () => {
     expect(readDexViewState('basic')).toEqual(emptyDexViewState())
   })
 
+  it('keeps an Uncaught progress filter', () => {
+    writeDexViewState('basic', {
+      query: '',
+      filterTags: [],
+      progressFilter: 'uncaught',
+      showEvolutionLine: false,
+    })
+    expect(readDexViewState('basic').progressFilter).toBe('uncaught')
+  })
+
   it('does not share the stored tag array with callers', () => {
     writeDexViewState('shadow', {
       query: '',

@@ -532,8 +532,6 @@ export async function pushTagRoster(): Promise<string | undefined> {
   const userId = await signedInUserId()
   if (!supabase || !userId) return
   const rows = await db.tagRoster.toArray()
-  const { error: delErr } = await supabase.from('tag_roster').delete().eq('user_id', userId)
-  if (delErr) return delErr.message
   if (rows.length === 0) return
   for (let i = 0; i < rows.length; i += UPSERT_PAGE) {
     const { error } = await supabase.from('tag_roster').upsert(

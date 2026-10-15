@@ -149,17 +149,21 @@ export function formatDexCompletionPercent(filled: number, total: number): strin
 }
 
 export const DEX_PROGRESS_KINDS = ['seen', 'caught', 'pure'] as const
-export type DexProgressKind = (typeof DEX_PROGRESS_KINDS)[number]
+export type DexStatKind = (typeof DEX_PROGRESS_KINDS)[number]
+
+/** Grid filters. Uncaught sits left of Seen and is not a progress-bar layer. */
+export const DEX_GRID_FILTER_KINDS = ['uncaught', ...DEX_PROGRESS_KINDS] as const
+export type DexProgressKind = (typeof DEX_GRID_FILTER_KINDS)[number]
 
 export type DexProgressLayer = {
-  kind: DexProgressKind
+  kind: DexStatKind
   current: number
   percent: number
 }
 
 /** Highest fill first (back of the bar). Ties keep Seen, then Caught, then Pure. */
 export function stackDexProgressLayers(
-  counts: Record<DexProgressKind, number>,
+  counts: Record<DexStatKind, number>,
   total: number,
 ): DexProgressLayer[] {
   return DEX_PROGRESS_KINDS.map((kind) => ({
@@ -241,13 +245,17 @@ export function toggleDexProgressFilter(
   return current === next ? null : next
 }
 
-/** Matches Seen / Caught / Pure slot counts on the current track. */
+/**
+ * Seen keeps every specimen. Caught and Pure skip silhouettes.
+ * Uncaught keeps a silhouette so a seen-only slot can still show that photo.
+ */
 export function specimenMatchesProgressFilter(
   specimen: SpecimenFields,
   required: readonly TagId[] = [],
   kind: DexProgressKind | null = null,
 ): boolean {
   if (!kind) return true
+  if (kind === 'uncaught') return isSilhouette(specimen)
   if (kind === 'seen') return true
   if (isSilhouette(specimen)) return false
   if (kind === 'caught') return true
@@ -261,11 +269,36 @@ export function specimenMatchesProgressFilter(
   )
 }
 
+/**
+ * Uncaught is the slots with no catch: empty cards and silhouette-only cards.
+ * A catch hides the slot even when a silhouette is also saved.
+ */
+export function slotMatchesProgressFilter(
+  specimens: readonly SpecimenFields[],
+  required: readonly TagId[] = [],
+  filterTags: readonly TagId[] = [],
+  kind: DexProgressKind | null = null,
+): boolean {
+  if (kind === 'uncaught') {
+    return !specimens.some(
+      (row) =>
+        specimenMatchesDexFilters(row, filterTags) &&
+        specimenMatchesProgressFilter(row, required, 'caught'),
+    )
+  }
+  if (!kind && filterTags.length === 0) return true
+  return specimens.some(
+    (row) =>
+      specimenMatchesDexFilters(row, filterTags) &&
+      specimenMatchesProgressFilter(row, required, kind),
+  )
+}
+
 /** Seen / Caught / Pure flags for one saved screenshot, not track slot counts. */
 export function specimenProgressFlags(
   specimen: SpecimenFields,
   categories: readonly { requiredTags: readonly TagId[] }[],
-): Record<DexProgressKind, boolean> {
+): Record<DexStatKind, boolean> {
   const silhouette = isSilhouette(specimen)
   const tags = specimenTags(specimen)
   return {

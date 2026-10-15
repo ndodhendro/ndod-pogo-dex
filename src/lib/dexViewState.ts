@@ -1,4 +1,4 @@
-import { DEX_PROGRESS_KINDS, type DexProgressKind } from './dexGrid'
+import { DEX_GRID_FILTER_KINDS, type DexProgressKind } from './dexGrid'
 import type { TagId } from './tags'
 
 export type DexViewState = {
@@ -45,5 +45,5 @@ function cloneDexViewState(state: DexViewState): DexViewState {
 }
 
 function parseProgressFilter(value: DexViewState['progressFilter']): DexProgressKind | null {
-  return value != null && DEX_PROGRESS_KINDS.includes(value) ? value : null
+  return value != null && DEX_GRID_FILTER_KINDS.includes(value) ? value : null
 }

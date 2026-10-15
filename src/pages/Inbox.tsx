@@ -31,7 +31,7 @@ import { db, type CategoryRow, type InboxRow, type SpecimenRow, type TransferLog
 import {
   DEX_PROGRESS_KINDS,
   specimenProgressFlags,
-  type DexProgressKind,
+  type DexStatKind,
 } from '../lib/dexGrid'
 import {
   INBOX_SORT_EMOJI,
@@ -60,7 +60,7 @@ import {
 import { specimenChipIcon, specimenChipLabel, specimenTags, type SpecimenFields, type TagId } from '../lib/tags'
 import styles from './Inbox.module.css'
 
-const PROGRESS_META: Record<DexProgressKind, { icon: string; label: string }> = {
+const PROGRESS_META: Record<DexStatKind, { icon: string; label: string }> = {
   seen: { icon: SEEN_ICON, label: 'Seen' },
   caught: { icon: '🎯', label: 'Caught' },
   pure: { icon: '🟢', label: 'Pure' },

@@ -462,7 +462,14 @@ describe('PGSData feed matching', () => {
       allGendersPureExcept([{ speciesId: 26, gender: 'Male' }]),
       categories,
     )
-    expect(feedIds(raichu)).toEqual([25, 26, 172])
+    expect(feedIds(raichu)).toEqual([26])
+
+    const { feeds: pikachu } = rebuildFeeds(
+      [{ name: 'Male', pokemons: [] }],
+      allGendersPureExcept([{ speciesId: 25, gender: 'Male' }]),
+      categories,
+    )
+    expect(feedIds(pikachu)).toEqual([25, 172])
 
     const { feeds: closed } = rebuildFeeds(
       [{ name: 'Male', pokemons: [] }],
@@ -470,6 +477,36 @@ describe('PGSData feed matching', () => {
       categories,
     )
     expect(feedIds(closed)).toEqual([])
+  })
+
+  it('drops a pure gendered pre-evolution while its evolution is still missing', () => {
+    const { feeds: bibarel } = rebuildFeeds(
+      [{ name: 'Male', pokemons: [] }],
+      allGendersPureExcept([{ speciesId: 400, gender: 'Male' }]),
+      categories,
+    )
+    expect(feedIds(bibarel)).toEqual([400])
+
+    const { feeds: both } = rebuildFeeds(
+      [
+        { name: 'Male', pokemons: [] },
+        { name: 'Female', pokemons: [] },
+      ],
+      allGendersPureExcept([{ speciesId: 400, gender: 'Female' }]),
+      categories,
+    )
+    expect(feedIds(both.filter((row) => String(row.name).startsWith('Male')))).toEqual([])
+    expect(feedIds(both.filter((row) => String(row.name).startsWith('Female')))).toEqual([400])
+
+    const { feeds: open } = rebuildFeeds(
+      [{ name: 'Male', pokemons: [] }],
+      allGendersPureExcept([
+        { speciesId: 399, gender: 'Male' },
+        { speciesId: 400, gender: 'Male' },
+      ]),
+      categories,
+    )
+    expect(feedIds(open)).toEqual([399, 400])
   })
 
   it('leaves a first-stage gender species without extra pre-evolutions', () => {

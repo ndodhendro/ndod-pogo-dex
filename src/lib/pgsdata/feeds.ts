@@ -243,14 +243,27 @@ function keepBranchAnchors(remaining: readonly number[], catalogIds: readonly nu
 }
 
 /**
- * A gender difference past stage 1 is often unavailable in the wild.
- * Until that species is pure, the feed also lists every earlier stage
- * so it can be caught and evolved. Male and Female stay separate.
+ * A gender difference that the previous stage does not share is often unavailable
+ * in the wild. Until that species is pure, the feed lists each earlier stage that
+ * has no gender difference, so it can be caught and evolved.
+ * A previous stage that already has this gender and is pure stays off the feed:
+ * that specimen is what gets evolved. Stages before it stay off too.
+ * Male and Female stay separate.
  */
-function withGenderPreEvolutions(remaining: readonly number[]): number[] {
+function withGenderPreEvolutions(
+  remaining: readonly number[],
+  genderedIds: ReadonlySet<number>,
+): number[] {
+  const open = new Set(remaining)
   const ids = new Set(remaining)
   for (const speciesId of remaining) {
-    for (const prior of priorEvolutions(speciesId)) {
+    const priors = priorEvolutions(speciesId)
+    for (let i = priors.length - 1; i >= 0; i--) {
+      const prior = priors[i]
+      if (genderedIds.has(prior)) {
+        if (!open.has(prior)) break
+        continue
+      }
       if (isGoReleased(prior)) ids.add(prior)
     }
   }
@@ -274,7 +287,7 @@ function remainingSpeciesIds(
     catalogIds,
   )
   if (!isGenderCategory(category.requiredTags)) return anchored
-  return withGenderPreEvolutions(anchored)
+  return withGenderPreEvolutions(anchored, new Set(catalogIds))
 }
 
 function copyFeed(template: PgsFeed, name: string, pokemons: number[]): PgsFeed {
