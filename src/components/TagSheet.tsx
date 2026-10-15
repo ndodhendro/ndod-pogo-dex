@@ -168,7 +168,8 @@ export function TagSheet({
     heightMap,
     Boolean(fields.silhouette),
   )
-  const cropBottom = parseCropBottom(heightDraft, suggestedHeight)
+  const seen = Boolean(fields.silhouette)
+  const cropBottom = seen ? suggestedHeight : parseCropBottom(heightDraft, suggestedHeight)
   const selectedLabel = specimenSlotBoxLabel(fields, catalogs)
   const availableSlots = useMemo(
     () => slotsForSelectedTags(tags, catalogs, roster),
@@ -262,12 +263,12 @@ export function TagSheet({
     if (!open) return
     if (openedKey.current !== resetKey) {
       openedKey.current = resetKey
-      keepStoredCrop.current = true
+      keepStoredCrop.current = !seen
       heightTouched.current = false
-      setHeightDraft(String(storedCrop ?? suggestedHeight))
+      setHeightDraft(String(seen ? suggestedHeight : (storedCrop ?? suggestedHeight)))
       return
     }
-    if (keepStoredCrop.current && storedCrop != null) {
+    if (!seen && keepStoredCrop.current && storedCrop != null) {
       keepStoredCrop.current = false
       heightTouched.current = false
       setHeightDraft(String(storedCrop))
@@ -276,7 +277,7 @@ export function TagSheet({
     keepStoredCrop.current = false
     heightTouched.current = false
     setHeightDraft(String(suggestedHeight))
-  }, [open, resetKey, suggestedHeight, storedCrop])
+  }, [open, resetKey, suggestedHeight, storedCrop, seen])
 
   useEffect(() => {
     if (!busy) return
@@ -591,7 +592,8 @@ export function TagSheet({
               inputMode="numeric"
               min={1}
               max={1600}
-              value={heightDraft}
+              value={seen ? String(suggestedHeight) : heightDraft}
+              disabled={seen}
               onChange={(e) => {
                 heightTouched.current = true
                 setHeightDraft(e.target.value)
@@ -600,8 +602,8 @@ export function TagSheet({
             />
           </label>
           <p className="page-sub">
-            {fields.silhouette
-              ? 'Seen always uses 710px. Changing this number crops this screenshot only.'
+            {seen
+              ? 'Seen keeps the full screenshot. Selected tags do not crop it.'
               : luckyCombo
                 ? 'Uses the taller Lucky combination crop. Saving a different height updates that combination for the next screenshot and crops this one.'
                 : 'Follows the tallest selected tag. Changing this number crops this screenshot only.'}

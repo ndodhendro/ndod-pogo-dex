@@ -168,6 +168,12 @@ button.kind {
   min-width: 0;
 }
 
+.progress[data-embedded='true'] .kind[data-selectable='true'] {
+  min-height: 0;
+  align-items: flex-start;
+  padding: 0.125rem;
+}
+
 .progress[data-embedded='true'] .kindName {
   position: static;
   width: auto;

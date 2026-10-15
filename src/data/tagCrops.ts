@@ -1,6 +1,8 @@
+import { SCREENSHOT_FULL_HEIGHT } from '../lib/screenshotCrop'
+
 export const BASIC_CROP_TAG = 'basic'
-/** Seen (silhouette) screenshots always crop here, regardless of other tags. */
-export const SEEN_CROP_HEIGHT = 710
+/** Seen keeps the full screenshot. Selected tags do not crop it. */
+export const SEEN_CROP_HEIGHT = SCREENSHOT_FULL_HEIGHT
 
 /** Crop bottom (Paint Y, exclusive) per tag. Basic is the empty-look chip. */
 export const SEED_TAG_CROPS: { tag: string; height: number }[] = [

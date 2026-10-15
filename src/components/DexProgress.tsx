@@ -33,6 +33,12 @@ type Props = {
   embedded?: boolean
   selectedKind?: DexProgressKind | null
   onSelectKind?: (kind: DexProgressKind | null) => void
+  /** Stats to show. Defaults to the grid filters when selectable, otherwise Seen, Caught, and Pure. */
+  kinds?: readonly DexProgressKind[]
+  /** Which shown stats are filter buttons. Defaults to every shown stat when `onSelectKind` is set. */
+  selectableKinds?: readonly DexProgressKind[]
+  selectableName?: (kind: DexProgressKind) => string
+  filtersLabel?: string
 }
 
 export function DexProgress({
@@ -50,11 +56,17 @@ export function DexProgress({
   embedded = false,
   selectedKind = null,
   onSelectKind,
+  kinds: kindsProp,
+  selectableKinds,
+  selectableName,
+  filtersLabel,
 }: Props) {
   const counts = { uncaught: Math.max(0, total - caught), seen, caught, pure }
   const layers = stackDexProgressLayers({ seen, caught, pure }, total)
   const selectable = Boolean(onSelectKind)
-  const kinds = selectable ? DEX_GRID_FILTER_KINDS : DEX_PROGRESS_KINDS
+  const kinds = kindsProp ?? (selectable ? DEX_GRID_FILTER_KINDS : DEX_PROGRESS_KINDS)
+  const kindSelects = (kind: DexProgressKind) =>
+    selectable && (!selectableKinds || selectableKinds.includes(kind))
   const valueText = kinds.map((kind) => {
     const meta = KIND_META[kind]
     return `${meta.label} ${counts[kind]}/${total} (${formatDexCompletionPercent(counts[kind], total)})`
@@ -73,12 +85,13 @@ export function DexProgress({
         className={styles.kinds}
         data-count={kinds.length}
         role={selectable ? 'group' : undefined}
-        aria-label={selectable ? 'Filter grid' : undefined}
+        aria-label={selectable ? (filtersLabel ?? 'Filter grid') : undefined}
       >
         {kinds.map((kind) => {
           const meta = KIND_META[kind]
           const current = counts[kind]
           const selected = selectedKind === kind
+          const interactive = kindSelects(kind)
           const body = (
             <>
               <span className={styles.kindIcon} aria-hidden="true">
@@ -97,7 +110,7 @@ export function DexProgress({
               </span>
             </>
           )
-          if (!onSelectKind) {
+          if (!interactive) {
             return (
               <div key={kind} className={styles.kind} data-kind={kind}>
                 {body}
@@ -113,7 +126,8 @@ export function DexProgress({
               data-selectable="true"
               data-on={selected ? 'true' : undefined}
               aria-pressed={selected}
-              onClick={() => onSelectKind(toggleDexProgressFilter(selectedKind, kind))}
+              aria-label={selectableName?.(kind)}
+              onClick={() => onSelectKind?.(toggleDexProgressFilter(selectedKind, kind))}
             >
               {body}
             </button>

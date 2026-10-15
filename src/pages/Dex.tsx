@@ -32,6 +32,7 @@ import { coverPurity, findCover, rankCategoriesFrom, type CoverPurity } from '..
 import { deleteSpecimen, setAsCover } from '../lib/collection'
 import { categoryChromeStyle } from '../lib/categoryStyle'
 import {
+  applyUncaughtGenerationFilter,
   buildDexVirtualRows,
   countBySpeciesId,
   dexAnimatedCardRowHeight,
@@ -39,6 +40,7 @@ import {
   dexGridLayout,
   dexOpenAmount,
   dexSpeciesExtraCount,
+  DEX_GRID_FILTER_KINDS,
   pickDexCover,
   specimenMatchesDexFilters,
   specimenMatchesProgressFilter,
@@ -79,6 +81,7 @@ type Slot = {
   name: string
   extraCount: number
   filled: boolean
+  uncaught: boolean
   purity: CoverPurity | null
   cover?: SpecimenRow
 }
@@ -98,6 +101,9 @@ export function DexPage() {
   const [progressFilter, setProgressFilter] = useState<DexProgressKind | null>(
     () => readDexViewState(categoryId).progressFilter,
   )
+  const [uncaughtGenerationIds, setUncaughtGenerationIds] = useState<number[]>(
+    () => readDexViewState(categoryId).uncaughtGenerationIds,
+  )
   const [filterTags, setFilterTags] = useState<TagId[]>(() => readDexViewState(categoryId).filterTags)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [preview, setPreview] = useState<SpecimenRow | null>(null)
@@ -115,9 +121,10 @@ export function DexPage() {
       query,
       filterTags,
       progressFilter,
+      uncaughtGenerationIds,
       showEvolutionLine,
     })
-  }, [categoryId, query, filterTags, progressFilter, showEvolutionLine])
+  }, [categoryId, query, filterTags, progressFilter, uncaughtGenerationIds, showEvolutionLine])
 
   useLayoutEffect(() => {
     if (!host) return
@@ -252,13 +259,10 @@ export function DexPage() {
     setPreview(exactFileHit)
     if (document.activeElement instanceof HTMLInputElement) document.activeElement.blur()
   }, [exactFileHit, query])
-  const groups = useMemo(
-    () =>
-      showEvolutionLine
-        ? [{ generation: EVOLUTION_LINE_GENERATION, items: slots }]
-        : groupByGeneration(slots),
-    [slots, showEvolutionLine],
-  )
+  const groups = useMemo(() => {
+    if (showEvolutionLine) return [{ generation: EVOLUTION_LINE_GENERATION, items: slots }]
+    return applyUncaughtGenerationFilter(groupByGeneration(slots), uncaughtGenerationIds)
+  }, [slots, showEvolutionLine, uncaughtGenerationIds])
 
   const { seen, caught, pure, total: catalogSize } = useMemo(
     () => countFilledSlots(specimens, category?.requiredTags ?? [], catalogs, roster),
@@ -465,7 +469,17 @@ export function DexPage() {
                     generation={row.generation}
                     expanded={!collapsed.has(row.generation.id)}
                     progress={generationProgress.get(row.generation.id)}
+                    uncaught={uncaughtGenerationIds.includes(row.generation.id)}
                     onToggle={() => toggle(row.generation.id)}
+                    onToggleUncaught={(on) => {
+                      setUncaughtGenerationIds((ids) => {
+                        const has = ids.includes(row.generation.id)
+                        if (on && !has) return [...ids, row.generation.id]
+                        if (!on && has) return ids.filter((id) => id !== row.generation.id)
+                        return ids
+                      })
+                      if (on && collapsed.has(row.generation.id)) toggle(row.generation.id)
+                    }}
                   />
                 </div>
               )
@@ -621,40 +635,49 @@ function GenerationHeader({
   generation,
   expanded,
   progress,
+  uncaught,
   onToggle,
+  onToggleUncaught,
 }: {
   generation: Generation
   expanded: boolean
   progress?: SlotProgress
+  uncaught: boolean
   onToggle: () => void
+  onToggleUncaught: (on: boolean) => void
 }) {
   const counts = progress ?? { seen: 0, caught: 0, pure: 0, filled: 0, total: 0 }
   return (
-    <button
-      type="button"
-      className={styles.genHeader}
-      style={categoryChromeStyle(generation.color)}
-      aria-expanded={expanded}
-      onClick={onToggle}
-    >
-      <span className={styles.genTitle}>
+    <div className={styles.genHeader} style={categoryChromeStyle(generation.color)}>
+      <button
+        type="button"
+        className={styles.genToggle}
+        aria-expanded={expanded}
+        onClick={onToggle}
+      >
         <span className={styles.genNumber}>{generation.id}</span>
         <span className={styles.genName}>{generation.name}</span>
         <span className={styles.genChevron} aria-hidden="true">
           ▾
         </span>
-      </span>
+      </button>
       <DexProgress
         compact
         embedded
+        kinds={DEX_GRID_FILTER_KINDS}
+        selectableKinds={['uncaught']}
+        filtersLabel={`${generation.name} filters`}
+        selectableName={() => `${generation.name} Uncaught`}
         seen={counts.seen}
         caught={counts.caught}
         pure={counts.pure}
         total={counts.total}
         ariaLabel={`${generation.name} completion`}
         announce={false}
+        selectedKind={uncaught ? 'uncaught' : null}
+        onSelectKind={(kind) => onToggleUncaught(kind === 'uncaught')}
       />
-    </button>
+    </div>
   )
 }
 
@@ -714,6 +737,7 @@ function buildSlots(
         specimenMatchesDexFilters(row, filterTags) &&
         specimenMatchesProgressFilter(row, required, progressFilter),
     )
+    const uncaught = slotMatchesProgressFilter(group, required, filterTags, 'uncaught')
     if (!slotMatchesProgressFilter(group, required, filterTags, progressFilter)) continue
     const coverRow = category
       ? findCover(categoryCovers, category.id, def.speciesId, def.variant)
@@ -748,6 +772,7 @@ function buildSlots(
         galleryCounts.get(def.speciesId) ?? 0,
       ),
       filled: progressFilter === 'uncaught' ? Boolean(cover) : inCategory,
+      uncaught,
       purity,
       cover: cover,
     })

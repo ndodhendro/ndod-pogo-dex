@@ -155,12 +155,18 @@
   text-align: left;
 }
 
-.genTitle {
+.genToggle {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   width: 100%;
   min-width: 0;
+  padding: 0;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-align: left;
 }
 
 .genNumber {
@@ -193,7 +199,7 @@
   transition: transform 0.24s ease;
 }
 
-.genHeader[aria-expanded='false'] .genChevron,
+.genToggle[aria-expanded='false'] .genChevron,
 .allChevron[data-expanded='false'] {
   transform: rotate(-90deg);
 }

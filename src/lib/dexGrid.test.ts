@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { GENERATIONS } from '../data/generations'
 import {
+  applyUncaughtGenerationFilter,
   buildDexVirtualRows,
   countFilledSpecies,
   stackDexProgressLayers,
@@ -198,6 +199,39 @@ describe('toggleDexProgressFilter', () => {
     expect(toggleDexProgressFilter(null, 'caught')).toBe('caught')
     expect(toggleDexProgressFilter('caught', 'pure')).toBe('pure')
     expect(toggleDexProgressFilter('pure', 'pure')).toBeNull()
+  })
+})
+
+describe('applyUncaughtGenerationFilter', () => {
+  const groups = [
+    {
+      generation: { id: 1 },
+      items: [
+        { id: 'empty', uncaught: true },
+        { id: 'seen', uncaught: true },
+        { id: 'caught', uncaught: false },
+      ],
+    },
+    {
+      generation: { id: 2 },
+      items: [{ id: 'johto', uncaught: false }],
+    },
+  ]
+
+  it('leaves every generation alone until Uncaught is selected', () => {
+    expect(applyUncaughtGenerationFilter(groups, [])).toBe(groups)
+  })
+
+  it('keeps only uncaught slots in the selected generation', () => {
+    const filtered = applyUncaughtGenerationFilter(groups, [1])
+    expect(filtered[0].items.map((item) => item.id)).toEqual(['empty', 'seen'])
+    expect(filtered[1].items.map((item) => item.id)).toEqual(['johto'])
+  })
+
+  it('can filter more than one generation', () => {
+    const filtered = applyUncaughtGenerationFilter(groups, [1, 2])
+    expect(filtered[0].items.map((item) => item.id)).toEqual(['empty', 'seen'])
+    expect(filtered[1].items).toEqual([])
   })
 })
 

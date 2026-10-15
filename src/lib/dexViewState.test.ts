@@ -21,6 +21,7 @@ describe('dexViewState', () => {
       query: 'Pika',
       filterTags: ['shiny', 'costume'],
       progressFilter: 'caught',
+      uncaughtGenerationIds: [1, 4],
       showEvolutionLine: true,
     })
 
@@ -28,6 +29,7 @@ describe('dexViewState', () => {
       query: 'Pika',
       filterTags: ['shiny', 'costume'],
       progressFilter: 'caught',
+      uncaughtGenerationIds: [1, 4],
       showEvolutionLine: true,
     })
     expect(readDexViewState('basic')).toEqual(emptyDexViewState())
@@ -38,9 +40,24 @@ describe('dexViewState', () => {
       query: '',
       filterTags: [],
       progressFilter: 'uncaught',
+      uncaughtGenerationIds: [],
       showEvolutionLine: false,
     })
     expect(readDexViewState('basic').progressFilter).toBe('uncaught')
+  })
+
+  it('keeps Uncaught filters for known generations only', () => {
+    writeDexViewState('basic', {
+      query: '',
+      filterTags: [],
+      progressFilter: null,
+      uncaughtGenerationIds: [1, 1, 99, 8],
+      showEvolutionLine: false,
+    })
+    const first = readDexViewState('basic')
+    expect(first.uncaughtGenerationIds).toEqual([1, 8])
+    first.uncaughtGenerationIds.push(2)
+    expect(readDexViewState('basic').uncaughtGenerationIds).toEqual([1, 8])
   })
 
   it('does not share the stored tag array with callers', () => {
@@ -48,6 +65,7 @@ describe('dexViewState', () => {
       query: '',
       filterTags: ['shiny'],
       progressFilter: null,
+      uncaughtGenerationIds: [],
       showEvolutionLine: false,
     })
     const first = readDexViewState('shadow')

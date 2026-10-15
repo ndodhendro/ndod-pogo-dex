@@ -1,3 +1,4 @@
+import { GENERATION_IDS } from '../data/generations'
 import { DEX_GRID_FILTER_KINDS, type DexProgressKind } from './dexGrid'
 import type { TagId } from './tags'
 
@@ -5,6 +6,7 @@ export type DexViewState = {
   query: string
   filterTags: TagId[]
   progressFilter: DexProgressKind | null
+  uncaughtGenerationIds: number[]
   showEvolutionLine: boolean
 }
 
@@ -15,6 +17,7 @@ export function emptyDexViewState(): DexViewState {
     query: '',
     filterTags: [],
     progressFilter: null,
+    uncaughtGenerationIds: [],
     showEvolutionLine: false,
   }
 }
@@ -40,10 +43,21 @@ function cloneDexViewState(state: DexViewState): DexViewState {
     query: state.query,
     filterTags: [...state.filterTags],
     progressFilter: parseProgressFilter(state.progressFilter),
+    uncaughtGenerationIds: parseGenerationIds(state.uncaughtGenerationIds),
     showEvolutionLine: Boolean(state.showEvolutionLine),
   }
 }
 
 function parseProgressFilter(value: DexViewState['progressFilter']): DexProgressKind | null {
   return value != null && DEX_GRID_FILTER_KINDS.includes(value) ? value : null
+}
+
+function parseGenerationIds(value: DexViewState['uncaughtGenerationIds']): number[] {
+  if (!Array.isArray(value)) return []
+  const ids: number[] = []
+  for (const id of value) {
+    if (typeof id !== 'number' || !GENERATION_IDS.includes(id) || ids.includes(id)) continue
+    ids.push(id)
+  }
+  return ids
 }

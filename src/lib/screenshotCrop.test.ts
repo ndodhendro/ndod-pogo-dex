@@ -30,6 +30,10 @@ describe('screenshotCropRect', () => {
     expect(screenshotCropRect(738, 710, 710)).toBeNull()
     expect(screenshotCropRect(738, 710, 1055)).toBeNull()
   })
+
+  it('does not crop a full 738×1600 screenshot', () => {
+    expect(screenshotCropRect(738, 1600, 1600)).toBeNull()
+  })
 })
 
 describe('cropBottomFromBitmap', () => {

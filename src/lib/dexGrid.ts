@@ -11,7 +11,7 @@ export const DEX_MIN_COLUMNS = 3
 export const DEX_MAX_COLUMNS = 6
 export const DEX_LABEL_STACK = 36
 export const DEX_ROW_GAP = 8
-export const DEX_GEN_HEADER_HEIGHT = 112
+export const DEX_GEN_HEADER_HEIGHT = 136
 export const DEX_GEN_SECTION_GAP = 16
 export const DEX_SECTION_ANIM_MS = 240
 
@@ -243,6 +243,18 @@ export function toggleDexProgressFilter(
   next: DexProgressKind,
 ): DexProgressKind | null {
   return current === next ? null : next
+}
+
+/** Keep other generations intact. A selected generation shows only its uncaught slots. */
+export function applyUncaughtGenerationFilter<
+  T extends { generation: { id: number }; items: readonly { uncaught: boolean }[] },
+>(groups: readonly T[], generationIds: readonly number[]): readonly T[] {
+  if (generationIds.length === 0) return groups
+  const selected = new Set(generationIds)
+  return groups.map((group) => {
+    if (!selected.has(group.generation.id)) return group
+    return { ...group, items: group.items.filter((item) => item.uncaught) }
+  })
 }
 
 /**

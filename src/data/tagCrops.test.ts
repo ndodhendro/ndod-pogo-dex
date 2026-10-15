@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SCREENSHOT_FULL_HEIGHT } from '../lib/screenshotCrop'
 import {
   cropHeightForSpecimen,
   cropHeightForTags,
@@ -61,11 +62,11 @@ describe('cropHeightForTags', () => {
 })
 
 describe('cropHeightForSpecimen', () => {
-  it('locks Seen to 710 even when taller tags are on', () => {
-    expect(SEEN_CROP_HEIGHT).toBe(710)
-    expect(cropHeightForSpecimen(['mega'], heights, true)).toBe(710)
-    expect(cropHeightForSpecimen(['lucky', 'xxs'], heights, true)).toBe(710)
-    expect(cropHeightForSpecimen(['shiny', 'mega', 'hundo'], heights, true)).toBe(710)
+  it('keeps Seen at full height even when taller tags are on', () => {
+    expect(SEEN_CROP_HEIGHT).toBe(SCREENSHOT_FULL_HEIGHT)
+    expect(cropHeightForSpecimen(['mega'], heights, true)).toBe(SCREENSHOT_FULL_HEIGHT)
+    expect(cropHeightForSpecimen(['lucky', 'xxs'], heights, true)).toBe(SCREENSHOT_FULL_HEIGHT)
+    expect(cropHeightForSpecimen(['shiny', 'mega', 'hundo'], heights, true)).toBe(SCREENSHOT_FULL_HEIGHT)
   })
 
   it('still follows the tallest tag when Seen is off', () => {
