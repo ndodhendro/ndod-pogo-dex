@@ -70,7 +70,7 @@ export function CardPreview({
 }: Props) {
   const tags = specimenTags(specimen)
   const formLabel = formLabelForPreview(specimen.form)
-  const title = specimenSlotName(specimen.speciesId, specimen.form)
+  const title = specimenSlotName(specimen.speciesId, specimen.form, tags)
   const showForm =
     formLabel != null &&
     !title.toLowerCase().endsWith(` ${formLabel.toLowerCase()}`) &&
@@ -629,7 +629,9 @@ function PreviewPhoto({
   showFx: boolean
 }) {
   const tags = slide ? specimenTags(slide.specimen) : []
-  const name = slide ? specimenSlotName(slide.specimen.speciesId, slide.specimen.form) : undefined
+  const name = slide
+    ? specimenSlotName(slide.specimen.speciesId, slide.specimen.form, tags)
+    : undefined
   const purity = slide
     ? coverPurity(
         tags,

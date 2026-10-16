@@ -913,6 +913,35 @@ describe('Basic Pokédex limit', () => {
     expect(shadowNundo).toContain(1)
   })
 
+  it('labels Pumpkaboo and Gourgeist as Jumbo Variety when the tag is XXL', () => {
+    const xxl = slotsForTrack(['xxl'], [basic], [])
+    expect(xxl.find((slot) => slot.speciesId === 710)).toMatchObject({
+      variant: '',
+      name: 'Pumpkaboo Jumbo Variety',
+    })
+    expect(xxl.find((slot) => slot.speciesId === 711)).toMatchObject({
+      variant: '',
+      name: 'Gourgeist Jumbo Variety',
+    })
+    expect(slotsForTrack([], [basic], []).find((slot) => slot.speciesId === 710)?.name).toBe(
+      'Pumpkaboo Medium Variety',
+    )
+    expect(slotsForTrack(['hundo'], [basic], []).find((slot) => slot.speciesId === 711)?.name).toBe(
+      'Gourgeist Medium Variety',
+    )
+    expect(specimenSlotBoxLabel(specimen({ speciesId: 710, extraTags: ['xxl'] }))).toBe(
+      '#0710 Pumpkaboo Jumbo Variety',
+    )
+    expect(specimenSlotDisplayName(specimen({ speciesId: 711, extraTags: ['xxl'] }))).toBe(
+      'Gourgeist Jumbo Variety',
+    )
+    expect(specimenSlotName(710, null, ['xxl'])).toBe('Pumpkaboo Jumbo Variety')
+    expect(specimenSlotName(710, 'Large Variety', ['xxl'])).toBe('Pumpkaboo Large Variety')
+    expect(specimenSlotBoxLabel(specimen({ speciesId: 710, extraTags: ['basic'] }))).toBe(
+      '#0710 Pumpkaboo Medium Variety',
+    )
+  })
+
   it('omits Pumpkaboo and Gourgeist from XXS because they have no XXS size', () => {
     const ids = slotsForTrack(['xxs'], [basic], []).map((slot) => slot.speciesId)
     expect(ids).not.toContain(710)

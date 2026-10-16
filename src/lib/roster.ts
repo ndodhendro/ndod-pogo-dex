@@ -46,8 +46,9 @@ export const FOLLOW_BASIC_TAGS = new Set<TagId>([
   'max-cp',
 ])
 
-/** Pumpkaboo and Gourgeist have no XXS; their smallest size is XS. */
-const NO_XXS_SPECIES = new Set<number>([710, 711])
+/** Pumpkaboo and Gourgeist. No XXS slot; on XXL the size name is Jumbo, not Medium. */
+const PUMPKABOO_LINE = new Set<number>([710, 711])
+const JUMBO_VARIETY = 'Jumbo Variety'
 
 export function tagFollowsBasicList(tag: TagId): boolean {
   return FOLLOW_BASIC_TAGS.has(tag)
@@ -160,9 +161,28 @@ export function slotDisplayName(speciesId: number, variant: string) {
   return appendFormeLabel(species, label)
 }
 
+/** Empty Pumpkaboo/Gourgeist variant reads as Jumbo Variety while XXL is selected. */
+function variantWithXxlPumpkaboo(
+  speciesId: number,
+  variant: string,
+  tags: readonly TagId[],
+): string {
+  const current = normalizeVariant(variant)
+  if (current) return current
+  if (tags.includes('xxl') && PUMPKABOO_LINE.has(speciesId)) return JUMBO_VARIETY
+  return ''
+}
+
 /** Grid/preview/gallery title: distinctive forme or the Basic default, not Alolan/Mega chip text. */
-export function specimenSlotName(speciesId: number, form: string | null | undefined): string {
-  return slotDisplayName(speciesId, formLabelForPreview(form) ?? '')
+export function specimenSlotName(
+  speciesId: number,
+  form: string | null | undefined,
+  tags: readonly TagId[] = [],
+): string {
+  return slotDisplayName(
+    speciesId,
+    variantWithXxlPumpkaboo(speciesId, formLabelForPreview(form) ?? '', tags),
+  )
 }
 
 function appendFormeLabel(species: string, label: string) {
@@ -190,7 +210,12 @@ export function specimenSlotBoxLabel(
   catalogs: readonly TagCatalog[] = [],
 ): string {
   if (!fields.speciesId || !SPECIES_BY_ID.has(fields.speciesId)) return ''
-  const variant = slotVariantForTrack(fields, specimenTags(fields), catalogs)
+  const tags = specimenTags(fields)
+  const variant = variantWithXxlPumpkaboo(
+    fields.speciesId,
+    slotVariantForTrack(fields, tags, catalogs),
+    tags,
+  )
   return slotBoxLabel({
     speciesId: fields.speciesId,
     variant,
@@ -202,7 +227,12 @@ export function specimenSlotDisplayName(
   fields: SpecimenFields,
   catalogs: readonly TagCatalog[] = [],
 ): string {
-  const variant = slotVariantForTrack(fields, specimenTags(fields), catalogs)
+  const tags = specimenTags(fields)
+  const variant = variantWithXxlPumpkaboo(
+    fields.speciesId,
+    slotVariantForTrack(fields, tags, catalogs),
+    tags,
+  )
   return slotDisplayName(fields.speciesId, variant)
 }
 
@@ -611,7 +641,15 @@ export function trackIsLimited(requiredTags: readonly TagId[], catalogs: readonl
 
 function omitSpeciesWithoutXxs(requiredTags: readonly TagId[], slots: DexSlotDef[]): DexSlotDef[] {
   if (!requiredTags.includes('xxs')) return slots
-  return slots.filter((slot) => !NO_XXS_SPECIES.has(slot.speciesId))
+  return slots.filter((slot) => !PUMPKABOO_LINE.has(slot.speciesId))
+}
+
+function labelXxlPumpkaboo(requiredTags: readonly TagId[], slots: DexSlotDef[]): DexSlotDef[] {
+  if (!requiredTags.includes('xxl')) return slots
+  return slots.map((slot) => {
+    if (!PUMPKABOO_LINE.has(slot.speciesId) || normalizeVariant(slot.variant)) return slot
+    return { ...slot, name: slotDisplayName(slot.speciesId, JUMBO_VARIETY) }
+  })
 }
 
 function omitLegendaryFromNundo(requiredTags: readonly TagId[], slots: DexSlotDef[]): DexSlotDef[] {
@@ -627,7 +665,10 @@ export function slotsForTrack(
   const slots = usesBasicSpeciesList(requiredTags)
     ? basicSpeciesSlots(catalogs, roster)
     : slotsForLimitedTags(ownListTags(requiredTags), catalogs, roster)
-  return omitLegendaryFromNundo(requiredTags, omitSpeciesWithoutXxs(requiredTags, slots))
+  return labelXxlPumpkaboo(
+    requiredTags,
+    omitLegendaryFromNundo(requiredTags, omitSpeciesWithoutXxs(requiredTags, slots)),
+  )
 }
 
 export function slotsForSelectedTags(
@@ -833,7 +874,7 @@ export function fieldsAllowedOnLimitedTags(
   roster: readonly TagRosterEntry[],
 ): TagId | null {
   const tags = specimenTags(fields)
-  if (tags.includes('xxs') && NO_XXS_SPECIES.has(fields.speciesId)) return 'xxs'
+  if (tags.includes('xxs') && PUMPKABOO_LINE.has(fields.speciesId)) return 'xxs'
   if (tags.includes('nundo') && nundoExcludesSpecies(fields.speciesId)) return 'nundo'
   const check: TagId[] = []
   if (tags.length === 0 || tags.includes(BASIC_DEX_TAG) || tags.some(tagFollowsBasicList)) {
@@ -872,7 +913,7 @@ export function canEnableLimitedTag(
   roster: readonly TagRosterEntry[],
 ): boolean {
   if (!fields.speciesId) return true
-  if (tag === 'xxs' && NO_XXS_SPECIES.has(fields.speciesId)) return false
+  if (tag === 'xxs' && PUMPKABOO_LINE.has(fields.speciesId)) return false
   if (tag === 'nundo' && nundoExcludesSpecies(fields.speciesId)) return false
   if (tagFollowsBasicList(tag) || tag === BASIC_DEX_TAG) {
     const basic = catalogForTag(catalogs, BASIC_DEX_TAG)
