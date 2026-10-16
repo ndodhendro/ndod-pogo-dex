@@ -16,6 +16,7 @@ import {
   tagUsesStaticReleasedList,
   uniqueVariantNamesForTag,
 } from '../lib/roster'
+import { matchesSpeciesSearch } from '../lib/fuzzySearch'
 import { toastAfterWrite, useToast } from '../lib/toast'
 import { labelForTag, type TagId } from '../lib/tags'
 import { BottomSheet } from './BottomSheet'
@@ -83,28 +84,18 @@ export function RosterSheet({ open, tags, title, onClose }: Props) {
       ? staticReleasedCount(tag, catalogForTag(catalogs, tag).slotMode) + extraRows.length
       : rows.length
   const visibleCombos = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const list = [...extraCombos].sort(
       (a, b) => a.speciesId - b.speciesId || a.variant.localeCompare(b.variant),
     )
-    if (!q) return list
-    return list.filter((slot) => {
-      const name = slot.name.toLowerCase()
-      const id = String(slot.speciesId)
-      return name.includes(q) || id === q || id.padStart(4, '0') === q.padStart(4, '0')
-    })
+    return list.filter((slot) => matchesSpeciesSearch(query, slot.speciesId, [slot.name]))
   }, [extraCombos, query])
   const visibleRows = useMemo(() => {
-    const q = query.trim().toLowerCase()
     const list = [...extraRows].sort(
       (a, b) => a.speciesId - b.speciesId || a.variant.localeCompare(b.variant),
     )
-    if (!q) return list
-    return list.filter((row) => {
-      const name = slotDisplayName(row.speciesId, row.variant).toLowerCase()
-      const id = String(row.speciesId)
-      return name.includes(q) || id === q || id.padStart(4, '0') === q.padStart(4, '0')
-    })
+    return list.filter((row) =>
+      matchesSpeciesSearch(query, row.speciesId, [slotDisplayName(row.speciesId, row.variant)]),
+    )
   }, [extraRows, query])
   const visibleCount = comboMode ? visibleCombos.length : visibleRows.length
 

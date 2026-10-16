@@ -609,6 +609,12 @@ describe('searchSlots', () => {
     expect(searchSlots(slots, '0001').every((slot) => slot.speciesId === 1)).toBe(true)
     expect(searchSlots(slots, '0001').length).toBeGreaterThanOrEqual(3)
   })
+
+  it('matches a species typo', () => {
+    const basic = slotsForTrack([], [], [])
+    expect(searchSlots(basic, 'charzard').some((slot) => slot.speciesId === 6)).toBe(true)
+    expect(searchSlots(basic, 'charzard').every((slot) => slot.speciesId === 6)).toBe(true)
+  })
 })
 
 describe('searchDexSlots', () => {
@@ -740,6 +746,7 @@ describe('searchVariantNames', () => {
   it('filters existing names as the user types', () => {
     expect(searchVariantNames(names, 'hat')).toEqual(['Party Hat'])
     expect(searchVariantNames(names, 'cape')).toEqual(['Halloween Cape'])
+    expect(searchVariantNames(names, 'hallowen')).toEqual(['Halloween Cape'])
   })
 
   it('hides suggestions once the typed name matches exactly', () => {

@@ -19,4 +19,8 @@ describe('filterByLabel', () => {
       { id: 'shadow', label: 'Shadow' },
     ])
   })
+
+  it('matches a typo without pulling in unrelated tracks', () => {
+    expect(filterByLabel(tracks, 'shniy')).toEqual([{ id: 'shiny', label: 'Shiny' }])
+  })
 })

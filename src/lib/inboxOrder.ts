@@ -1,4 +1,4 @@
-import { screenshotFileName } from './screenshotFileName'
+import { screenshotFileNameMatchesQuery } from './screenshotFileName'
 
 export type InboxSortDir = 'asc' | 'desc'
 
@@ -45,10 +45,7 @@ export function inboxMatchesFileNameQuery(
   fileName: string | null | undefined,
   query: string,
 ): boolean {
-  const q = query.trim().toLowerCase()
-  if (!q) return true
-  const name = screenshotFileName(fileName)
-  return Boolean(name && name.toLowerCase().includes(q))
+  return screenshotFileNameMatchesQuery(fileName, query)
 }
 
 /** Keep the user's last order; newly added rows stay in live (newest-first) order at the top. */

@@ -58,6 +58,7 @@ describe('specimenMatchesGalleryQuery', () => {
     expect(specimenMatchesGalleryQuery(shiny, 'shiny', categories)).toBe(true)
     expect(specimenMatchesGalleryQuery(hat, 'female', categories)).toBe(false)
     expect(specimenMatchesGalleryQuery(female, 'party', categories)).toBe(false)
+    expect(specimenMatchesGalleryQuery(hat, 'prty hat', categories)).toBe(true)
   })
 
   it('matches a visible filename', () => {

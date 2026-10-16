@@ -7,6 +7,7 @@ import { useImageUrl } from '../hooks/useImageUrl'
 import { useTagCropHeights } from '../hooks/useCropSettings'
 import { deleteSpecimen, replaceSpecimenLook, updateSpecimen } from '../lib/collection'
 import { db, type SpecimenRow } from '../lib/db'
+import { rankByFuzzy } from '../lib/fuzzySearch'
 import { cropBottomFromBlob, SCREENSHOT_WIDTH } from '../lib/images'
 import {
   applyRosterSlot,
@@ -205,7 +206,10 @@ export function TagSheet({
       return genderChoices
     }
     if (!query.trim() || query === selectedLabel) return []
-    return searchSlots(availableSlots, query).slice(0, 12)
+    return rankByFuzzy(searchSlots(availableSlots, query), query, (slot) => [
+      slot.name,
+      slot.variant,
+    ]).slice(0, 12)
   }, [
     ocrHits,
     speciesMenuOpen,

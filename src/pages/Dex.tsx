@@ -32,7 +32,7 @@ import { coverPurity, findCover, rankCategoriesFrom, type CoverPurity } from '..
 import { deleteSpecimen, setAsCover } from '../lib/collection'
 import { categoryChromeStyle } from '../lib/categoryStyle'
 import {
-  applyUncaughtGenerationFilter,
+  applyGenerationProgressFilter,
   buildDexVirtualRows,
   countBySpeciesId,
   dexAnimatedCardRowHeight,
@@ -46,6 +46,7 @@ import {
   specimenMatchesProgressFilter,
   slotMatchesProgressFilter,
   type DexProgressKind,
+  type GenerationProgressFilter,
 } from '../lib/dexGrid'
 import {
   db,
@@ -82,6 +83,9 @@ type Slot = {
   extraCount: number
   filled: boolean
   uncaught: boolean
+  seen: boolean
+  caught: boolean
+  pure: boolean
   purity: CoverPurity | null
   cover?: SpecimenRow
 }
@@ -101,8 +105,8 @@ export function DexPage() {
   const [progressFilter, setProgressFilter] = useState<DexProgressKind | null>(
     () => readDexViewState(categoryId).progressFilter,
   )
-  const [uncaughtGenerationIds, setUncaughtGenerationIds] = useState<number[]>(
-    () => readDexViewState(categoryId).uncaughtGenerationIds,
+  const [generationFilters, setGenerationFilters] = useState<GenerationProgressFilter[]>(
+    () => readDexViewState(categoryId).generationFilters,
   )
   const [filterTags, setFilterTags] = useState<TagId[]>(() => readDexViewState(categoryId).filterTags)
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -121,10 +125,10 @@ export function DexPage() {
       query,
       filterTags,
       progressFilter,
-      uncaughtGenerationIds,
+      generationFilters,
       showEvolutionLine,
     })
-  }, [categoryId, query, filterTags, progressFilter, uncaughtGenerationIds, showEvolutionLine])
+  }, [categoryId, query, filterTags, progressFilter, generationFilters, showEvolutionLine])
 
   useLayoutEffect(() => {
     if (!host) return
@@ -261,8 +265,8 @@ export function DexPage() {
   }, [exactFileHit, query])
   const groups = useMemo(() => {
     if (showEvolutionLine) return [{ generation: EVOLUTION_LINE_GENERATION, items: slots }]
-    return applyUncaughtGenerationFilter(groupByGeneration(slots), uncaughtGenerationIds)
-  }, [slots, showEvolutionLine, uncaughtGenerationIds])
+    return applyGenerationProgressFilter(groupByGeneration(slots), generationFilters)
+  }, [slots, showEvolutionLine, generationFilters])
 
   const { seen, caught, pure, total: catalogSize } = useMemo(
     () => countFilledSlots(specimens, category?.requiredTags ?? [], catalogs, roster),
@@ -469,16 +473,18 @@ export function DexPage() {
                     generation={row.generation}
                     expanded={!collapsed.has(row.generation.id)}
                     progress={generationProgress.get(row.generation.id)}
-                    uncaught={uncaughtGenerationIds.includes(row.generation.id)}
+                    selectedKind={
+                      generationFilters.find((filter) => filter.generationId === row.generation.id)?.kind ?? null
+                    }
                     onToggle={() => toggle(row.generation.id)}
-                    onToggleUncaught={(on) => {
-                      setUncaughtGenerationIds((ids) => {
-                        const has = ids.includes(row.generation.id)
-                        if (on && !has) return [...ids, row.generation.id]
-                        if (!on && has) return ids.filter((id) => id !== row.generation.id)
-                        return ids
+                    onSelectKind={(kind) => {
+                      const generationId = row.generation.id
+                      setGenerationFilters((filters) => {
+                        const rest = filters.filter((filter) => filter.generationId !== generationId)
+                        if (!kind) return rest
+                        return [...rest, { generationId, kind }]
                       })
-                      if (on && collapsed.has(row.generation.id)) toggle(row.generation.id)
+                      if (kind && collapsed.has(generationId)) toggle(generationId)
                     }}
                   />
                 </div>
@@ -631,20 +637,27 @@ export function DexPage() {
   )
 }
 
+const GENERATION_FILTER_LABEL: Record<DexProgressKind, string> = {
+  uncaught: 'Uncaught',
+  seen: 'Seen',
+  caught: 'Caught',
+  pure: 'Pure',
+}
+
 function GenerationHeader({
   generation,
   expanded,
   progress,
-  uncaught,
+  selectedKind,
   onToggle,
-  onToggleUncaught,
+  onSelectKind,
 }: {
   generation: Generation
   expanded: boolean
   progress?: SlotProgress
-  uncaught: boolean
+  selectedKind: DexProgressKind | null
   onToggle: () => void
-  onToggleUncaught: (on: boolean) => void
+  onSelectKind: (kind: DexProgressKind | null) => void
 }) {
   const counts = progress ?? { seen: 0, caught: 0, pure: 0, filled: 0, total: 0 }
   return (
@@ -665,17 +678,16 @@ function GenerationHeader({
         compact
         embedded
         kinds={DEX_GRID_FILTER_KINDS}
-        selectableKinds={['uncaught']}
         filtersLabel={`${generation.name} filters`}
-        selectableName={() => `${generation.name} Uncaught`}
+        selectableName={(kind) => `${generation.name} ${GENERATION_FILTER_LABEL[kind]}`}
         seen={counts.seen}
         caught={counts.caught}
         pure={counts.pure}
         total={counts.total}
         ariaLabel={`${generation.name} completion`}
         announce={false}
-        selectedKind={uncaught ? 'uncaught' : null}
-        onSelectKind={(kind) => onToggleUncaught(kind === 'uncaught')}
+        selectedKind={selectedKind}
+        onSelectKind={onSelectKind}
       />
     </div>
   )
@@ -737,7 +749,12 @@ function buildSlots(
         specimenMatchesDexFilters(row, filterTags) &&
         specimenMatchesProgressFilter(row, required, progressFilter),
     )
-    const uncaught = slotMatchesProgressFilter(group, required, filterTags, 'uncaught')
+    const progress = {
+      uncaught: slotMatchesProgressFilter(group, required, filterTags, 'uncaught'),
+      seen: slotMatchesProgressFilter(group, required, filterTags, 'seen'),
+      caught: slotMatchesProgressFilter(group, required, filterTags, 'caught'),
+      pure: slotMatchesProgressFilter(group, required, filterTags, 'pure'),
+    }
     if (!slotMatchesProgressFilter(group, required, filterTags, progressFilter)) continue
     const coverRow = category
       ? findCover(categoryCovers, category.id, def.speciesId, def.variant)
@@ -772,7 +789,10 @@ function buildSlots(
         galleryCounts.get(def.speciesId) ?? 0,
       ),
       filled: progressFilter === 'uncaught' ? Boolean(cover) : inCategory,
-      uncaught,
+      uncaught: progress.uncaught,
+      seen: progress.seen,
+      caught: progress.caught,
+      pure: progress.pure,
       purity,
       cover: cover,
     })

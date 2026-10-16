@@ -245,15 +245,21 @@ export function toggleDexProgressFilter(
   return current === next ? null : next
 }
 
-/** Keep other generations intact. A selected generation shows only its uncaught slots. */
-export function applyUncaughtGenerationFilter<
-  T extends { generation: { id: number }; items: readonly { uncaught: boolean }[] },
->(groups: readonly T[], generationIds: readonly number[]): readonly T[] {
-  if (generationIds.length === 0) return groups
-  const selected = new Set(generationIds)
+export type GenerationProgressFilter = {
+  generationId: number
+  kind: DexProgressKind
+}
+
+/** Keep other generations intact. A selected generation shows only slots of that kind. */
+export function applyGenerationProgressFilter<
+  T extends { generation: { id: number }; items: readonly Record<DexProgressKind, boolean>[] },
+>(groups: readonly T[], filters: readonly GenerationProgressFilter[]): readonly T[] {
+  if (filters.length === 0) return groups
+  const selected = new Map(filters.map((filter) => [filter.generationId, filter.kind]))
   return groups.map((group) => {
-    if (!selected.has(group.generation.id)) return group
-    return { ...group, items: group.items.filter((item) => item.uncaught) }
+    const kind = selected.get(group.generation.id)
+    if (!kind) return group
+    return { ...group, items: group.items.filter((item) => item[kind]) }
   })
 }
 

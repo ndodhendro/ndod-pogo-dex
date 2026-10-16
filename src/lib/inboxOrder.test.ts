@@ -110,6 +110,7 @@ describe('nextInboxSort', () => {
 describe('inboxMatchesFileNameQuery', () => {
   it('matches a case-insensitive filename fragment', () => {
     expect(inboxMatchesFileNameQuery('Screenshot_2026.png', 'shot_2026')).toBe(true)
+    expect(inboxMatchesFileNameQuery('Screenshot_2026.png', 'shot2026')).toBe(true)
     expect(inboxMatchesFileNameQuery('Screenshot_2026.png', 'PNG')).toBe(true)
     expect(inboxMatchesFileNameQuery('Screenshot_2026.png', 'charizard')).toBe(false)
   })

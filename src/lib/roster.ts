@@ -16,6 +16,7 @@ import { GO_RELEASED_IDS, isGoReleased } from '../data/goReleased'
 import { SPECIES, SPECIES_BY_ID, searchSpecies } from '../data/species'
 import { BASIC_CROP_TAG } from '../data/tagCrops'
 import { isGreenCover } from './covers'
+import { fuzzyMatches, matchesSpeciesSearch, rankByFuzzy } from './fuzzySearch'
 import { screenshotFileNameIsExact, screenshotFileNameMatchesQuery } from './screenshotFileName'
 import {
   extraTagList,
@@ -411,10 +412,10 @@ export function uniqueVariantNamesForTag(
 
 export function searchVariantNames(names: readonly string[], query: string, limit = 12): string[] {
   const typed = query.trim()
-  const q = typed.toLowerCase()
-  if (!q) return []
+  if (!typed) return []
   if (names.some((name) => name === typed)) return []
-  return names.filter((name) => name.toLowerCase().includes(q)).slice(0, limit)
+  const hits = names.filter((name) => fuzzyMatches(typed, name))
+  return rankByFuzzy(hits, typed, (name) => [name]).slice(0, limit)
 }
 
 function intersectIds(current: Set<number> | null, next: Set<number>): Set<number> {
@@ -664,19 +665,11 @@ export function variantFieldComesFromSlot(
 }
 
 export function searchSlots(slots: readonly DexSlotDef[], query: string): DexSlotDef[] {
-  const q = query.trim().toLowerCase()
+  const q = query.trim()
   if (!q) return [...slots]
-  return slots.filter((slot) => {
-    const id = String(slot.speciesId)
-    const padded = id.padStart(4, '0')
-    return (
-      slot.name.toLowerCase().includes(q) ||
-      id === q ||
-      padded === q.padStart(4, '0') ||
-      padded === q ||
-      normalizeVariant(slot.variant).toLowerCase().includes(q)
-    )
-  })
+  return slots.filter((slot) =>
+    matchesSpeciesSearch(q, slot.speciesId, [slot.name, normalizeVariant(slot.variant)]),
+  )
 }
 
 type DexSearchSpecimen = SpecimenFields & { fileName?: string | null }

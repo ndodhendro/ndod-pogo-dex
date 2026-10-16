@@ -1,4 +1,5 @@
 import { categoryForTag } from '../data/navIcons'
+import { fuzzyMatches } from './fuzzySearch'
 import { formatDexSpeciesId } from './dexGrid'
 import { specimenSlotDisplayName, type TagCatalog } from './roster'
 import { screenshotFileName } from './screenshotFileName'
@@ -49,9 +50,7 @@ export function specimenMatchesGalleryQuery(
   categories: GallerySearchCategory[] = [],
   catalogs: readonly TagCatalog[] = [],
 ): boolean {
-  const q = query.trim().toLowerCase()
+  const q = query.trim()
   if (!q) return true
-  return galleryVisibleLabels(specimen, categories, catalogs).some((label) =>
-    label.toLowerCase().includes(q),
-  )
+  return fuzzyMatches(q, ...galleryVisibleLabels(specimen, categories, catalogs))
 }

@@ -45,6 +45,7 @@ describe('screenshotFileNameMatchesQuery', () => {
   it('matches a basename fragment, ignoring case and path', () => {
     expect(screenshotFileNameMatchesQuery('C:\\Pictures\\IMG_1234.PNG', 'img_1234')).toBe(true)
     expect(screenshotFileNameMatchesQuery('IMG_1234.PNG', '1234')).toBe(true)
+    expect(screenshotFileNameMatchesQuery('IMG_1234.PNG', 'img1234')).toBe(true)
     expect(screenshotFileNameMatchesQuery('IMG_1234.PNG', 'other')).toBe(false)
   })
 

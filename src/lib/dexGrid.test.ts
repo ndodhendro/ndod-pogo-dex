@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { GENERATIONS } from '../data/generations'
 import {
-  applyUncaughtGenerationFilter,
+  applyGenerationProgressFilter,
   buildDexVirtualRows,
   countFilledSpecies,
   stackDexProgressLayers,
@@ -202,35 +202,54 @@ describe('toggleDexProgressFilter', () => {
   })
 })
 
-describe('applyUncaughtGenerationFilter', () => {
+describe('applyGenerationProgressFilter', () => {
   const groups = [
     {
       generation: { id: 1 },
       items: [
-        { id: 'empty', uncaught: true },
-        { id: 'seen', uncaught: true },
-        { id: 'caught', uncaught: false },
+        { id: 'empty', uncaught: true, seen: false, caught: false, pure: false },
+        { id: 'silhouette', uncaught: true, seen: true, caught: false, pure: false },
+        { id: 'extra', uncaught: false, seen: true, caught: true, pure: false },
+        { id: 'exact', uncaught: false, seen: true, caught: true, pure: true },
       ],
     },
     {
       generation: { id: 2 },
-      items: [{ id: 'johto', uncaught: false }],
+      items: [{ id: 'johto', uncaught: false, seen: true, caught: true, pure: false }],
     },
   ]
 
-  it('leaves every generation alone until Uncaught is selected', () => {
-    expect(applyUncaughtGenerationFilter(groups, [])).toBe(groups)
+  it('leaves every generation alone until a filter is selected', () => {
+    expect(applyGenerationProgressFilter(groups, [])).toBe(groups)
   })
 
   it('keeps only uncaught slots in the selected generation', () => {
-    const filtered = applyUncaughtGenerationFilter(groups, [1])
-    expect(filtered[0].items.map((item) => item.id)).toEqual(['empty', 'seen'])
+    const filtered = applyGenerationProgressFilter(groups, [{ generationId: 1, kind: 'uncaught' }])
+    expect(filtered[0].items.map((item) => item.id)).toEqual(['empty', 'silhouette'])
     expect(filtered[1].items.map((item) => item.id)).toEqual(['johto'])
   })
 
-  it('can filter more than one generation', () => {
-    const filtered = applyUncaughtGenerationFilter(groups, [1, 2])
-    expect(filtered[0].items.map((item) => item.id)).toEqual(['empty', 'seen'])
+  it('keeps seen, caught, or pure slots for that generation only', () => {
+    expect(
+      applyGenerationProgressFilter(groups, [{ generationId: 1, kind: 'seen' }])[0].items.map((item) => item.id),
+    ).toEqual(['silhouette', 'extra', 'exact'])
+    expect(
+      applyGenerationProgressFilter(groups, [{ generationId: 1, kind: 'caught' }])[0].items.map((item) => item.id),
+    ).toEqual(['extra', 'exact'])
+    expect(
+      applyGenerationProgressFilter(groups, [{ generationId: 1, kind: 'pure' }])[0].items.map((item) => item.id),
+    ).toEqual(['exact'])
+    expect(
+      applyGenerationProgressFilter(groups, [{ generationId: 1, kind: 'pure' }])[1].items.map((item) => item.id),
+    ).toEqual(['johto'])
+  })
+
+  it('can filter more than one generation with different kinds', () => {
+    const filtered = applyGenerationProgressFilter(groups, [
+      { generationId: 1, kind: 'uncaught' },
+      { generationId: 2, kind: 'pure' },
+    ])
+    expect(filtered[0].items.map((item) => item.id)).toEqual(['empty', 'silhouette'])
     expect(filtered[1].items).toEqual([])
   })
 })

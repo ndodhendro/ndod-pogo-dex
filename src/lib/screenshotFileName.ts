@@ -1,3 +1,5 @@
+import { fuzzyMatches } from './fuzzySearch'
+
 /** Basename with extension. Paths and empty names are dropped. */
 export function screenshotFileName(
   source: File | Blob | string | null | undefined,
@@ -17,15 +19,15 @@ export function screenshotFileNameKey(
   return name ? name.toLowerCase() : null
 }
 
-/** Empty query matches. Otherwise the basename must contain the query. */
+/** Empty query matches. Otherwise the basename fuzzy-matches the query. */
 export function screenshotFileNameMatchesQuery(
   fileName: string | null | undefined,
   query: string,
 ): boolean {
-  const q = query.trim().toLowerCase()
+  const q = query.trim()
   if (!q) return true
-  const name = screenshotFileNameKey(fileName)
-  return Boolean(name && name.includes(q))
+  const name = screenshotFileName(fileName)
+  return Boolean(name && fuzzyMatches(q, name))
 }
 
 /** Query is the whole basename, including a file extension. */
