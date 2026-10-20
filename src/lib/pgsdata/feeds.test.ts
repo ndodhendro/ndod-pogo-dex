@@ -191,6 +191,37 @@ describe('PGSData feed matching', () => {
     expect(next[0].pokemons).toContain(1)
   })
 
+  it('leaves disguised species out of IV and size feeds and keeps them on Basic', () => {
+    const statCategories = [
+      ...categories,
+      category('XXS', ['xxs']),
+      category('Nundo', ['nundo']),
+      category('Hokido', ['hokido']),
+    ]
+    const { feeds: next } = rebuildFeeds(
+      [
+        { name: 'Basic', pokemons: [] },
+        { name: 'Hundo', pokemons: [] },
+        { name: 'Nundo', pokemons: [] },
+        { name: 'Hokido', pokemons: [] },
+        { name: 'XXS', pokemons: [] },
+        { name: 'XXL', pokemons: [] },
+      ],
+      [],
+      statCategories,
+    )
+    const basic = feedIds(next.filter((row) => String(row.name).startsWith('Basic')))
+    for (const speciesId of [570, 571, 774]) {
+      expect(basic).toContain(speciesId)
+    }
+    for (const stem of ['Hundo', 'Nundo', 'Hokido', 'XXS', 'XXL']) {
+      const ids = feedIds(next.filter((row) => String(row.name).startsWith(stem)))
+      for (const speciesId of [570, 571, 774]) {
+        expect(ids).not.toContain(speciesId)
+      }
+    }
+  })
+
   it('removes XXL and Hundo from their own feeds', () => {
     const remainingXxl = basicIds.filter((id) => id !== 1)
     const remainingHundo = basicIds.filter((id) => id !== 25)

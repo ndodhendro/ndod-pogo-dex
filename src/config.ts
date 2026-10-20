@@ -1,4 +1,4 @@
 export const APP_CONFIG = {
-  version: '1.19.15',
+  version: '1.19.16',
   credit: 'Made by Ndod',
 } as const

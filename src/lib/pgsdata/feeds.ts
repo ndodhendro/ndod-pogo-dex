@@ -21,6 +21,16 @@ export type FeedRebuildStats = {
 export const FEED_POKEMON_LIMIT = 300
 
 /**
+ * The catch screen is a disguise. The caught Pokémon gets a new IV and size roll.
+ * Minior's screen is its Meteor shell; Zorua and Zoroark copy the buddy.
+ * Hisuian Zorua and Zoroark share these dex numbers.
+ * IV and size feeds would only add false alerts.
+ * The Pokédex still lists them, so an appraised catch can be saved.
+ */
+const ENCOUNTER_REROLL_SPECIES = new Set<number>([570, 571, 774])
+const ENCOUNTER_REROLL_FEED_TAGS = new Set<TagId>(['hundo', 'nundo', 'hokido', 'xxs', 'xxl'])
+
+/**
  * Branch root kept in a feed while any direct evolution with a different dex ID
  * is still missing from that category. Further linear stages do not keep the root.
  * Tyrogue is left out: it is rarer than Hitmonlee, Hitmonchan, and Hitmontop.
@@ -286,8 +296,11 @@ function remainingSpeciesIds(
     catalogIds.filter((id) => !drop.has(id)),
     catalogIds,
   )
-  if (!isGenderCategory(category.requiredTags)) return anchored
-  return withGenderPreEvolutions(anchored, new Set(catalogIds))
+  const listed = isGenderCategory(category.requiredTags)
+    ? withGenderPreEvolutions(anchored, new Set(catalogIds))
+    : anchored
+  if (!category.requiredTags.some((tag) => ENCOUNTER_REROLL_FEED_TAGS.has(tag))) return listed
+  return listed.filter((id) => !ENCOUNTER_REROLL_SPECIES.has(id))
 }
 
 function copyFeed(template: PgsFeed, name: string, pokemons: number[]): PgsFeed {
