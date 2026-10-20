@@ -23,6 +23,7 @@ import {
   specimenProgressFlags,
   toggleDexProgressFilter,
   countBySpeciesId,
+  countFilledBySpecies,
   dexSpeciesExtraCount,
   formatDexSpeciesId,
 } from './dexGrid'
@@ -464,6 +465,20 @@ describe('dexSpeciesExtraCount', () => {
   it('uses gallery size on a species-mode track', () => {
     expect(dexSpeciesExtraCount(1, 5)).toBe(5)
     expect(dexSpeciesExtraCount(1, 0)).toBe(0)
+  })
+})
+
+describe('countFilledBySpecies', () => {
+  it('counts only screenshots that fill a slot on this track', () => {
+    const slots = [{ speciesId: 774, variant: 'Green Core' }]
+    const specimens = [
+      { speciesId: 774, tag: 'basic' },
+      { speciesId: 774, tag: 'alternate-forme' },
+      { speciesId: 25, tag: 'alternate-forme' },
+    ]
+    expect(
+      countFilledBySpecies(specimens, slots, (row, slot) => row.tag === 'alternate-forme' && row.speciesId === slot.speciesId),
+    ).toEqual(new Map([[774, 1]]))
   })
 })
 

@@ -268,6 +268,7 @@ describe('Basic default forme labels', () => {
     expect(basicDefaultForme(718)).toBe('10% Forme')
     expect(basicDefaultForme(892)).toBe('Single Strike Style')
     expect(basicDefaultForme(925)).toBe('Family of Four')
+    expect(basicDefaultForme(774)).toBe('Meteor Form')
     expect(basicDefaultForme(1)).toBe('')
   })
 

@@ -845,6 +845,10 @@ describe('Basic Pokédex limit', () => {
       name: 'Tauros',
     })
     expect(slots.find((slot) => slot.speciesId === 666)?.name).toBe('Vivillon')
+    expect(slots.find((slot) => slot.speciesId === 774)).toMatchObject({
+      variant: '',
+      name: 'Minior Meteor Form',
+    })
   })
 
   it('uses the Pokémon GO released list when Limit is on', () => {

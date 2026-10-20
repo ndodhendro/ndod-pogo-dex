@@ -35,6 +35,7 @@ import {
   applyGenerationProgressFilter,
   buildDexVirtualRows,
   countBySpeciesId,
+  countFilledBySpecies,
   dexAnimatedCardRowHeight,
   dexGenHeaderHeight,
   dexGridLayout,
@@ -735,7 +736,9 @@ function buildSlots(
         ? searchDexSlots(catalog, query, specimens, required, catalogs)
         : catalog
   const variantCounts = countBySpeciesId(catalog)
-  const galleryCounts = countBySpeciesId(specimens)
+  const galleryCounts = countFilledBySpecies(specimens, catalog, (row, slot) =>
+    specimenFillsSlot(row, required, slot, catalogs),
+  )
   const categoryCovers = category ? covers.filter((row) => row.categoryId === category.id) : []
   const filtering = progressFilter != null || filterTags.length > 0
 

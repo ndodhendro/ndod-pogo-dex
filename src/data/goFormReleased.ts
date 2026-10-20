@@ -124,6 +124,8 @@ export const GO_ALTERNATE_FORME_FAMILIES: Readonly<Record<number, readonly strin
   720: ['Hoopa Confined', 'Hoopa Unbound'],
   741: ['Baile Style', "Pa'u Style", 'Pom-Pom Style', 'Sensu Style'],
   745: ['Midday Form', 'Midnight Form', 'Dusk Form'],
+  // Minior Basic is Meteor Form. Core colors stay off Alternate forme until each one is released.
+  774: ['Meteor Form'],
   778: ['Disguised Form', 'Busted Form'],
   849: ['Amped Form', 'Low Key Form'],
   854: TEA_FORMS,

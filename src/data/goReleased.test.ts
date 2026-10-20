@@ -6,6 +6,7 @@ describe('GO released list', () => {
     expect(GO_RELEASED_IDS.size).toBeGreaterThan(900)
     expect(isGoReleased(1)).toBe(true)
     expect(isGoReleased(25)).toBe(true)
+    expect(isGoReleased(774)).toBe(true)
     expect(isGoReleased(808)).toBe(true)
     expect(isGoReleased(1025)).toBe(false)
     expect(isGoReleased(489)).toBe(false)
@@ -23,7 +24,7 @@ describe('GO Lucky list', () => {
       expect(GO_LUCKY_IDS.has(id)).toBe(false)
     }
     expect(GO_LUCKY_IDS.size).toBe(GO_RELEASED_IDS.size - GO_UNTRADABLE_IDS.size)
-    expect(GO_LUCKY_IDS.size).toBe(938)
+    expect(GO_LUCKY_IDS.size).toBe(939)
     expect(GO_LUCKY_IDS.has(1)).toBe(true)
     expect(GO_LUCKY_IDS.has(25)).toBe(true)
     expect(GO_LUCKY_IDS.has(808)).toBe(true)

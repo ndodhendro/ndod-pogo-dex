@@ -352,7 +352,28 @@ export function countBySpeciesId(rows: readonly { speciesId: number }[]): Map<nu
   return counts
 }
 
-/** Variant-track slot count when a species has several looks; otherwise gallery size. */
+/** Screenshots that fill a slot of that species. Shots on another track stay out. */
+export function countFilledBySpecies<T extends { speciesId: number }, S extends { speciesId: number }>(
+  specimens: readonly T[],
+  slots: readonly S[],
+  fills: (specimen: T, slot: S) => boolean,
+): Map<number, number> {
+  const slotsBySpecies = new Map<number, S[]>()
+  for (const slot of slots) {
+    const list = slotsBySpecies.get(slot.speciesId)
+    if (list) list.push(slot)
+    else slotsBySpecies.set(slot.speciesId, [slot])
+  }
+  const counts = new Map<number, number>()
+  for (const specimen of specimens) {
+    const speciesSlots = slotsBySpecies.get(specimen.speciesId)
+    if (!speciesSlots?.some((slot) => fills(specimen, slot))) continue
+    counts.set(specimen.speciesId, (counts.get(specimen.speciesId) ?? 0) + 1)
+  }
+  return counts
+}
+
+/** Variant-track slot count when a species has several looks; otherwise owned shots on this track. */
 export function dexSpeciesExtraCount(variantSlotCount: number, galleryCount: number): number {
   return variantSlotCount > 1 ? variantSlotCount : galleryCount
 }
