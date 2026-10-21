@@ -40,6 +40,11 @@ describe('fuzzyMatches', () => {
     expect(fuzzyMatches('zz', 'Pikachu')).toBe(false)
   })
 
+  it('does not match punctuation that folds away', () => {
+    expect(fuzzyMatches('!!!', 'Pikachu')).toBe(false)
+    expect(fuzzyScore('!!!', 'Pikachu')).toBe(null)
+  })
+
   it('does not confuse a close species name', () => {
     expect(fuzzyMatches('pikachu', 'Pichu')).toBe(false)
     expect(fuzzyMatches('pikachu', 'Raichu')).toBe(false)

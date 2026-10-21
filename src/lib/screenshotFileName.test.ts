@@ -47,6 +47,9 @@ describe('screenshotFileNameMatchesQuery', () => {
     expect(screenshotFileNameMatchesQuery('IMG_1234.PNG', '1234')).toBe(true)
     expect(screenshotFileNameMatchesQuery('IMG_1234.PNG', 'img1234')).toBe(true)
     expect(screenshotFileNameMatchesQuery('IMG_1234.PNG', 'other')).toBe(false)
+    expect(screenshotFileNameMatchesQuery('IMG_1234.PNG', 'p')).toBe(false)
+    expect(screenshotFileNameMatchesQuery('IMG_1234.PNG', 'png')).toBe(true)
+    expect(screenshotFileNameMatchesQuery('IMG_1234.PNG', 'img_1234.png')).toBe(true)
   })
 
   it('keeps every name when the query is empty', () => {

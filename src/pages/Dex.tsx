@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { BottomSheet } from '../components/BottomSheet'
 import { CardPreview } from '../components/CardPreview'
@@ -70,7 +70,7 @@ import {
   specimenFillsSlot,
   slotVariantForTrack,
   trackIsLimited,
-  uniqueSearchSpeciesId,
+  type DexSlotDef,
   type SlotProgress,
 } from '../lib/roster'
 import { toastAfterWrite, useToast } from '../lib/toast'
@@ -102,6 +102,7 @@ export function DexPage() {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const [query, setQuery] = useState(() => readDexViewState(categoryId).query)
+  const deferredQuery = useDeferredValue(query)
   const [showEvolutionLine, setShowEvolutionLine] = useState(() => readDexViewState(categoryId).showEvolutionLine)
   const [progressFilter, setProgressFilter] = useState<DexProgressKind | null>(
     () => readDexViewState(categoryId).progressFilter,
@@ -189,28 +190,42 @@ export function DexPage() {
     () => slotsForTrack(category?.requiredTags ?? [], catalogs, roster),
     [category, catalogs, roster],
   )
-  const searchedSpeciesId = useMemo(
-    () =>
-      uniqueSearchSpeciesId(catalog, query, specimens, category?.requiredTags ?? [], catalogs),
-    [catalog, query, specimens, category, catalogs],
-  )
+  const matchedSlots = useMemo(() => {
+    if (!deferredQuery.trim()) return null
+    return searchDexSlots(
+      catalog,
+      deferredQuery,
+      specimens,
+      category?.requiredTags ?? [],
+      catalogs,
+    )
+  }, [catalog, deferredQuery, specimens, category, catalogs])
+  const searchedSpeciesId = useMemo(() => {
+    if (!matchedSlots || matchedSlots.length === 0) return null
+    const id = matchedSlots[0].speciesId
+    for (let index = 1; index < matchedSlots.length; index++) {
+      if (matchedSlots[index].speciesId !== id) return null
+    }
+    return id
+  }, [matchedSlots])
   useEffect(() => {
     if (searchedSpeciesId == null) setShowEvolutionLine(false)
   }, [searchedSpeciesId])
   const slots = useMemo(
     () =>
-      query.trim()
+      deferredQuery.trim()
         ? buildSlots(
             category,
             specimens,
             covers,
             catalogs,
             roster,
-            query,
+            deferredQuery,
             progressFilter,
             filterTags,
             showEvolutionLine ? searchedSpeciesId : null,
             categories,
+            matchedSlots,
           )
         : allSlots,
     [
@@ -220,19 +235,20 @@ export function DexPage() {
       covers,
       catalogs,
       roster,
-      query,
+      deferredQuery,
       progressFilter,
       filterTags,
       showEvolutionLine,
       searchedSpeciesId,
       categories,
+      matchedSlots,
     ],
   )
   const exactFileHit = useMemo(() => {
     if (!category) return null
     const hit = exactFileNameDexSpecimen(
       catalog,
-      query,
+      deferredQuery,
       specimens,
       category.requiredTags,
       catalogs,
@@ -242,10 +258,10 @@ export function DexPage() {
       specimenFillsSlot(hit, category.requiredTags, slot, catalogs),
     )
     return shown ? hit : null
-  }, [catalog, query, specimens, category, catalogs, slots])
+  }, [catalog, deferredQuery, specimens, category, catalogs, slots])
   const fileSearchPreview = useRef<{ queryKey: string; specimenId: string } | null>(null)
   useEffect(() => {
-    const key = screenshotFileNameKey(query)
+    const key = screenshotFileNameKey(deferredQuery)
     const opened = fileSearchPreview.current
     if (!exactFileHit || !key) {
       if (opened) {
@@ -263,7 +279,7 @@ export function DexPage() {
     fileSearchPreview.current = { queryKey: key, specimenId: exactFileHit.id }
     setPreview(exactFileHit)
     if (document.activeElement instanceof HTMLInputElement) document.activeElement.blur()
-  }, [exactFileHit, query])
+  }, [exactFileHit, deferredQuery])
   const groups = useMemo(() => {
     if (showEvolutionLine) return [{ generation: EVOLUTION_LINE_GENERATION, items: slots }]
     return applyGenerationProgressFilter(groupByGeneration(slots), generationFilters)
@@ -285,11 +301,11 @@ export function DexPage() {
       ]),
     )
   }, [specimens, category, catalogs, roster])
-  const tagFiltering = filterTags.length > 0 || Boolean(query.trim())
+  const tagFiltering = filterTags.length > 0 || Boolean(deferredQuery.trim())
   const filtering = progressFilter != null || tagFiltering
   const selectedTagCount =
     filterTags.length === 0 ? 0 : filterTags.length + lockedFilterTags.length
-  const filterCount = selectedTagCount + (query.trim() ? 1 : 0)
+  const filterCount = selectedTagCount + (deferredQuery.trim() ? 1 : 0)
   const limitedEmpty =
     Boolean(category) &&
     trackIsLimited(category?.requiredTags ?? [], catalogs) &&
@@ -441,7 +457,7 @@ export function DexPage() {
         </p>
       ) : filtering && slots.length === 0 ? (
         <p className="empty-state">
-          {query.trim()
+          {deferredQuery.trim()
             ? 'No matching species.'
             : filterTags.length > 0
               ? 'No matching tags.'
@@ -725,6 +741,7 @@ function buildSlots(
   filterTags: readonly TagId[] = [],
   evolutionSpeciesId: number | null = null,
   allCategories: readonly CategoryRow[] = [],
+  matched: readonly DexSlotDef[] | null = null,
 ): Slot[] {
   const required = category?.requiredTags ?? []
   const rankCategories = allCategories.length > 0 ? rankCategoriesFrom(allCategories) : undefined
@@ -732,9 +749,11 @@ function buildSlots(
   const defs =
     evolutionSpeciesId != null
       ? slotsForEvolutionLine(catalog, evolutionSpeciesId)
-      : query.trim()
-        ? searchDexSlots(catalog, query, specimens, required, catalogs)
-        : catalog
+      : matched
+        ? matched
+        : query.trim()
+          ? searchDexSlots(catalog, query, specimens, required, catalogs)
+          : catalog
   const variantCounts = countBySpeciesId(catalog)
   const galleryCounts = countFilledBySpecies(specimens, catalog, (row, slot) =>
     specimenFillsSlot(row, required, slot, catalogs),

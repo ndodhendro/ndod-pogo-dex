@@ -2,7 +2,11 @@ import { categoryForTag } from '../data/navIcons'
 import { fuzzyMatches } from './fuzzySearch'
 import { formatDexSpeciesId } from './dexGrid'
 import { specimenSlotDisplayName, type TagCatalog } from './roster'
-import { screenshotFileName } from './screenshotFileName'
+import {
+  screenshotFileName,
+  screenshotFileNameMatchesQuery,
+  screenshotFileStem,
+} from './screenshotFileName'
 import {
   isNotPure,
   isSilhouette,
@@ -40,7 +44,7 @@ export function galleryVisibleLabels(
   if (isSilhouette(specimen)) labels.push('Seen')
   if (isNotPure(specimen)) labels.push('Not Pure')
   const fileName = screenshotFileName(specimen.fileName)
-  if (fileName) labels.push(fileName)
+  if (fileName) labels.push(screenshotFileStem(fileName))
   return labels.filter((label) => label.trim().length > 0)
 }
 
@@ -52,5 +56,6 @@ export function specimenMatchesGalleryQuery(
 ): boolean {
   const q = query.trim()
   if (!q) return true
-  return fuzzyMatches(q, ...galleryVisibleLabels(specimen, categories, catalogs))
+  if (fuzzyMatches(q, ...galleryVisibleLabels(specimen, categories, catalogs))) return true
+  return screenshotFileNameMatchesQuery(specimen.fileName, q)
 }

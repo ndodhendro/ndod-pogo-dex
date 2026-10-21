@@ -1,5 +1,12 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { BottomSheet } from '../components/BottomSheet'
 import { CardPreview } from '../components/CardPreview'
@@ -87,6 +94,7 @@ export function GalleryPage() {
   const [editingTags, setEditingTags] = useState(false)
   const [filterTags, setFilterTags] = useState<TagId[]>([])
   const [query, setQuery] = useState('')
+  const deferredQuery = useDeferredValue(query)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [draftIds, setDraftIds] = useState<string[] | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -146,9 +154,9 @@ export function GalleryPage() {
       ordered.filter(
         (row) =>
           specimenMatchesDexFilters(row, filterTags) &&
-          specimenMatchesGalleryQuery(row, query, categories, catalogs),
+          specimenMatchesGalleryQuery(row, deferredQuery, categories, catalogs),
       ),
-    [ordered, filterTags, query, categories, catalogs],
+    [ordered, filterTags, deferredQuery, categories, catalogs],
   )
   const visibleIds = useMemo(() => visible.map((row) => row.id), [visible])
   orderedIdsRef.current = orderedIds
@@ -167,7 +175,7 @@ export function GalleryPage() {
     dragId && dragRef.current
       ? moveVisibleGalleryId(dragRef.current.originVisible, dragId, targetIndex)
       : visibleIds
-  const searching = Boolean(query.trim())
+  const searching = Boolean(deferredQuery.trim())
   const filtering = filterTags.length > 0 || searching
   const tagFilters = useMemo(() => specimenTagChoices(categories).filter((choice) => choice.tag != null), [categories])
   const previewIndex = preview ? visible.findIndex((row) => row.id === preview.id) : -1

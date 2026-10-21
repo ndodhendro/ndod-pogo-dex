@@ -16,7 +16,13 @@ import { GO_RELEASED_IDS, isGoReleased } from '../data/goReleased'
 import { SPECIES, SPECIES_BY_ID, searchSpecies } from '../data/species'
 import { BASIC_CROP_TAG } from '../data/tagCrops'
 import { isGreenCover } from './covers'
-import { fuzzyMatches, matchesSpeciesSearch, rankByFuzzy } from './fuzzySearch'
+import {
+  fuzzyBestScore,
+  fuzzyMatches,
+  matchesSpeciesSearch,
+  rankByFuzzy,
+  speciesIdMatchesQuery,
+} from './fuzzySearch'
 import { screenshotFileNameIsExact, screenshotFileNameMatchesQuery } from './screenshotFileName'
 import {
   extraTagList,
@@ -713,6 +719,25 @@ export function searchSlots(slots: readonly DexSlotDef[], query: string): DexSlo
   )
 }
 
+/** One pass: keep species, number, and variant hits, closest label first. */
+export function rankedSearchSlots(
+  slots: readonly DexSlotDef[],
+  query: string,
+  limit = 12,
+): DexSlotDef[] {
+  const q = query.trim()
+  if (!q) return []
+  const hits: { slot: DexSlotDef; index: number; score: number }[] = []
+  for (let index = 0; index < slots.length; index++) {
+    const slot = slots[index]
+    const textScore = fuzzyBestScore(q, [slot.name, slot.variant])
+    if (textScore == null && !speciesIdMatchesQuery(slot.speciesId, q)) continue
+    hits.push({ slot, index, score: textScore ?? Number.NEGATIVE_INFINITY })
+  }
+  hits.sort((a, b) => b.score - a.score || a.index - b.index)
+  return hits.slice(0, limit).map((row) => row.slot)
+}
+
 type DexSearchSpecimen = SpecimenFields & { fileName?: string | null }
 
 /** Species, number, variant, plus screenshot filenames that fill a slot on this track. */
@@ -730,10 +755,19 @@ export function searchDexSlots(
   const byFile = specimens.filter((row) => screenshotFileNameMatchesQuery(row.fileName, q))
   if (byFile.length === 0) return named
 
+  const bySpecies = new Map<number, DexSlotDef[]>()
+  for (const slot of slots) {
+    const group = bySpecies.get(slot.speciesId)
+    if (group) group.push(slot)
+    else bySpecies.set(slot.speciesId, [slot])
+  }
+
   const keep = new Set(named.map((slot) => slotId(slot.speciesId, slot.variant)))
   let added = false
   for (const row of byFile) {
-    for (const slot of slots) {
+    const speciesSlots = bySpecies.get(row.speciesId)
+    if (!speciesSlots) continue
+    for (const slot of speciesSlots) {
       const id = slotId(slot.speciesId, slot.variant)
       if (keep.has(id)) continue
       if (!specimenFillsSlot(row, requiredTags, slot, catalogs)) continue

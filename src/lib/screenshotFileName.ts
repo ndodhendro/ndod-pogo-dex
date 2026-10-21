@@ -19,7 +19,19 @@ export function screenshotFileNameKey(
   return name ? name.toLowerCase() : null
 }
 
-/** Empty query matches. Otherwise the basename fuzzy-matches the query. */
+/** Basename without a short file extension. `IMG_1234.PNG` becomes `IMG_1234`. */
+export function screenshotFileStem(name: string): string {
+  const dot = name.lastIndexOf('.')
+  if (dot <= 0 || dot === name.length - 1) return name
+  const ext = name.slice(dot + 1)
+  if (!/^[a-z0-9]{1,8}$/i.test(ext)) return name
+  return name.slice(0, dot)
+}
+
+/**
+ * Empty query matches. The file extension is ignored for a short query,
+ * so `p` does not hit every `.png`. `png` and `img_1234.png` still match.
+ */
 export function screenshotFileNameMatchesQuery(
   fileName: string | null | undefined,
   query: string,
@@ -27,7 +39,13 @@ export function screenshotFileNameMatchesQuery(
   const q = query.trim()
   if (!q) return true
   const name = screenshotFileName(fileName)
-  return Boolean(name && fuzzyMatches(q, name))
+  if (!name) return false
+  const stem = screenshotFileStem(name)
+  if (fuzzyMatches(q, stem)) return true
+  if (stem === name) return false
+  if (q.includes('.') && fuzzyMatches(q, name)) return true
+  const ext = name.slice(stem.length + 1)
+  return q.length >= ext.length && fuzzyMatches(q, ext)
 }
 
 /** Query is the whole basename, including a file extension. */

@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useEffect, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { BottomSheet } from '../components/BottomSheet'
 import { FilePickerButton } from '../components/FilePickerButton'
 import { TagSheet } from '../components/TagSheet'
@@ -104,13 +104,14 @@ export function InboxPage() {
   const [view, setView] = useState<TransferView>('untagged')
   const [sortDir, setSortDir] = useState<InboxSortDir>('asc')
   const [fileQuery, setFileQuery] = useState('')
+  const deferredFileQuery = useDeferredValue(fileQuery)
   const showingLogs = view === 'logs'
   const canDiscardAll = !showingLogs && items.length > 0
   const remainingWraps = addProgress ? addProgress.total > 999 : items.length > 9999
   const displayed = useMemo(() => {
     const sorted = sortInboxByFileName(items, sortDir)
-    return sorted.filter((item) => inboxMatchesFileNameQuery(item.fileName, fileQuery))
-  }, [items, sortDir, fileQuery])
+    return sorted.filter((item) => inboxMatchesFileNameQuery(item.fileName, deferredFileQuery))
+  }, [items, sortDir, deferredFileQuery])
   const showSort = canDiscardAll
 
   useEffect(() => {

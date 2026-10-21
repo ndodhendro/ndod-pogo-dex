@@ -1,4 +1,4 @@
-import { fuzzyBestScore, speciesIdMatchesQuery } from '../lib/fuzzySearch'
+import { fuzzyBestScore, indexFuzzyText, speciesIdMatchesQuery } from '../lib/fuzzySearch'
 import speciesJson from './species.json'
 
 export type Species = {
@@ -9,6 +9,11 @@ export type Species = {
 
 export const SPECIES: Species[] = speciesJson
 export const SPECIES_BY_ID = new Map(SPECIES.map((s) => [s.id, s]))
+
+for (const species of SPECIES) {
+  indexFuzzyText(species.name)
+  indexFuzzyText(species.slug)
+}
 
 export function searchSpecies(query: string): Species[] {
   const q = query.trim()

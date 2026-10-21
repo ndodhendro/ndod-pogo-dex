@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks'
-import { useMemo, useState } from 'react'
+import { useDeferredValue, useMemo, useState } from 'react'
 import { SPECIES_BY_ID, searchSpecies } from '../data/species'
 import { addRosterEntry, removeRosterEntry } from '../lib/collection'
 import { db } from '../lib/db'
@@ -44,8 +44,10 @@ export function RosterSheet({ open, tags, title, onClose }: Props) {
     ) ?? []
   const catalogs = useLiveQuery(() => db.tagCatalogs.toArray(), []) ?? []
   const [query, setQuery] = useState('')
+  const deferredQuery = useDeferredValue(query)
   const [adding, setAdding] = useState(false)
   const [speciesQuery, setSpeciesQuery] = useState('')
+  const deferredSpeciesQuery = useDeferredValue(speciesQuery)
   const [speciesId, setSpeciesId] = useState(0)
   const [variants, setVariants] = useState<Record<string, string>>({})
   const [released, setReleased] = useState(true)
@@ -60,9 +62,9 @@ export function RosterSheet({ open, tags, title, onClose }: Props) {
   const selected = speciesId ? SPECIES_BY_ID.get(speciesId) : undefined
   const selectedLabel = selected ? speciesBoxLabel(selected) : ''
   const speciesMatches = useMemo(() => {
-    if (!adding || !speciesQuery.trim() || speciesQuery === selectedLabel) return []
-    return searchSpecies(speciesQuery).slice(0, 12)
-  }, [adding, speciesQuery, selectedLabel])
+    if (!adding || !deferredSpeciesQuery.trim() || deferredSpeciesQuery === selectedLabel) return []
+    return searchSpecies(deferredSpeciesQuery).slice(0, 12)
+  }, [adding, deferredSpeciesQuery, selectedLabel])
 
   const usesGoList = comboMode
     ? tags.every((item) => tagUsesStaticReleasedList(item))
@@ -87,16 +89,16 @@ export function RosterSheet({ open, tags, title, onClose }: Props) {
     const list = [...extraCombos].sort(
       (a, b) => a.speciesId - b.speciesId || a.variant.localeCompare(b.variant),
     )
-    return list.filter((slot) => matchesSpeciesSearch(query, slot.speciesId, [slot.name]))
-  }, [extraCombos, query])
+    return list.filter((slot) => matchesSpeciesSearch(deferredQuery, slot.speciesId, [slot.name]))
+  }, [extraCombos, deferredQuery])
   const visibleRows = useMemo(() => {
     const list = [...extraRows].sort(
       (a, b) => a.speciesId - b.speciesId || a.variant.localeCompare(b.variant),
     )
     return list.filter((row) =>
-      matchesSpeciesSearch(query, row.speciesId, [slotDisplayName(row.speciesId, row.variant)]),
+      matchesSpeciesSearch(deferredQuery, row.speciesId, [slotDisplayName(row.speciesId, row.variant)]),
     )
-  }, [extraRows, query])
+  }, [extraRows, deferredQuery])
   const visibleCount = comboMode ? visibleCombos.length : visibleRows.length
 
   function resetAdd() {
@@ -202,7 +204,7 @@ export function RosterSheet({ open, tags, title, onClose }: Props) {
             }}
             placeholder="Pokédex number or name"
           />
-          {speciesMatches.length > 0 ? (
+          {speciesQuery.trim() && speciesQuery !== selectedLabel && speciesMatches.length > 0 ? (
             <div className={styles.matches}>
               {speciesMatches.map((species) => (
                 <button

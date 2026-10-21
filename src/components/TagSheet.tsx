@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { categoryForTag, SEEN_ICON, NOT_PURE_ICON, specimenTagChoices } from '../data/navIcons'
 import { comboCropsAtHeight, cropHeightForSpecimen, matchingComboCrops } from '../data/tagCrops'
@@ -7,13 +7,12 @@ import { useImageUrl } from '../hooks/useImageUrl'
 import { useTagCropHeights } from '../hooks/useCropSettings'
 import { deleteSpecimen, replaceSpecimenLook, updateSpecimen } from '../lib/collection'
 import { db, type SpecimenRow } from '../lib/db'
-import { rankByFuzzy } from '../lib/fuzzySearch'
 import { cropBottomFromBlob, SCREENSHOT_WIDTH } from '../lib/images'
 import {
   applyRosterSlot,
   limitedRosterWarning,
   normalizeVariant,
-  searchSlots,
+  rankedSearchSlots,
   slotBoxLabel,
   slotDisplayName,
   specimenSlotBoxLabel,
@@ -140,6 +139,7 @@ export function TagSheet({
 }: TagSheetProps) {
   const [tab, setTab] = useState<SheetTab>('tags')
   const [query, setQuery] = useState('')
+  const deferredQuery = useDeferredValue(query)
   const [fields, setFields] = useState<SpecimenFields>(emptyFields)
   const [ocrHits, setOcrHits] = useState<DexSlotDef[] | null>(null)
   const [speciesMenuOpen, setSpeciesMenuOpen] = useState(false)
@@ -195,31 +195,20 @@ export function TagSheet({
     () => genderSlotsForSpecies(availableSlots, fields.speciesId),
     [availableSlots, fields.speciesId],
   )
-  const matches = useMemo(() => {
-    if (ocrHits) return ocrHits
-    if (
-      speciesMenuOpen &&
-      tags.includes('gender') &&
-      fields.speciesId &&
-      (!query.trim() || query === selectedLabel)
-    ) {
-      return genderChoices
-    }
-    if (!query.trim() || query === selectedLabel) return []
-    return rankByFuzzy(searchSlots(availableSlots, query), query, (slot) => [
-      slot.name,
-      slot.variant,
-    ]).slice(0, 12)
-  }, [
-    ocrHits,
-    speciesMenuOpen,
-    tags,
-    fields.speciesId,
-    query,
-    selectedLabel,
-    genderChoices,
-    availableSlots,
-  ])
+  const rankedSlots = useMemo(() => {
+    if (!deferredQuery.trim()) return []
+    return rankedSearchSlots(availableSlots, deferredQuery, 12)
+  }, [deferredQuery, availableSlots])
+  const matches = ocrHits
+    ? ocrHits
+    : speciesMenuOpen &&
+        tags.includes('gender') &&
+        fields.speciesId &&
+        (!query.trim() || query === selectedLabel)
+      ? genderChoices
+      : !query.trim() || query === selectedLabel
+        ? []
+        : rankedSlots
   useEffect(() => {
     if (!open) {
       openedKey.current = null

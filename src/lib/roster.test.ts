@@ -15,6 +15,7 @@ import {
   nationalDexSlots,
   exactFileNameDexSpecimen,
   searchDexSlots,
+  rankedSearchSlots,
   searchSlots,
   searchVariantNames,
   slotsForEvolutionLine,
@@ -614,6 +615,12 @@ describe('searchSlots', () => {
     const basic = slotsForTrack([], [], [])
     expect(searchSlots(basic, 'charzard').some((slot) => slot.speciesId === 6)).toBe(true)
     expect(searchSlots(basic, 'charzard').every((slot) => slot.speciesId === 6)).toBe(true)
+  })
+
+  it('ranks the closest species first', () => {
+    const basic = slotsForTrack([], [], [])
+    expect(rankedSearchSlots(basic, 'charzard', 4)[0]?.speciesId).toBe(6)
+    expect(rankedSearchSlots(basic, '0006', 4).every((slot) => slot.speciesId === 6)).toBe(true)
   })
 })
 
