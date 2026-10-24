@@ -5,9 +5,11 @@ import {
   GO_GENDER,
   GO_MEGA,
   basicDefaultForme,
+  branchedMegaEvolveSuffix,
   goFormSpeciesIds,
   hasStaticFormList,
   isGoFormReleased,
+  megaEvolveBranch,
   staticFormSlotCount,
 } from '../data/goFormReleased'
 import { compareByEvolutionLine, evolutionLine } from '../data/evolutions'
@@ -573,6 +575,45 @@ function pairCostumeFormeSlots(
   return out
 }
 
+function trackSideHasTag(slots: readonly DexSlotDef[], tag: TagId, ownTag: TagId): boolean {
+  return ownTag === tag || slots.some((slot) => slot.variantParts?.some((part) => part.tag === tag))
+}
+
+function megaBackgroundBranchMatches(parts: readonly SlotVariantPart[]): boolean {
+  const mega = parts.find((part) => part.tag === 'mega')?.variant ?? ''
+  const background = parts.find((part) => part.tag === 'background')?.variant ?? ''
+  const branch = branchedMegaEvolveSuffix(background)
+  if (!branch) return true
+  return branch.toLowerCase() === megaEvolveBranch(mega).toLowerCase()
+}
+
+/** Mega Evolve X belongs to Mega X. Other backgrounds still pair with every Mega. */
+function pairMegaBackgroundSlots(
+  left: DexSlotDef[],
+  leftTag: TagId,
+  right: DexSlotDef[],
+  rightTag: TagId,
+): DexSlotDef[] {
+  const bySpecies = new Map<number, DexSlotDef[]>()
+  for (const slot of right) {
+    const list = bySpecies.get(slot.speciesId) ?? []
+    list.push(slot)
+    bySpecies.set(slot.speciesId, list)
+  }
+  const out: DexSlotDef[] = []
+  const seen = new Set<string>()
+  for (const raw of left) {
+    const a = ensureVariantParts(raw, leftTag)
+    for (const rawB of bySpecies.get(a.speciesId) ?? []) {
+      const b = ensureVariantParts(rawB, rightTag)
+      const parts = [...(a.variantParts ?? []), ...(b.variantParts ?? [])]
+      if (!megaBackgroundBranchMatches(parts)) continue
+      pushCombinedSlot(out, seen, a.speciesId, parts)
+    }
+  }
+  return out
+}
+
 function cartesianVariantSlots(
   left: DexSlotDef[],
   leftTag: TagId,
@@ -584,6 +625,12 @@ function cartesianVariantSlots(
     (leftTag === 'alternate-forme' && rightTag === 'costume')
   ) {
     return pairCostumeFormeSlots(left, leftTag, right, rightTag)
+  }
+  if (
+    (trackSideHasTag(left, 'mega', leftTag) && trackSideHasTag(right, 'background', rightTag)) ||
+    (trackSideHasTag(left, 'background', leftTag) && trackSideHasTag(right, 'mega', rightTag))
+  ) {
+    return pairMegaBackgroundSlots(left, leftTag, right, rightTag)
   }
   const bySpecies = new Map<number, DexSlotDef[]>()
   for (const slot of right) {

@@ -9,6 +9,7 @@ import {
   GO_MEGA,
   MEGA_EVOLVE_BACKGROUND,
   basicDefaultForme,
+  branchedMegaEvolveSuffix,
   goFormSpeciesIds,
   isGoFormReleased,
 } from './goFormReleased'
@@ -213,9 +214,11 @@ describe('GO regional and alternate forme lists', () => {
   })
 
   it('lists wiki Location and Special backgrounds and skips unused rows', () => {
-    const wiki = GO_BACKGROUND.filter((row) => row.variant !== MEGA_EVOLVE_BACKGROUND)
+    const wiki = GO_BACKGROUND.filter(
+      (row) => row.variant !== MEGA_EVOLVE_BACKGROUND && branchedMegaEvolveSuffix(row.variant) == null,
+    )
     expect(wiki).toHaveLength(879)
-    expect(GO_BACKGROUND).toHaveLength(879 + GO_FORM_SPECIES_IDS.mega.size)
+    expect(GO_BACKGROUND).toHaveLength(879 + GO_MEGA.length)
     expect(GO_FORM_SPECIES_IDS.background.size).toBe(250)
     expect(GO_BACKGROUND.some((row) => row.speciesId === 382 && row.variant === 'Las Vegas, US')).toBe(
       true,
@@ -234,19 +237,23 @@ describe('GO regional and alternate forme lists', () => {
   })
 
   it('adds a Mega Evolve background for every released Mega species', () => {
+    const branched = [6, 26, 150]
     const megaEvolve = GO_BACKGROUND.filter((row) => row.variant === MEGA_EVOLVE_BACKGROUND)
-    expect(megaEvolve).toHaveLength(GO_FORM_SPECIES_IDS.mega.size)
+    expect(megaEvolve).toHaveLength(GO_FORM_SPECIES_IDS.mega.size - branched.length)
     expect(megaEvolve.map((row) => row.speciesId).sort((a, b) => a - b)).toEqual(
-      [...GO_FORM_SPECIES_IDS.mega].sort((a, b) => a - b),
+      [...GO_FORM_SPECIES_IDS.mega].filter((id) => !branched.includes(id)).sort((a, b) => a - b),
     )
     expect(
       GO_BACKGROUND.some((row) => row.speciesId === 3 && row.variant === 'Mega Evolution'),
     ).toBe(true)
     expect(isGoFormReleased('background', 3, MEGA_EVOLVE_BACKGROUND)).toBe(true)
-    expect(isGoFormReleased('background', 6, MEGA_EVOLVE_BACKGROUND)).toBe(true)
-    expect(isGoFormReleased('background', 150, MEGA_EVOLVE_BACKGROUND)).toBe(true)
     expect(isGoFormReleased('background', 719, MEGA_EVOLVE_BACKGROUND)).toBe(true)
     expect(isGoFormReleased('background', 1, MEGA_EVOLVE_BACKGROUND)).toBe(false)
+    for (const speciesId of branched) {
+      expect(isGoFormReleased('background', speciesId, MEGA_EVOLVE_BACKGROUND)).toBe(false)
+      expect(isGoFormReleased('background', speciesId, 'Mega Evolve X')).toBe(true)
+      expect(isGoFormReleased('background', speciesId, 'Mega Evolve Y')).toBe(true)
+    }
   })
 })
 

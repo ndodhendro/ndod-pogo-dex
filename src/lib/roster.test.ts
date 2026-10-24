@@ -179,6 +179,14 @@ describe('slotsForTrack', () => {
     expect(slots.some((slot) => slot.speciesId === 382 && slot.variant === 'Las Vegas, US')).toBe(true)
     expect(slots.some((slot) => slot.speciesId === 3 && slot.variant === 'Mega Evolve')).toBe(true)
     expect(slots.some((slot) => slot.speciesId === 719 && slot.variant === 'Mega Evolve')).toBe(true)
+    for (const speciesId of [6, 26, 150]) {
+      expect(
+        slots
+          .filter((slot) => slot.speciesId === speciesId && slot.variant.startsWith('Mega Evolve'))
+          .map((slot) => slot.variant)
+          .sort(),
+      ).toEqual(['Mega Evolve X', 'Mega Evolve Y'])
+    }
     expect(
       slots.some((slot) => slot.speciesId === 793 && slot.variant === 'Pokémon GO Fest 2024: Wormhole'),
     ).toBe(true)
@@ -318,6 +326,13 @@ describe('slotsForTrack', () => {
     expect(venusaur.some((slot) => slot.variant.includes('Mega Evolution'))).toBe(true)
     expect(venusaur.some((slot) => slot.variant.includes('Mega Evolve'))).toBe(true)
     expect(venusaur.some((slot) => slot.variant.includes('Max Finale'))).toBe(true)
+    const charizard = slots.filter((slot) => slot.speciesId === 6)
+    expect(charizard.some((slot) => slot.variant === 'Mega X Mega Evolve X')).toBe(true)
+    expect(charizard.some((slot) => slot.variant === 'Mega Y Mega Evolve Y')).toBe(true)
+    expect(charizard.some((slot) => slot.variant === 'Mega X Mega Evolve Y')).toBe(false)
+    expect(charizard.some((slot) => slot.variant === 'Mega Y Mega Evolve X')).toBe(false)
+    expect(charizard.some((slot) => slot.variant === 'Mega X Los Angeles, California, USA')).toBe(true)
+    expect(charizard.some((slot) => slot.variant === 'Mega Y Los Angeles, California, USA')).toBe(true)
     expect(slots.every((slot) => GO_MEGA.some((row) => row.speciesId === slot.speciesId))).toBe(true)
     expect(slots.every((slot) => GO_BACKGROUND.some((row) => row.speciesId === slot.speciesId))).toBe(
       true,

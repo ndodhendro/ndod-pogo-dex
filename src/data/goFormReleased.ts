@@ -29,14 +29,50 @@ export const GO_COSTUME: readonly FormVariant[] = data.costume
 /** Species summary background while Mega Evolved. Not the Mega Evolution event souvenir. */
 export const MEGA_EVOLVE_BACKGROUND = 'Mega Evolve'
 
+/** Branch letter on Mega X. Empty when the Mega has a single form. */
+export function megaEvolveBranch(megaVariant: string): string {
+  const raw = megaVariant.trim()
+  if (!raw || /^mega$/i.test(raw)) return ''
+  const branch = raw.replace(/^mega\s+/i, '').trim()
+  return /^mega$/i.test(branch) ? '' : branch
+}
+
+/** Mega Evolve, or Mega Evolve X when that Mega form is one of several branches. */
+export function megaEvolveBackgroundName(megaVariant: string): string {
+  const branch = megaEvolveBranch(megaVariant)
+  return branch ? `${MEGA_EVOLVE_BACKGROUND} ${branch}` : MEGA_EVOLVE_BACKGROUND
+}
+
+/** X on Mega Evolve X. Null for the shared Mega Evolve background and every other background. */
+export function branchedMegaEvolveSuffix(background: string): string | null {
+  const prefix = `${MEGA_EVOLVE_BACKGROUND} `
+  const raw = background.trim()
+  if (!raw.toLowerCase().startsWith(prefix.toLowerCase())) return null
+  const suffix = raw.slice(prefix.length).trim()
+  return suffix || null
+}
+
 function withMegaEvolveBackgrounds(rows: readonly FormVariant[]): FormVariant[] {
   const seen = new Set(rows.map((row) => `${row.speciesId}:${row.variant.trim().toLowerCase()}`))
   const extra: FormVariant[] = []
-  const megaSpecies = [...new Set(GO_MEGA.map((row) => row.speciesId))].sort((a, b) => a - b)
-  for (const speciesId of megaSpecies) {
-    const key = `${speciesId}:${MEGA_EVOLVE_BACKGROUND.toLowerCase()}`
-    if (seen.has(key)) continue
-    extra.push({ speciesId, variant: MEGA_EVOLVE_BACKGROUND })
+  const variantsBySpecies = new Map<number, string[]>()
+  for (const row of GO_MEGA) {
+    const list = variantsBySpecies.get(row.speciesId) ?? []
+    list.push(row.variant)
+    variantsBySpecies.set(row.speciesId, list)
+  }
+  for (const speciesId of [...variantsBySpecies.keys()].sort((a, b) => a - b)) {
+    const variants = variantsBySpecies.get(speciesId) ?? []
+    const names =
+      variants.length > 1
+        ? variants.map((variant) => megaEvolveBackgroundName(variant))
+        : [MEGA_EVOLVE_BACKGROUND]
+    for (const variant of names) {
+      const key = `${speciesId}:${variant.trim().toLowerCase()}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      extra.push({ speciesId, variant })
+    }
   }
   return [...rows, ...extra].sort(
     (a, b) => a.speciesId - b.speciesId || a.variant.localeCompare(b.variant),

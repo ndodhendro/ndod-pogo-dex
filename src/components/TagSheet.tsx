@@ -114,6 +114,8 @@ type TagSheetProps = {
   fileName?: string | null
   initialFields?: SpecimenFields
   saveLabel: string
+  /** A single clear OCR match saves immediately. Choices still use the save button. */
+  saveOnIdentify?: boolean
   tone: string
   nested?: boolean
   onClose: () => void
@@ -130,6 +132,7 @@ export function TagSheet({
   fileName,
   initialFields,
   saveLabel,
+  saveOnIdentify = false,
   tone,
   nested = false,
   onClose,
@@ -149,6 +152,7 @@ export function TagSheet({
   const [heightDraft, setHeightDraft] = useState('710')
   const [storedCrop, setStoredCrop] = useState<number | null>(null)
   const sheetTopRef = useRef<HTMLDivElement>(null)
+  const savingRef = useRef(false)
   const openedKey = useRef<string | null>(null)
   const keepStoredCrop = useRef(true)
   const heightTouched = useRef(false)
@@ -219,6 +223,7 @@ export function TagSheet({
       return
     }
     setTab('tags')
+    savingRef.current = false
     setBusy(false)
     setOcrBusy(false)
     setOcrHits(null)
@@ -290,7 +295,7 @@ export function TagSheet({
         const speciesId = uniqueOcrSpeciesId(result)
         if (speciesId && formShowsGenderDifference(fields, speciesId)) {
           setOcrHits(null)
-          setSpeciesMenuOpen(false)
+          setSpeciesMenuOpen(true)
           setFields((current) => applyOcrGenderSpecies(current, speciesId))
           setQuery(baseSpeciesBoxLabel(speciesId))
           return
@@ -298,10 +303,15 @@ export function TagSheet({
       }
       if (result.kind === 'strong' && result.slot) {
         const slot = result.slot
+        const next = applyRosterSlot(fields, slot, specimenTags(fields), catalogs)
         setOcrHits(null)
         setSpeciesMenuOpen(false)
-        setFields((current) => applyRosterSlot(current, slot, specimenTags(current), catalogs))
+        setFields(next)
         setQuery(slotBoxLabel(slot))
+        if (saveOnIdentify) {
+          setOcrBusy(false)
+          await save(next)
+        }
         return
       }
       setFields((current) => ({ ...current, speciesId: 0 }))
@@ -315,23 +325,25 @@ export function TagSheet({
     }
   }
 
-  async function save() {
-    let warning = specimenSaveWarning(fields)
+  async function save(nextFields: SpecimenFields = fields) {
+    if (savingRef.current) return
+    const nextTags = specimenTags(nextFields)
+    let warning = specimenSaveWarning(nextFields)
     if (
       warning === 'Enter a costume name' &&
-      variantFieldComesFromSlot('costume', tags, catalogs, availableSlots)
+      variantFieldComesFromSlot('costume', nextTags, catalogs, availableSlots)
     ) {
       warning = 'Pick a released costume'
     } else if (
       warning === 'Enter a background name' &&
-      variantFieldComesFromSlot('background', tags, catalogs, availableSlots)
+      variantFieldComesFromSlot('background', nextTags, catalogs, availableSlots)
     ) {
       warning = 'Pick a released background'
     } else if (warning === 'Pick a gender variant') {
       warning = 'Pick a released gender variant'
     }
     if (!warning) {
-      warning = limitedRosterWarning(fields, catalogs, roster, (tag) =>
+      warning = limitedRosterWarning(nextFields, catalogs, roster, (tag) =>
         categoryForTag(categories, tag)?.name ?? labelForTag(tag),
       )
     }
@@ -339,31 +351,38 @@ export function TagSheet({
       onWarning(warning)
       return
     }
+    const nextSeen = Boolean(nextFields.silhouette)
+    const nextCropTags = cropTagsFromFields(nextFields)
+    const nextSuggested = cropHeightForSpecimen(nextCropTags, heightMap, nextSeen)
+    const suggestionChanged = nextSuggested !== suggestedHeight || nextSeen !== seen
+    const nextCrop = nextSeen || suggestionChanged ? nextSuggested : cropBottom
+    savingRef.current = true
     setBusy(true)
     try {
       await onSave(
         {
-          ...fields,
-          costume: normalizeOptionalName(fields.costume),
-          background: normalizeOptionalName(fields.background),
-          gender: fields.gender != null ? normalizeOptionalName(fields.gender) : null,
+          ...nextFields,
+          costume: normalizeOptionalName(nextFields.costume),
+          background: normalizeOptionalName(nextFields.background),
+          gender: nextFields.gender != null ? normalizeOptionalName(nextFields.gender) : null,
         },
-        cropBottom,
+        nextCrop,
       )
-      const comboTags = cropTagsFromFields(fields)
-      const comboSuggestion = cropHeightForSpecimen(comboTags, heightMap, false)
-      const winners = comboCropsAtHeight(comboTags, heightMap, comboSuggestion)
+      const comboSuggestion = cropHeightForSpecimen(nextCropTags, heightMap, false)
+      const winners = comboCropsAtHeight(nextCropTags, heightMap, comboSuggestion)
       if (
         heightTouched.current &&
-        !fields.silhouette &&
+        !suggestionChanged &&
+        !nextSeen &&
         winners.length > 0 &&
-        cropBottom !== comboSuggestion
+        nextCrop !== comboSuggestion
       ) {
-        await db.tagCrops.bulkPut(winners.map((row) => ({ tag: row.tag, height: cropBottom })))
+        await db.tagCrops.bulkPut(winners.map((row) => ({ tag: row.tag, height: nextCrop })))
       }
     } catch (err) {
       onError(err instanceof Error ? err.message : 'Could not save')
     } finally {
+      savingRef.current = false
       setBusy(false)
     }
   }
@@ -484,6 +503,28 @@ export function TagSheet({
               ) : null}
             </label>
           ) : null}
+          <label className={styles.checkRow}>
+            <span className={styles.checkCopy}>
+              <span aria-hidden="true">{SEEN_ICON}</span>
+              Seen
+            </span>
+            <input
+              type="checkbox"
+              checked={Boolean(fields.silhouette)}
+              onChange={(e) => setFields((f) => ({ ...f, silhouette: e.target.checked }))}
+            />
+          </label>
+          <label className={styles.checkRow}>
+            <span className={styles.checkCopy}>
+              <span aria-hidden="true">{NOT_PURE_ICON}</span>
+              Mark as not Pure
+            </span>
+            <input
+              type="checkbox"
+              checked={Boolean(fields.notPure)}
+              onChange={(e) => setFields((f) => ({ ...f, notPure: e.target.checked }))}
+            />
+          </label>
           <button
             type="button"
             className={`btn btn-ghost ${styles.ocr}`}
@@ -523,7 +564,9 @@ export function TagSheet({
                     key={`${slot.speciesId}:${slot.variant}`}
                     type="button"
                     data-on={query === label ? 'true' : 'false'}
+                    disabled={busy || ocrBusy}
                     onClick={() => {
+                      if (busy || ocrBusy) return
                       setOcrHits(null)
                       if (
                         formShowsGenderDifference(fields, slot.speciesId) &&
@@ -545,28 +588,6 @@ export function TagSheet({
               })}
             </div>
           ) : null}
-          <label className={styles.checkRow}>
-            <span className={styles.checkCopy}>
-              <span aria-hidden="true">{SEEN_ICON}</span>
-              Seen
-            </span>
-            <input
-              type="checkbox"
-              checked={Boolean(fields.silhouette)}
-              onChange={(e) => setFields((f) => ({ ...f, silhouette: e.target.checked }))}
-            />
-          </label>
-          <label className={styles.checkRow}>
-            <span className={styles.checkCopy}>
-              <span aria-hidden="true">{NOT_PURE_ICON}</span>
-              Mark as not Pure
-            </span>
-            <input
-              type="checkbox"
-              checked={Boolean(fields.notPure)}
-              onChange={(e) => setFields((f) => ({ ...f, notPure: e.target.checked }))}
-            />
-          </label>
         </>
       ) : (
         <>

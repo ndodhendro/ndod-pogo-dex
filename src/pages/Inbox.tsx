@@ -376,6 +376,7 @@ export function InboxPage() {
         imageId={active?.imageId}
         fileName={active?.fileName}
         saveLabel="Save specimen"
+        saveOnIdentify
         tone="inbox"
         onClose={() => setActive(null)}
         onSave={async (fields, cropBottom) => {
