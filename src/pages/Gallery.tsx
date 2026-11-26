@@ -363,7 +363,7 @@ export function GalleryPage() {
         : null
     const panelId = `gallery-${section}`
     return (
-      <div className={`group ${styles.section}`} key={section}>
+      <div className={styles.section} key={section}>
         <h2 className={styles.sectionHeading}>
           <button
             type="button"

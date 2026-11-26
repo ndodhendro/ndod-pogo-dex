@@ -12,10 +12,6 @@
   margin: 0;
 }
 
-:global(.group) > .sectionHeading {
-  margin: 0;
-}
-
 .sectionToggle {
   display: flex;
   width: 100%;
@@ -135,7 +131,7 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: var(--space-3) var(--space-2);
   align-items: start;
 }
