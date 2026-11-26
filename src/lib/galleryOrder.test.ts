@@ -251,15 +251,15 @@ describe('gallery sections', () => {
     ).toBe('mixed')
   })
 
-  it('keeps Seen and Not Pure in Exact, with a gray border', () => {
+  it('keeps Seen and Not Pure in Exact, with a blue border', () => {
     const shiny = spec('shiny', { shiny: true, silhouette: true })
     expect(galleryGroup(shiny, userTags)).toBe('exact')
-    expect(galleryCardPurity(shiny, userTags)).toBe('gray')
+    expect(galleryCardPurity(shiny, userTags)).toBe('blue')
     const marked = spec('marked', { shadowStatus: 'shadow', notPure: true })
     expect(galleryGroup(marked, userTags)).toBe('exact')
-    expect(galleryCardPurity(marked, userTags)).toBe('gray')
+    expect(galleryCardPurity(marked, userTags)).toBe('blue')
     expect(galleryCardPurity(spec('pure', { shiny: true }), userTags)).toBe('green')
-    expect(galleryCardPurity(spec('mix', { shiny: true, shadowStatus: 'shadow' }), userTags)).toBe('mixed')
+    expect(galleryCardPurity(spec('mix', { shiny: true, shadowStatus: 'shadow' }), userTags)).toBe('gray')
   })
 
   it('keeps the current gallery order inside each section', () => {

@@ -49,7 +49,7 @@ export function galleryDefaultRank(specimen: SpecimenFields, categories: readonl
 }
 
 export type GalleryGroup = 'exact' | 'mixed'
-export type GalleryCardPurity = 'green' | 'gray' | 'mixed'
+export type GalleryCardPurity = 'green' | 'blue' | 'gray'
 
 /**
  * Exact: the tag set can be a pure cover for one of its categories, including
@@ -71,7 +71,7 @@ export function galleryCardPurity(
   specimen: SpecimenFields,
   categories: readonly GalleryCategory[],
 ): GalleryCardPurity {
-  if (galleryGroup(specimen, categories) === 'mixed') return 'mixed'
+  if (galleryGroup(specimen, categories) === 'mixed') return 'gray'
   const tags = specimenTags(specimen)
   const pure = categories.some((row) =>
     isGreenCover(
@@ -83,7 +83,7 @@ export function galleryCardPurity(
       isNotPure(specimen),
     ),
   )
-  return pure ? 'green' : 'gray'
+  return pure ? 'green' : 'blue'
 }
 
 /** Keep the current gallery order inside each section. */

@@ -42,12 +42,12 @@
   border-color: var(--color-cover-green);
 }
 
-.card[data-purity='gray'] .frame {
-  border-color: var(--color-cover-gray);
+.card[data-purity='blue'] .frame {
+  border-color: var(--color-cover-blue);
 }
 
-.card[data-purity='mixed'] .frame {
-  border-color: var(--color-cover-mixed);
+.card[data-purity='gray'] .frame {
+  border-color: var(--color-cover-gray);
 }
 
 .card[data-empty='true'] .frame {

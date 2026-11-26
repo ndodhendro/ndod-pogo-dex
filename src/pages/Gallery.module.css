@@ -60,7 +60,7 @@
 }
 
 .sectionLabel[data-group='mixed'] {
-  color: var(--color-cover-mixed);
+  color: var(--color-cover-gray);
 }
 
 .sectionCount {
