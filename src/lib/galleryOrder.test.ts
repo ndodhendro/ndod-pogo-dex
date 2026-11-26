@@ -254,12 +254,30 @@ describe('gallery sections', () => {
   it('keeps Seen and Not Pure in Exact, with a blue border', () => {
     const shiny = spec('shiny', { shiny: true, silhouette: true })
     expect(galleryGroup(shiny, userTags)).toBe('exact')
-    expect(galleryCardPurity(shiny, userTags)).toBe('blue')
+    expect(galleryCardPurity(shiny, userTags, ['shiny'])).toBe('blue')
     const marked = spec('marked', { shadowStatus: 'shadow', notPure: true })
     expect(galleryGroup(marked, userTags)).toBe('exact')
-    expect(galleryCardPurity(marked, userTags)).toBe('blue')
-    expect(galleryCardPurity(spec('pure', { shiny: true }), userTags)).toBe('green')
-    expect(galleryCardPurity(spec('mix', { shiny: true, shadowStatus: 'shadow' }), userTags)).toBe('gray')
+    expect(galleryCardPurity(marked, userTags, ['shadow'])).toBe('blue')
+    expect(galleryCardPurity(spec('pure', { shiny: true }), userTags, ['shiny'])).toBe('green')
+    expect(galleryCardPurity(spec('mix', { shiny: true, shadowStatus: 'shadow' }), userTags, ['shiny'])).toBe(
+      'gray',
+    )
+  })
+
+  it('marks green only for the category opened from the dex', () => {
+    const basicGender = spec('basic-gender', { extraTags: ['basic', 'gender'], gender: 'Female' })
+    const shiny = spec('shiny', { shiny: true })
+    const shadowGender = spec('shadow-gender', {
+      shadowStatus: 'shadow',
+      extraTags: ['gender'],
+      gender: 'Male',
+    })
+    expect(galleryCardPurity(basicGender, userTags, [])).toBe('green')
+    expect(galleryCardPurity(shiny, userTags, [])).toBe('blue')
+    expect(galleryCardPurity(shiny, userTags, ['shiny'])).toBe('green')
+    expect(galleryCardPurity(basicGender, userTags, ['shiny'])).toBe('blue')
+    expect(galleryCardPurity(shadowGender, userTags, ['shadow'])).toBe('green')
+    expect(galleryCardPurity(shadowGender, userTags, ['shiny'])).toBe('blue')
   })
 
   it('keeps the current gallery order inside each section', () => {

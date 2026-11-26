@@ -82,6 +82,7 @@ export function GalleryPage() {
   )
   const categoryRows = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), [])
   const categories = categoryRows ?? EMPTY_CATEGORIES
+  const openedCategory = categoryRows?.find((row) => row.id === categoryId) ?? category
   const catalogs = useLiveQuery(() => db.tagCatalogs.toArray(), []) ?? EMPTY_CATALOGS
   const roster = useLiveQuery(() => db.tagRoster.toArray(), []) ?? EMPTY_ROSTER
   const specimens =
@@ -418,7 +419,11 @@ export function GalleryPage() {
                     specimen={specimen}
                     categories={categories}
                     catalogs={catalogs}
-                    purity={galleryCardPurity(specimen, categories)}
+                    purity={galleryCardPurity(
+                      specimen,
+                      categories,
+                      openedCategory?.requiredTags ?? [],
+                    )}
                     dragging={dragging}
                     shift={dragging ? delta : shift}
                     onOpen={() => {

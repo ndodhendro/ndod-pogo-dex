@@ -67,21 +67,20 @@ export function galleryGroup(
   return exact ? 'exact' : 'mixed'
 }
 
+/** Green only when this specimen is pure for the dex category that was opened. */
 export function galleryCardPurity(
   specimen: SpecimenFields,
   categories: readonly GalleryCategory[],
+  requiredTags: readonly TagId[],
 ): GalleryCardPurity {
   if (galleryGroup(specimen, categories) === 'mixed') return 'gray'
-  const tags = specimenTags(specimen)
-  const pure = categories.some((row) =>
-    isGreenCover(
-      tags,
-      [...row.requiredTags],
-      isSilhouette(specimen),
-      specimen.speciesId,
-      specimen.gender,
-      isNotPure(specimen),
-    ),
+  const pure = isGreenCover(
+    specimenTags(specimen),
+    [...requiredTags],
+    isSilhouette(specimen),
+    specimen.speciesId,
+    specimen.gender,
+    isNotPure(specimen),
   )
   return pure ? 'green' : 'blue'
 }
