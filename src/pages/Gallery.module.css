@@ -24,6 +24,7 @@
   background: transparent;
   color: inherit;
   font: inherit;
+  font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
   letter-spacing: var(--letter-ui);
   text-align: left;
@@ -49,6 +50,9 @@
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: var(--letter-ui);
 }
 
 .sectionLabel[data-group='exact'] {
@@ -107,6 +111,23 @@
   flex: 0 0 auto;
 }
 
+.columns {
+  flex: 0 0 auto;
+  padding-right: var(--space-2);
+}
+
+.columns select {
+  min-width: 2.75rem;
+  min-height: 1.75rem;
+  padding: 0 0.15rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: var(--font-weight-bold);
+}
+
 .toolBtn[data-on='true'] {
   background: var(--tone-soft, var(--color-dex-soft));
   border-color: transparent;
@@ -131,7 +152,7 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--gallery-columns, 5), minmax(0, 1fr));
   gap: var(--space-3) var(--space-2);
   align-items: start;
 }

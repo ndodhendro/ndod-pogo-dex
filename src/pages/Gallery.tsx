@@ -29,6 +29,11 @@ import {
 import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
 import { deleteSpecimen, reorderGallerySpecimens, setAsCover } from '../lib/collection'
+import {
+  GALLERY_COLUMN_OPTIONS,
+  setGalleryColumns,
+  useGalleryColumns,
+} from '../lib/galleryColumns'
 import { categoryChromeStyle } from '../lib/categoryStyle'
 import { sameCategoryOrder } from '../lib/categoryOrder'
 import { db, type CategoryRow, type SpecimenRow, type TagCatalogRow, type TagRosterRow } from '../lib/db'
@@ -90,6 +95,7 @@ export function GalleryPage() {
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const columns = useGalleryColumns()
   const [draftIds, setDraftIds] = useState<string[] | null>(null)
   const [dragId, setDragId] = useState<string | null>(null)
   const [targetIndex, setTargetIndex] = useState(0)
@@ -476,6 +482,21 @@ export function GalleryPage() {
           placeholder="Search"
           aria-label="Search names"
         />
+        <label className={`btn ${styles.columns}`}>
+          <span aria-hidden="true">▦</span>
+          Per row
+          <select
+            aria-label="Cards per row"
+            value={columns}
+            onChange={(event) => setGalleryColumns(Number(event.target.value))}
+          >
+            {GALLERY_COLUMN_OPTIONS.map((count) => (
+              <option key={count} value={count}>
+                {count}
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           type="button"
           className={`btn ${styles.toolBtn}`}
@@ -495,9 +516,9 @@ export function GalleryPage() {
       ) : !categoryRows ? null : visible.length === 0 ? (
         <p className="empty-state">{searching ? 'No matching names.' : 'No matching tags.'}</p>
       ) : (
-        <div className={styles.sections}>
-          {renderSection('exact', 'Exact', '✅')}
-          {renderSection('mixed', 'Mixed', '🔀')}
+        <div className={styles.sections} style={{ ['--gallery-columns' as string]: columns }}>
+          {renderSection('exact', 'Classified', '✅')}
+          {renderSection('mixed', 'Unclassified', '🔀')}
         </div>
       )}
       {preview && category ? (
