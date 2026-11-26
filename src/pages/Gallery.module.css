@@ -9,7 +9,7 @@
 }
 
 .sectionHeading {
-  margin: 0;
+  margin: 0 0 var(--space-2);
 }
 
 .sectionToggle {
@@ -19,9 +19,10 @@
   align-items: center;
   gap: var(--space-2);
   margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   color: inherit;
   font: inherit;
   font-size: var(--font-size-md);
@@ -32,17 +33,22 @@
 }
 
 .sectionChevron {
-  display: inline-grid;
-  place-items: center;
-  width: 1rem;
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
+  flex-shrink: 0;
+  display: inline-block;
   line-height: 1;
   transition: transform 0.24s ease;
 }
 
-.sectionToggle[aria-expanded='true'] .sectionChevron {
-  transform: rotate(90deg);
+.sectionToggle[data-group='exact'] .sectionChevron {
+  color: var(--color-cover-green);
+}
+
+.sectionToggle[data-group='mixed'] .sectionChevron {
+  color: var(--color-cover-gray);
+}
+
+.sectionToggle[aria-expanded='false'] .sectionChevron {
+  transform: rotate(-90deg);
 }
 
 .sectionLabel {
@@ -50,6 +56,7 @@
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
+  flex: 1 1 auto;
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-bold);
   letter-spacing: var(--letter-ui);
@@ -64,7 +71,7 @@
 }
 
 .sectionCount {
-  margin-left: auto;
+  flex-shrink: 0;
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
   font-weight: var(--font-weight-bold);

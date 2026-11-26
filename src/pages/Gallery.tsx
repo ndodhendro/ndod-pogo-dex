@@ -165,7 +165,10 @@ export function GalleryPage() {
       ),
     [ordered, filterTags, deferredQuery, categories, catalogs],
   )
-  const grouped = useMemo(() => splitGalleryGroups(visible, categories), [visible, categories])
+  const grouped = useMemo(
+    () => splitGalleryGroups(visible, categories, openedCategory?.requiredTags),
+    [visible, categories, openedCategory],
+  )
   const previewRows = useMemo(() => [...grouped.exact, ...grouped.mixed], [grouped])
   orderedIdsRef.current = orderedIds
   liveIdsRef.current = liveIds
@@ -377,16 +380,17 @@ export function GalleryPage() {
             className={styles.sectionToggle}
             aria-expanded={expanded}
             aria-controls={panelId}
+            data-group={section}
             onClick={() => setOpenSections((current) => ({ ...current, [section]: !current[section] }))}
           >
-            <span className={styles.sectionChevron} aria-hidden="true">
-              ▶
-            </span>
             <span className={styles.sectionLabel} data-group={section}>
               <span aria-hidden="true">{icon}</span>
               {label}
             </span>
             <span className={styles.sectionCount}>{items.length}</span>
+            <span className={styles.sectionChevron} aria-hidden="true">
+              ▾
+            </span>
           </button>
         </h2>
         <div

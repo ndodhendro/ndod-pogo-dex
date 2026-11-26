@@ -85,10 +85,14 @@ export function galleryCardPurity(
   return pure ? 'green' : 'blue'
 }
 
-/** Keep the current gallery order inside each section. */
+/**
+ * Keep the current gallery order inside each section.
+ * Inside Classified, specimens that are pure for the opened category come first.
+ */
 export function splitGalleryGroups<T extends SpecimenFields>(
   rows: readonly T[],
   categories: readonly GalleryCategory[],
+  requiredTags?: readonly TagId[],
 ): Record<GalleryGroup, T[]> {
   const exact: T[] = []
   const mixed: T[] = []
@@ -96,7 +100,14 @@ export function splitGalleryGroups<T extends SpecimenFields>(
     if (galleryGroup(row, categories) === 'exact') exact.push(row)
     else mixed.push(row)
   }
-  return { exact, mixed }
+  if (!requiredTags) return { exact, mixed }
+  const pure: T[] = []
+  const rest: T[] = []
+  for (const row of exact) {
+    if (galleryCardPurity(row, categories, requiredTags) === 'green') pure.push(row)
+    else rest.push(row)
+  }
+  return { exact: [...pure, ...rest], mixed }
 }
 
 export function sortGallerySpecimens<T extends SpecimenFields & { id: string; gallerySort?: number | null }>(

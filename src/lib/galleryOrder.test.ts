@@ -292,6 +292,27 @@ describe('gallery sections', () => {
     expect(split.exact.map((row) => row.id)).toEqual(['shiny', 'shadow', 'basic'])
     expect(split.mixed.map((row) => row.id)).toEqual(['mix', 'mega'])
   })
+
+  it('puts specimens that are pure for the opened category first in Classified', () => {
+    const rows = [
+      spec('shiny', { shiny: true }),
+      spec('shadow', { shadowStatus: 'shadow' }),
+      spec('basic-gender', { extraTags: ['basic', 'gender'], gender: 'Female' }),
+      spec('seen', { shiny: true, silhouette: true }),
+    ]
+    expect(splitGalleryGroups(rows, userTags, []).exact.map((row) => row.id)).toEqual([
+      'basic-gender',
+      'shiny',
+      'shadow',
+      'seen',
+    ])
+    expect(splitGalleryGroups(rows, userTags, ['shiny']).exact.map((row) => row.id)).toEqual([
+      'shiny',
+      'shadow',
+      'basic-gender',
+      'seen',
+    ])
+  })
 })
 
 describe('galleryItemShift', () => {
