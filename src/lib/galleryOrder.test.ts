@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest'
 import type { SpecimenFields } from './tags'
 import {
   applyVisibleGalleryOrder,
+  galleryCardPurity,
   galleryDefaultRank,
+  galleryGroup,
   galleryOrderPatch,
   galleryItemShift,
   galleryTargetIndex,
   mergeGalleryDraft,
   moveVisibleGalleryId,
   sortGallerySpecimens,
+  splitGalleryGroups,
 } from './galleryOrder'
 
 const categories = [
@@ -197,6 +200,79 @@ describe('galleryTargetIndex', () => {
     expect(galleryTargetIndex(slots, 10, 10)).toBe(0)
     expect(galleryTargetIndex(slots, 170, 40)).toBe(1)
     expect(galleryTargetIndex(slots, 40, 170)).toBe(2)
+  })
+})
+
+const userTags = [
+  { requiredTags: [] as const, sortOrder: 0 },
+  { requiredTags: ['mega'] as const, sortOrder: 1 },
+  { requiredTags: ['background'] as const, sortOrder: 14 },
+  { requiredTags: ['gender'] as const, sortOrder: 8 },
+  { requiredTags: ['shiny'] as const, sortOrder: 9 },
+  { requiredTags: ['shadow'] as const, sortOrder: 12 },
+  { requiredTags: ['hisuian'] as const, sortOrder: 5 },
+  { requiredTags: ['paldean'] as const, sortOrder: 6 },
+  { requiredTags: ['alternate-forme'] as const, sortOrder: 7 },
+]
+
+describe('gallery sections', () => {
+  it('keeps a pure tag set, and the special pure cases, in Exact', () => {
+    expect(galleryGroup(spec('plain'), userTags)).toBe('exact')
+    expect(galleryGroup(spec('shiny', { shiny: true }), userTags)).toBe('exact')
+    expect(galleryGroup(spec('shadow', { shadowStatus: 'shadow' }), userTags)).toBe('exact')
+    expect(
+      galleryGroup(spec('basic-gender', { extraTags: ['basic', 'gender'], gender: 'Female' }), userTags),
+    ).toBe('exact')
+    expect(
+      galleryGroup(spec('shadow-gender', { shadowStatus: 'shadow', extraTags: ['gender'], gender: 'Male' }), userTags),
+    ).toBe('exact')
+    expect(
+      galleryGroup(
+        spec('sneasel', {
+          speciesId: 215,
+          extraTags: ['gender', 'hisuian'],
+          gender: 'Hisuian Male',
+        }),
+        userTags,
+      ),
+    ).toBe('exact')
+    expect(
+      galleryGroup(spec('tauros', { speciesId: 128, extraTags: ['paldean', 'alternate-forme'] }), userTags),
+    ).toBe('exact')
+  })
+
+  it('puts tag sets that cannot be pure in Mixed', () => {
+    expect(galleryGroup(spec('shadow-shiny', { shiny: true, shadowStatus: 'shadow' }), userTags)).toBe('mixed')
+    expect(
+      galleryGroup(spec('mega-bg', { extraTags: ['mega'], background: 'Tokyo' }), userTags),
+    ).toBe('mixed')
+    expect(
+      galleryGroup(spec('wooper', { speciesId: 194, extraTags: ['paldean', 'alternate-forme'] }), userTags),
+    ).toBe('mixed')
+  })
+
+  it('keeps Seen and Not Pure in Exact, with a gray border', () => {
+    const shiny = spec('shiny', { shiny: true, silhouette: true })
+    expect(galleryGroup(shiny, userTags)).toBe('exact')
+    expect(galleryCardPurity(shiny, userTags)).toBe('gray')
+    const marked = spec('marked', { shadowStatus: 'shadow', notPure: true })
+    expect(galleryGroup(marked, userTags)).toBe('exact')
+    expect(galleryCardPurity(marked, userTags)).toBe('gray')
+    expect(galleryCardPurity(spec('pure', { shiny: true }), userTags)).toBe('green')
+    expect(galleryCardPurity(spec('mix', { shiny: true, shadowStatus: 'shadow' }), userTags)).toBe('mixed')
+  })
+
+  it('keeps the current gallery order inside each section', () => {
+    const rows = [
+      spec('shiny', { shiny: true }),
+      spec('mix', { shiny: true, shadowStatus: 'shadow' }),
+      spec('shadow', { shadowStatus: 'shadow' }),
+      spec('mega', { extraTags: ['mega'], background: 'Tokyo' }),
+      spec('basic'),
+    ]
+    const split = splitGalleryGroups(rows, userTags)
+    expect(split.exact.map((row) => row.id)).toEqual(['shiny', 'shadow', 'basic'])
+    expect(split.mixed.map((row) => row.id)).toEqual(['mix', 'mega'])
   })
 })
 

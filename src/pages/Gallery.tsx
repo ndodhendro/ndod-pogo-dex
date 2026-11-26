@@ -28,18 +28,20 @@ import {
 } from '../data/navIcons'
 import { SPECIES_BY_ID } from '../data/species'
 import { useImageUrl } from '../hooks/useImageUrl'
-import { coverPurity } from '../lib/covers'
 import { deleteSpecimen, reorderGallerySpecimens, setAsCover } from '../lib/collection'
 import { categoryChromeStyle } from '../lib/categoryStyle'
 import { sameCategoryOrder } from '../lib/categoryOrder'
 import { db, type CategoryRow, type SpecimenRow, type TagCatalogRow, type TagRosterRow } from '../lib/db'
 import {
   applyVisibleGalleryOrder,
+  galleryCardPurity,
   galleryItemShift,
   galleryTargetIndex,
   mergeGalleryDraft,
   moveVisibleGalleryId,
   sortGallerySpecimens,
+  splitGalleryGroups,
+  type GalleryGroup,
   type GallerySlot,
 } from '../lib/galleryOrder'
 import { listNeighbor } from '../lib/previewSwipe'
@@ -73,22 +75,14 @@ export function GalleryPage() {
     () => (categoryId ? db.categories.get(categoryId) : undefined),
     [categoryId],
   )
-  const categories =
-    useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), []) ?? EMPTY_CATEGORIES
+  const categoryRows = useLiveQuery(() => db.categories.orderBy('sortOrder').toArray(), [])
+  const categories = categoryRows ?? EMPTY_CATEGORIES
   const catalogs = useLiveQuery(() => db.tagCatalogs.toArray(), []) ?? EMPTY_CATALOGS
   const roster = useLiveQuery(() => db.tagRoster.toArray(), []) ?? EMPTY_ROSTER
   const specimens =
     useLiveQuery(
       () => db.specimens.where('speciesId').equals(Number(speciesId)).toArray(),
       [speciesId],
-    ) ?? []
-  const coverRows =
-    useLiveQuery(
-      () =>
-        categoryId && speciesId
-          ? db.covers.where('[categoryId+speciesId]').equals([categoryId, Number(speciesId)]).toArray()
-          : [],
-      [categoryId, speciesId],
     ) ?? []
   const [preview, setPreview] = useState<SpecimenRow | null>(null)
   const [editingTags, setEditingTags] = useState(false)
@@ -100,9 +94,14 @@ export function GalleryPage() {
   const [dragId, setDragId] = useState<string | null>(null)
   const [targetIndex, setTargetIndex] = useState(0)
   const [delta, setDelta] = useState({ x: 0, y: 0 })
-  const gridRef = useRef<HTMLDivElement>(null)
+  const [openSections, setOpenSections] = useState<Record<GalleryGroup, boolean>>({
+    exact: true,
+    mixed: true,
+  })
+  const gridRefs = useRef<Record<GalleryGroup, HTMLDivElement | null>>({ exact: null, mixed: null })
   const pressRef = useRef<{
     id: string
+    section: GalleryGroup
     pointerId: number
     startX: number
     startY: number
@@ -113,6 +112,7 @@ export function GalleryPage() {
   } | null>(null)
   const dragRef = useRef<{
     id: string
+    section: GalleryGroup
     pointerId: number
     originVisible: string[]
     originIndex: number
@@ -126,7 +126,7 @@ export function GalleryPage() {
   const orderedIdsRef = useRef<string[]>([])
   const liveIdsRef = useRef<string[]>([])
   const orderedRef = useRef<SpecimenRow[]>([])
-  const visibleIdsRef = useRef<string[]>([])
+  const sectionIdsRef = useRef<Record<GalleryGroup, string[]>>({ exact: [], mixed: [] })
 
   const liveSorted = useMemo(
     () => sortGallerySpecimens(specimens, categories, catalogs),
@@ -158,29 +158,21 @@ export function GalleryPage() {
       ),
     [ordered, filterTags, deferredQuery, categories, catalogs],
   )
-  const visibleIds = useMemo(() => visible.map((row) => row.id), [visible])
+  const grouped = useMemo(() => splitGalleryGroups(visible, categories), [visible, categories])
+  const previewRows = useMemo(() => [...grouped.exact, ...grouped.mixed], [grouped])
   orderedIdsRef.current = orderedIds
   liveIdsRef.current = liveIds
   orderedRef.current = ordered
-  visibleIdsRef.current = visibleIds
-  const display = useMemo(() => {
-    const originIds = dragId && dragRef.current ? dragRef.current.originVisible : visibleIds
-    const byId = new Map(ordered.map((row) => [row.id, row]))
-    return originIds.flatMap((id) => {
-      const row = byId.get(id)
-      return row ? [row] : []
-    })
-  }, [dragId, visibleIds, ordered])
-  const nextVisibleIds =
-    dragId && dragRef.current
-      ? moveVisibleGalleryId(dragRef.current.originVisible, dragId, targetIndex)
-      : visibleIds
+  sectionIdsRef.current = {
+    exact: grouped.exact.map((row) => row.id),
+    mixed: grouped.mixed.map((row) => row.id),
+  }
   const searching = Boolean(deferredQuery.trim())
   const filtering = filterTags.length > 0 || searching
   const tagFilters = useMemo(() => specimenTagChoices(categories).filter((choice) => choice.tag != null), [categories])
-  const previewIndex = preview ? visible.findIndex((row) => row.id === preview.id) : -1
-  const previewNext = listNeighbor(visible, previewIndex, 1)
-  const previewPrev = listNeighbor(visible, previewIndex, -1)
+  const previewIndex = preview ? previewRows.findIndex((row) => row.id === preview.id) : -1
+  const previewNext = listNeighbor(previewRows, previewIndex, 1)
+  const previewPrev = listNeighbor(previewRows, previewIndex, -1)
   const previewUrl = useImageUrl(preview?.imageId, 'original')
   const nextUrl = useImageUrl(previewNext?.imageId, 'original')
   const prevUrl = useImageUrl(previewPrev?.imageId, 'original')
@@ -234,10 +226,18 @@ export function GalleryPage() {
     pressRef.current = null
   }
 
-  function startDrag(target: HTMLButtonElement, id: string, pointerId: number, startX: number, startY: number) {
+  function startDrag(
+    target: HTMLButtonElement,
+    id: string,
+    section: GalleryGroup,
+    pointerId: number,
+    startX: number,
+    startY: number,
+  ) {
     clearPress()
-    if (dragRef.current || savingRef.current || visibleIdsRef.current.length < 2) return
-    const grid = gridRef.current
+    const originVisible = sectionIdsRef.current[section]
+    if (dragRef.current || savingRef.current || originVisible.length < 2) return
+    const grid = gridRefs.current[section]
     if (!grid) return
     if (!target.hasPointerCapture(pointerId)) {
       try {
@@ -246,7 +246,6 @@ export function GalleryPage() {
         return
       }
     }
-    const originVisible = visibleIdsRef.current
     const originIndex = originVisible.indexOf(id)
     if (originIndex < 0) return
     const slots = [...grid.querySelectorAll<HTMLElement>('[data-gallery-id]')].map((el) => {
@@ -255,6 +254,7 @@ export function GalleryPage() {
     })
     dragRef.current = {
       id,
+      section,
       pointerId,
       originVisible,
       originIndex,
@@ -300,14 +300,19 @@ export function GalleryPage() {
     }
   }
 
-  function onCardPointerDown(event: ReactPointerEvent<HTMLButtonElement>, id: string) {
+  function onCardPointerDown(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    id: string,
+    section: GalleryGroup,
+  ) {
     if (event.button !== 0 || savingRef.current || dragRef.current || preview) return
-    if (visibleIdsRef.current.length < 2) return
+    if (sectionIdsRef.current[section].length < 2) return
     ignoreClickRef.current = false
     clearPress()
     const target = event.currentTarget
     pressRef.current = {
       id,
+      section,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
@@ -317,7 +322,7 @@ export function GalleryPage() {
       timer: window.setTimeout(() => {
         const press = pressRef.current
         if (!press || press.id !== id) return
-        startDrag(press.target, id, press.pointerId, press.lastX, press.lastY)
+        startDrag(press.target, id, press.section, press.pointerId, press.lastX, press.lastY)
       }, HOLD_MS),
     }
   }
@@ -335,6 +340,99 @@ export function GalleryPage() {
     if (Math.hypot(event.clientX - press.startX, event.clientY - press.startY) >= HOLD_LOCK) {
       clearPress()
     }
+  }
+
+  function sectionCards(section: GalleryGroup) {
+    const live = grouped[section]
+    if (!dragId || dragRef.current?.section !== section) return live
+    const byId = new Map(ordered.map((row) => [row.id, row]))
+    return dragRef.current.originVisible.flatMap((id) => {
+      const row = byId.get(id)
+      return row ? [row] : []
+    })
+  }
+
+  function renderSection(section: GalleryGroup, label: string, icon: string) {
+    const items = sectionCards(section)
+    if (items.length === 0) return null
+    const expanded = openSections[section]
+    const draggingHere = Boolean(dragId && dragRef.current?.section === section)
+    const nextIds =
+      draggingHere && dragRef.current
+        ? moveVisibleGalleryId(dragRef.current.originVisible, dragId as string, targetIndex)
+        : null
+    const panelId = `gallery-${section}`
+    return (
+      <div className={`group ${styles.section}`} key={section}>
+        <h2 className={styles.sectionHeading}>
+          <button
+            type="button"
+            className={styles.sectionToggle}
+            aria-expanded={expanded}
+            aria-controls={panelId}
+            onClick={() => setOpenSections((current) => ({ ...current, [section]: !current[section] }))}
+          >
+            <span className={styles.sectionChevron} aria-hidden="true">
+              ▶
+            </span>
+            <span className={styles.sectionLabel} data-group={section}>
+              <span aria-hidden="true">{icon}</span>
+              {label}
+            </span>
+            <span className={styles.sectionCount}>{items.length}</span>
+          </button>
+        </h2>
+        <div
+          id={panelId}
+          className={styles.slide}
+          data-open={expanded ? 'true' : 'false'}
+          inert={!expanded}
+        >
+          <div className={styles.clip}>
+            <div
+              ref={(node) => {
+                gridRefs.current[section] = node
+              }}
+              className={styles.grid}
+              data-reordering={draggingHere ? 'true' : 'false'}
+            >
+              {items.map((specimen, originIndex) => {
+                const dragging = dragId === specimen.id
+                const shift =
+                  !draggingHere || dragging || !dragRef.current
+                    ? { x: 0, y: 0 }
+                    : galleryItemShift(
+                        originIndex,
+                        nextIds?.indexOf(specimen.id) ?? originIndex,
+                        dragRef.current.slots,
+                      )
+                return (
+                  <GalleryCard
+                    key={specimen.id}
+                    specimen={specimen}
+                    categories={categories}
+                    catalogs={catalogs}
+                    purity={galleryCardPurity(specimen, categories)}
+                    dragging={dragging}
+                    shift={dragging ? delta : shift}
+                    onOpen={() => {
+                      if (ignoreClickRef.current) {
+                        ignoreClickRef.current = false
+                        return
+                      }
+                      setPreview(specimen)
+                    }}
+                    onPointerDown={(event) => onCardPointerDown(event, specimen.id, section)}
+                    onPointerMove={(event) => onCardPointerMove(event, specimen.id)}
+                    onPointerUp={onCardPointerUp}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   function onCardPointerUp(event: ReactPointerEvent<HTMLButtonElement>) {
@@ -394,53 +492,12 @@ export function GalleryPage() {
       </div>
       {specimens.length === 0 ? (
         <p className="empty-state">No screenshots for this species yet.</p>
-      ) : visible.length === 0 ? (
+      ) : !categoryRows ? null : visible.length === 0 ? (
         <p className="empty-state">{searching ? 'No matching names.' : 'No matching tags.'}</p>
       ) : (
-        <div ref={gridRef} className={styles.grid} data-reordering={dragId ? 'true' : 'false'}>
-          {display.map((specimen, originIndex) => {
-            const dragging = dragId === specimen.id
-            const shift =
-              dragging || !dragId || !dragRef.current
-                ? { x: 0, y: 0 }
-                : galleryItemShift(
-                    originIndex,
-                    nextVisibleIds.indexOf(specimen.id),
-                    dragRef.current.slots,
-                  )
-            return (
-              <GalleryCard
-                key={specimen.id}
-                specimen={specimen}
-                categories={categories}
-                catalogs={catalogs}
-                purity={
-                  coverRows.some((row) => row.specimenId === specimen.id) && category
-                    ? coverPurity(
-                        specimenTags(specimen),
-                        category.requiredTags,
-                        isSilhouette(specimen),
-                        specimen.speciesId,
-                        specimen.gender,
-                        isNotPure(specimen),
-                      )
-                    : null
-                }
-                dragging={dragging}
-                shift={dragging ? delta : shift}
-                onOpen={() => {
-                  if (ignoreClickRef.current) {
-                    ignoreClickRef.current = false
-                    return
-                  }
-                  setPreview(specimen)
-                }}
-                onPointerDown={(event) => onCardPointerDown(event, specimen.id)}
-                onPointerMove={(event) => onCardPointerMove(event, specimen.id)}
-                onPointerUp={onCardPointerUp}
-              />
-            )
-          })}
+        <div className={styles.sections}>
+          {renderSection('exact', 'Exact', '✅')}
+          {renderSection('mixed', 'Mixed', '🔀')}
         </div>
       )}
       {preview && category ? (
@@ -556,7 +613,7 @@ function GalleryCard({
   specimen: SpecimenRow
   categories: CategoryRow[]
   catalogs: TagCatalogRow[]
-  purity: ReturnType<typeof coverPurity>
+  purity: ReturnType<typeof galleryCardPurity>
   dragging: boolean
   shift: { x: number; y: number }
   onOpen: () => void

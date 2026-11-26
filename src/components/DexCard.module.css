@@ -46,6 +46,10 @@
   border-color: var(--color-cover-gray);
 }
 
+.card[data-purity='mixed'] .frame {
+  border-color: var(--color-cover-mixed);
+}
+
 .card[data-empty='true'] .frame {
   border-color: var(--color-border);
   padding: 0;

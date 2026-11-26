@@ -48,6 +48,58 @@ export function galleryDefaultRank(specimen: SpecimenFields, categories: readonl
   return [basic?.sortOrder ?? Number.MAX_SAFE_INTEGER]
 }
 
+export type GalleryGroup = 'exact' | 'mixed'
+export type GalleryCardPurity = 'green' | 'gray' | 'mixed'
+
+/**
+ * Exact: the tag set can be a pure cover for one of its categories, including
+ * Gender, Basic, Hisuian Sneasel, and Paldean Tauros. Seen and Not Pure stay
+ * here. Mixed: no category would call this tag set pure.
+ */
+export function galleryGroup(
+  specimen: SpecimenFields,
+  categories: readonly GalleryCategory[],
+): GalleryGroup {
+  const tags = specimenTags(specimen)
+  const exact = categories.some((row) =>
+    isGreenCover(tags, [...row.requiredTags], false, specimen.speciesId, specimen.gender, false),
+  )
+  return exact ? 'exact' : 'mixed'
+}
+
+export function galleryCardPurity(
+  specimen: SpecimenFields,
+  categories: readonly GalleryCategory[],
+): GalleryCardPurity {
+  if (galleryGroup(specimen, categories) === 'mixed') return 'mixed'
+  const tags = specimenTags(specimen)
+  const pure = categories.some((row) =>
+    isGreenCover(
+      tags,
+      [...row.requiredTags],
+      isSilhouette(specimen),
+      specimen.speciesId,
+      specimen.gender,
+      isNotPure(specimen),
+    ),
+  )
+  return pure ? 'green' : 'gray'
+}
+
+/** Keep the current gallery order inside each section. */
+export function splitGalleryGroups<T extends SpecimenFields>(
+  rows: readonly T[],
+  categories: readonly GalleryCategory[],
+): Record<GalleryGroup, T[]> {
+  const exact: T[] = []
+  const mixed: T[] = []
+  for (const row of rows) {
+    if (galleryGroup(row, categories) === 'exact') exact.push(row)
+    else mixed.push(row)
+  }
+  return { exact, mixed }
+}
+
 export function sortGallerySpecimens<T extends SpecimenFields & { id: string; gallerySort?: number | null }>(
   rows: readonly T[],
   categories: readonly GalleryCategory[] = [],

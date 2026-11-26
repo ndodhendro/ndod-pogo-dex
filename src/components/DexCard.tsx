@@ -1,5 +1,5 @@
 import { useState, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from 'react'
-import type { CoverPurity } from '../lib/covers'
+import type { GalleryCardPurity } from '../lib/galleryOrder'
 import { formatDexSpeciesId } from '../lib/dexGrid'
 import styles from './DexCard.module.css'
 
@@ -8,7 +8,7 @@ type Props = {
   number: number
   extraCount?: number
   thumbUrl?: string | null
-  purity?: CoverPurity | null
+  purity?: GalleryCardPurity | null
   filled?: boolean
   fill?: boolean
   grabbed?: boolean
